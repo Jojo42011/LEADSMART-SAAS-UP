@@ -1,14 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
-import { loadOnboarding, type OnboardingData } from "@/lib/onboarding";
+import { Field } from "@/components/onboarding/fields";
+import {
+  loadOnboarding,
+  saveOnboarding,
+  type OnboardingData,
+  type Cadence,
+  type PublishMode,
+} from "@/lib/onboarding";
+import { buildPlan } from "@/lib/plan";
 
-const navItems = [
+type Tab = "Overview" | "Content" | "Keywords" | "Competitors" | "Settings";
+
+const navItems: { label: Tab; icon: React.ReactNode }[] = [
   {
     label: "Overview",
-    active: true,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
         <rect x="4" y="4" width="7" height="7" rx="1.5" />
@@ -56,20 +65,56 @@ const navItems = [
   },
 ];
 
-const firstRunTasks = [
-  { label: "Workspace created", done: true },
-  { label: "Brand and design ingest", done: true },
-  { label: "Competitor mapping", done: false, active: true },
-  { label: "Keyword gap analysis", done: false },
-  { label: "First page draft", done: false },
-];
+const statusStyles: Record<string, string> = {
+  Drafting: "bg-accent/10 text-accent",
+  Queued: "bg-ink/[0.06] text-ink/70",
+  Researching: "bg-ink/[0.04] text-muted",
+  Tracking: "bg-ink/[0.06] text-ink/70",
+};
+
+function StatusPill({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[11.5px] font-medium ${
+        statusStyles[status] ?? "bg-ink/[0.06] text-ink/70"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`rounded-2xl border border-line bg-white ${className}`}>{children}</div>;
+}
+
+function EmptyState({ title, sub }: { title: string; sub: string }) {
+  return (
+    <Card className="p-10 text-center">
+      <p className="text-[14.5px] font-medium">{title}</p>
+      <p className="mx-auto mt-1.5 max-w-sm text-[13px] text-muted">{sub}</p>
+    </Card>
+  );
+}
 
 export function Dashboard() {
   const [data, setData] = useState<OnboardingData | null>(null);
+  const [tab, setTab] = useState<Tab>("Overview");
 
   useEffect(() => {
     setData(loadOnboarding());
   }, []);
+
+  const plan = useMemo(() => (data ? buildPlan(data) : null), [data]);
+
+  const update = (patch: Partial<OnboardingData>) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      saveOnboarding(next);
+      return next;
+    });
+  };
 
   const siteName = data?.business.name || "Your site";
   const siteUrl = data?.website.url?.replace(/^https?:\/\//, "") || "";
@@ -85,8 +130,9 @@ export function Dashboard() {
           {navItems.map((item) => (
             <button
               key={item.label}
+              onClick={() => setTab(item.label)}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] transition-colors ${
-                item.active
+                tab === item.label
                   ? "bg-paper-warm font-medium text-ink"
                   : "text-muted hover:bg-paper-warm hover:text-ink"
               }`}
@@ -110,92 +156,389 @@ export function Dashboard() {
             <h1 className="text-[16px] font-medium tracking-tight">{siteName}</h1>
             {siteUrl && <p className="text-[12.5px] text-muted">{siteUrl}</p>}
           </div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-line px-3.5 py-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
-            <span className="label-mono text-muted">Agent active</span>
-          </span>
+          <div className="flex items-center gap-3">
+            {/* Mobile tab switcher */}
+            <select
+              value={tab}
+              onChange={(e) => setTab(e.target.value as Tab)}
+              className="rounded-lg border border-line bg-white px-3 py-1.5 text-[13px] md:hidden"
+            >
+              {navItems.map((item) => (
+                <option key={item.label}>{item.label}</option>
+              ))}
+            </select>
+            <span className="inline-flex items-center gap-2 rounded-full border border-line px-3.5 py-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
+              <span className="label-mono text-muted">Agent active</span>
+            </span>
+          </div>
         </header>
 
         <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.21, 0.47, 0.32, 0.98] }}
-          >
-            {/* First run banner */}
-            <div className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-white sm:p-9">
-              <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <span className="label-mono text-accent">First cycle in progress</span>
-                  <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">
-                    Your agent is studying the market.
-                  </h2>
-                  <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-white/55">
-                    The first research cycle maps your competitors and finds
-                    the gaps worth writing into. Your first page lands here
-                    when it clears the audit.
-                  </p>
-                </div>
-                <div className="w-full max-w-[240px] shrink-0">
-                  {firstRunTasks.map((t) => (
-                    <div key={t.label} className="flex items-center gap-3 py-1.5 text-[13px]">
-                      {t.done ? (
-                        <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      ) : t.active ? (
-                        <span className="h-4 w-4 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" />
-                      ) : (
-                        <span className="h-4 w-4 shrink-0 rounded-full border border-white/20" />
-                      )}
-                      <span className={t.done || t.active ? "text-white" : "text-white/40"}>
-                        {t.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* KPI placeholders */}
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              {[
-                { label: "Pages published", value: "0", note: "First page within 24 hours" },
-                { label: "Keywords tracked", value: "0", note: "Populates after research" },
-                { label: "Average audit score", value: "—", note: "Scored at publish time" },
-              ].map((kpi) => (
-                <div key={kpi.label} className="rounded-2xl border border-line bg-white p-6">
-                  <p className="label-mono text-muted/70">{kpi.label}</p>
-                  <p className="font-display mt-2 text-4xl tracking-tight">{kpi.value}</p>
-                  <p className="mt-1.5 text-[12.5px] text-muted">{kpi.note}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Queue placeholder */}
-            <div className="mt-6 rounded-2xl border border-line bg-white p-6">
-              <div className="flex items-center justify-between">
-                <p className="text-[14.5px] font-medium">Content queue</p>
-                <span className="label-mono text-muted/60">Updates live</span>
-              </div>
-              <div className="mt-5 grid gap-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center gap-4 rounded-xl border border-line p-4">
-                    <div className="h-10 w-10 shrink-0 rounded-lg animate-shimmer" />
-                    <div className="flex-1">
-                      <div className="h-3 w-2/5 rounded animate-shimmer" />
-                      <div className="mt-2 h-2.5 w-1/4 rounded animate-shimmer" />
-                    </div>
-                    <div className="h-6 w-16 rounded-full animate-shimmer" />
-                  </div>
-                ))}
-              </div>
-              <p className="mt-5 text-center text-[12.5px] text-muted/70">
-                Drafts appear here as the agent writes them.
-              </p>
-            </div>
-          </motion.div>
+          {plan && data && (
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.21, 0.47, 0.32, 0.98] }}
+            >
+              {tab === "Overview" && <Overview plan={plan} goTo={setTab} />}
+              {tab === "Content" && <Content plan={plan} />}
+              {tab === "Keywords" && <Keywords plan={plan} />}
+              {tab === "Competitors" && <Competitors plan={plan} goTo={setTab} />}
+              {tab === "Settings" && <Settings data={data} update={update} />}
+            </motion.div>
+          )}
         </main>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------- Overview ------------------------------- */
+
+function Overview({
+  plan,
+  goTo,
+}: {
+  plan: ReturnType<typeof buildPlan>;
+  goTo: (t: Tab) => void;
+}) {
+  const setupTasks = [
+    { label: "Workspace created" },
+    { label: "Brand and design ingest" },
+    { label: "Keyword gap analysis" },
+    { label: "Content plan built" },
+  ];
+
+  const kpis = [
+    { label: "Pages in queue", value: String(plan.pages.length), note: "First page within 24 hours" },
+    { label: "Keywords tracked", value: String(plan.keywords.length), note: "From your services and locations" },
+    { label: "Average audit score", value: "—", note: "Scored at publish time" },
+  ];
+
+  return (
+    <>
+      {/* Plan-ready banner */}
+      <div className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-white sm:p-9">
+        <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <span className="label-mono text-accent">Setup complete</span>
+            <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">
+              Your content plan is ready.
+            </h2>
+            <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-white/55">
+              The agent mapped {plan.keywords.length} keywords across your
+              services and locations and queued the first {plan.pages.length}{" "}
+              pages. Your first draft is being written now.
+            </p>
+          </div>
+          <div className="w-full max-w-[240px] shrink-0">
+            {setupTasks.map((t) => (
+              <div key={t.label} className="flex items-center gap-3 py-1.5 text-[13px]">
+                <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="text-white">{t.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        {kpis.map((kpi) => (
+          <Card key={kpi.label} className="p-6">
+            <p className="label-mono text-muted/70">{kpi.label}</p>
+            <p className="font-display mt-2 text-4xl tracking-tight">{kpi.value}</p>
+            <p className="mt-1.5 text-[12.5px] text-muted">{kpi.note}</p>
+          </Card>
+        ))}
+      </div>
+
+      {/* Queue preview */}
+      <Card className="mt-6 p-6">
+        <div className="flex items-center justify-between">
+          <p className="text-[14.5px] font-medium">Content queue</p>
+          <button onClick={() => goTo("Content")} className="label-mono text-muted/60 transition-colors hover:text-ink">
+            View all &rarr;
+          </button>
+        </div>
+        <div className="mt-5 grid gap-3">
+          {plan.pages.slice(0, 3).map((page) => (
+            <QueueRow key={page.keyword} page={page} />
+          ))}
+        </div>
+        {plan.pages.length === 0 && (
+          <p className="mt-2 text-center text-[12.5px] text-muted/70">
+            Add services and locations in Settings to build your queue.
+          </p>
+        )}
+      </Card>
+    </>
+  );
+}
+
+function QueueRow({ page }: { page: { title: string; keyword: string; status: string; note: string } }) {
+  return (
+    <div className="flex items-center gap-4 rounded-xl border border-line p-4">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-paper-warm">
+        <svg viewBox="0 0 24 24" className="h-4.5 w-4.5 text-ink/50" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <rect x="5" y="3" width="14" height="18" rx="2" />
+          <path d="M9 8h6M9 12h6M9 16h4" strokeLinecap="round" />
+        </svg>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13.5px] font-medium">{page.title}</p>
+        <p className="truncate text-[12px] text-muted">
+          {page.keyword} &middot; {page.note}
+        </p>
+      </div>
+      <StatusPill status={page.status} />
+    </div>
+  );
+}
+
+/* -------------------------------- Content ------------------------------- */
+
+function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
+  if (plan.pages.length === 0)
+    return (
+      <EmptyState
+        title="No pages queued yet"
+        sub="Add your services and locations in Settings and the agent will build a page queue from them."
+      />
+    );
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between">
+        <p className="text-[14.5px] font-medium">Content queue</p>
+        <span className="label-mono text-muted/60">{plan.pages.length} pages this cycle</span>
+      </div>
+      <div className="mt-5 grid gap-3">
+        {plan.pages.map((page) => (
+          <QueueRow key={page.keyword} page={page} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------- Keywords ------------------------------- */
+
+function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
+  if (plan.keywords.length === 0)
+    return (
+      <EmptyState
+        title="No keywords tracked yet"
+        sub="Add your services and locations in Settings and the agent will map the keywords worth ranking for."
+      />
+    );
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-center justify-between px-6 pt-6">
+        <p className="text-[14.5px] font-medium">Tracked keywords</p>
+        <span className="label-mono text-muted/60">{plan.keywords.length} keywords</span>
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-left text-[13px]">
+          <thead>
+            <tr className="border-y border-line text-muted">
+              <th className="px-6 py-3 font-medium">Keyword</th>
+              <th className="px-4 py-3 font-medium">Intent</th>
+              <th className="px-4 py-3 font-medium">Est. volume</th>
+              <th className="px-4 py-3 font-medium">Difficulty</th>
+              <th className="px-6 py-3 text-right font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {plan.keywords.map((k) => (
+              <tr key={k.term} className="border-b border-line last:border-0">
+                <td className="px-6 py-3.5 font-medium">{k.term}</td>
+                <td className="px-4 py-3.5 text-muted">{k.intent}</td>
+                <td className="px-4 py-3.5 text-muted">{k.volume.toLocaleString()}/mo</td>
+                <td className="px-4 py-3.5 text-muted">{k.difficulty}</td>
+                <td className="px-6 py-3.5 text-right">
+                  <StatusPill status={k.status} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------ Competitors ----------------------------- */
+
+function Competitors({
+  plan,
+  goTo,
+}: {
+  plan: ReturnType<typeof buildPlan>;
+  goTo: (t: Tab) => void;
+}) {
+  if (plan.competitors.length === 0)
+    return (
+      <Card className="p-10 text-center">
+        <p className="text-[14.5px] font-medium">No competitors added yet</p>
+        <p className="mx-auto mt-1.5 max-w-sm text-[13px] text-muted">
+          List the competitors you want the agent to study and it will map
+          their keyword coverage against yours.
+        </p>
+        <button
+          onClick={() => goTo("Settings")}
+          className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-medium text-white transition-colors hover:bg-accent"
+        >
+          Add competitors in Settings &rarr;
+        </button>
+      </Card>
+    );
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {plan.competitors.map((c) => (
+        <Card key={c.name} className="p-6">
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-[14.5px] font-medium">{c.name}</p>
+            <span className="label-mono shrink-0 text-muted/60">{c.keywords} keywords</span>
+          </div>
+          <p className="mt-1 text-[12.5px] text-muted">{c.note}</p>
+          <div className="mt-5">
+            <div className="flex items-center justify-between text-[12px] text-muted">
+              <span>Keyword overlap</span>
+              <span className="font-medium text-ink">{c.overlap}%</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
+              <div className="h-full rounded-full bg-accent" style={{ width: `${c.overlap}%` }} />
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------- Settings ------------------------------ */
+
+function Settings({
+  data,
+  update,
+}: {
+  data: OnboardingData;
+  update: (patch: Partial<OnboardingData>) => void;
+}) {
+  const [saved, setSaved] = useState(false);
+  const flash = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1600);
+  };
+
+  return (
+    <div className="grid gap-6">
+      <Card className="p-6 sm:p-8">
+        <p className="text-[14.5px] font-medium">Business</p>
+        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Business name"
+            value={data.business.name}
+            onChange={(e) => update({ business: { ...data.business, name: e.target.value } })}
+          />
+          <Field
+            label="Website URL"
+            value={data.website.url}
+            onChange={(e) => update({ website: { ...data.website, url: e.target.value } })}
+          />
+          <Field
+            label="City"
+            value={data.business.city}
+            onChange={(e) => update({ business: { ...data.business, city: e.target.value } })}
+          />
+          <Field
+            label="Service area"
+            optional
+            value={data.business.serviceArea}
+            onChange={(e) => update({ business: { ...data.business, serviceArea: e.target.value } })}
+          />
+        </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <p className="text-[14.5px] font-medium">Market</p>
+        <p className="mt-1 text-[12.5px] text-muted">
+          The agent builds keywords and the content queue from these. Comma separated.
+        </p>
+        <div className="mt-5 grid gap-5">
+          <Field
+            label="Services"
+            hint="e.g. pool remodeling, pool installation"
+            value={data.market.services}
+            onChange={(e) => update({ market: { ...data.market, services: e.target.value } })}
+          />
+          <Field
+            label="Target locations"
+            hint="e.g. Scottsdale, Paradise Valley, Tempe"
+            value={data.market.locations}
+            onChange={(e) => update({ market: { ...data.market, locations: e.target.value } })}
+          />
+          <Field
+            label="Competitors"
+            hint="Names or domains, comma separated"
+            value={data.market.competitors}
+            onChange={(e) => update({ market: { ...data.market, competitors: e.target.value } })}
+          />
+        </div>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <p className="text-[14.5px] font-medium">Publishing</p>
+        <div className="mt-5 grid gap-5 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-[13px] font-medium text-ink">Cadence</span>
+            <select
+              value={data.launch.cadence}
+              onChange={(e) =>
+                update({ launch: { ...data.launch, cadence: e.target.value as Cadence } })
+              }
+              className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+            >
+              <option value="daily">Daily</option>
+              <option value="every3days">Every 3 days</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-[13px] font-medium text-ink">Publish mode</span>
+            <select
+              value={data.launch.mode}
+              onChange={(e) =>
+                update({ launch: { ...data.launch, mode: e.target.value as PublishMode } })
+              }
+              className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+            >
+              <option value="autopilot">Autopilot &mdash; publish automatically</option>
+              <option value="review">Review &mdash; approve before publishing</option>
+            </select>
+          </label>
+        </div>
+      </Card>
+
+      <div className="flex items-center gap-4">
+        <button
+          onClick={flash}
+          className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-[14px] font-medium text-white transition-colors hover:bg-accent"
+        >
+          Save changes
+        </button>
+        <span
+          className={`text-[13px] text-muted transition-opacity ${saved ? "opacity-100" : "opacity-0"}`}
+        >
+          Saved &mdash; changes apply everywhere
+        </span>
       </div>
     </div>
   );
