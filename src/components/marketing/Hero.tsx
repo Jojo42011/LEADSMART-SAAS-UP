@@ -25,18 +25,9 @@ export function Hero() {
 
       <div className="relative mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-3xl text-center">
-          <motion.div {...fade(0)}>
-            <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3.5 py-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
-              <span className="label-mono text-muted">
-                Autonomous SEO platform
-              </span>
-            </span>
-          </motion.div>
-
           <motion.h1
             {...fade(0.1)}
-            className="font-display mt-7 text-[44px] leading-[1.04] tracking-tight sm:text-[68px] md:text-[78px]"
+            className="font-display text-[44px] leading-[1.04] tracking-tight sm:text-[68px] md:text-[78px]"
           >
             SEO that runs
             <br />

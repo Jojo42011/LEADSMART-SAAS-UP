@@ -1,7 +1,6 @@
 import { Nav } from "@/components/marketing/Nav";
 import { Hero } from "@/components/marketing/Hero";
 import { StatStrip } from "@/components/marketing/StatStrip";
-import { KeywordMarquee } from "@/components/marketing/KeywordMarquee";
 import { Pipeline } from "@/components/marketing/Pipeline";
 import { Features } from "@/components/marketing/Features";
 import { Scoring } from "@/components/marketing/Scoring";
@@ -17,7 +16,6 @@ export default function Home() {
       <Nav />
       <Hero />
       <StatStrip />
-      <KeywordMarquee />
       <Pipeline />
       <Features />
       <Scoring />
