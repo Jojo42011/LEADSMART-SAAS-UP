@@ -58,9 +58,10 @@ export function Comparison() {
           </h2>
           <p className="mt-5 text-[15.5px] leading-relaxed text-muted">
             Great agencies employ smart people — billed by the hour, shared
-            across accounts, on contracts built for renewals. The most common
-            reasons businesses fire agencies are missed targets and lack of
-            transparency. Both are model problems. So we fixed the model.
+            across accounts, on contracts built for renewals, sometimes taking
+            a cut of your ad spend on top. The most common reasons businesses
+            fire agencies are missed targets and lack of transparency. Both
+            are model problems. So we fixed the model.
           </p>
         </Reveal>
 
