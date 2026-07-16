@@ -9,6 +9,7 @@
  */
 
 import type { Cadence, OnboardingData } from "./onboarding";
+import { scoreGeoTactics, scoreFreshness, suggestCitationPlatform, type GeoScore, type Freshness, type CitationPlatform } from "./geo";
 
 export type KeywordRow = {
   term: string;
@@ -20,6 +21,8 @@ export type KeywordRow = {
   /** True when the owner asked for this keyword in their wishlist. */
   wishlisted: boolean;
   status: "Tracking" | "Queued";
+  /** Off-site platform worth seeding for this keyword's citation profile. */
+  citationPlatform: CitationPlatform;
 };
 
 export type PillarScores = {
@@ -41,6 +44,10 @@ export type PageDraft = {
   infoGain: number;
   /** AI retrievability 0-100: how citable the page is for AI answer engines. */
   retrievability: number;
+  /** Which of the 9 GEO tactics this page satisfies. */
+  geo: GeoScore;
+  /** Content age and refresh status; fresher pages are more citable. */
+  freshness: Freshness;
 };
 
 export type CompetitorRow = {
@@ -148,6 +155,7 @@ export function buildPlan(data: OnboardingData): Plan {
       potential: Math.min(98, intentBase + (h % 28) + (wishlisted ? 14 : 0)),
       wishlisted,
       status: "Tracking",
+      citationPlatform: suggestCitationPlatform(intent),
     });
   };
 
@@ -189,6 +197,7 @@ export function buildPlan(data: OnboardingData): Plan {
         structure: 90 + (h % 9),
       };
       const audit = Math.round((pillars.substance + pillars.signal + pillars.structure) / 3);
+      const geo = scoreGeoTactics(k.term);
       return {
         title:
           location && k.term.startsWith(service.toLowerCase())
@@ -206,7 +215,9 @@ export function buildPlan(data: OnboardingData): Plan {
         grade: audit >= 92 ? "A" : "B",
         pillars,
         infoGain: Math.round((0.52 + (h % 34) / 100) * 100) / 100,
-        retrievability: 82 + (h % 17),
+        retrievability: Math.min(100, 55 + geo.count * 5),
+        geo,
+        freshness: scoreFreshness(k.term, i),
       };
     });
 

@@ -12,6 +12,7 @@ import {
   type PublishMode,
 } from "@/lib/onboarding";
 import { buildPlan, type PageDraft } from "@/lib/plan";
+import { GEO_TACTICS } from "@/lib/geo";
 
 type Tab = "Overview" | "Content" | "Keywords" | "Competitors" | "Settings";
 
@@ -434,27 +435,60 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
         >
           IG {page.infoGain.toFixed(2)}
         </span>
+        <span
+          className="hidden shrink-0 rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted sm:inline-flex"
+          title="GEO tactics satisfied, of 9 (citations, quotations, statistics, fluency, plain language, unique phrasing, authoritative tone, technical terms, keyword alignment)."
+        >
+          GEO {page.geo.count}/9
+        </span>
         <StatusPill status={page.status} />
       </div>
       {detailed && (
-        <div className="mt-3.5 grid gap-2 border-t border-line pt-3.5 sm:grid-cols-2 lg:grid-cols-4">
-          {(
-            [
-              ["Substance", page.pillars.substance],
-              ["Signal", page.pillars.signal],
-              ["Structure", page.pillars.structure],
-              ["AI retrieval", page.retrievability],
-            ] as const
-          ).map(([label, value]) => (
-            <div key={label} className="flex items-center gap-2.5">
-              <span className="w-[74px] shrink-0 text-[11.5px] text-muted">{label}</span>
-              <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-ink/[0.06]">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${value}%` }} />
+        <>
+          <div className="mt-3.5 grid gap-2 border-t border-line pt-3.5 sm:grid-cols-2 lg:grid-cols-4">
+            {(
+              [
+                ["Substance", page.pillars.substance],
+                ["Signal", page.pillars.signal],
+                ["Structure", page.pillars.structure],
+                ["AI retrieval", page.retrievability],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label} className="flex items-center gap-2.5">
+                <span className="w-[74px] shrink-0 text-[11.5px] text-muted">{label}</span>
+                <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-ink/[0.06]">
+                  <div className="h-full rounded-full bg-accent" style={{ width: `${value}%` }} />
+                </div>
+                <span className="w-6 shrink-0 text-right font-mono text-[10.5px] text-muted">{value}</span>
               </div>
-              <span className="w-6 shrink-0 text-right font-mono text-[10.5px] text-muted">{value}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <div className="mt-3.5 flex flex-wrap items-center gap-1.5 border-t border-line pt-3.5">
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                page.freshness.status === "Fresh"
+                  ? "bg-accent/10 text-accent"
+                  : page.freshness.status === "Aging"
+                    ? "bg-ink/[0.06] text-ink/70"
+                    : "bg-ink/[0.06] text-muted"
+              }`}
+              title={`${page.freshness.ageDays} days since last write. Content under 90 days is roughly 3x more likely to be cited by AI answer engines.`}
+            >
+              {page.freshness.status} &middot; {page.freshness.ageDays}d
+            </span>
+            {GEO_TACTICS.map((t) => (
+              <span
+                key={t.key}
+                title={t.description}
+                className={`rounded-full px-2.5 py-1 text-[11px] ${
+                  page.geo.tactics[t.key] ? "bg-ink/[0.06] text-ink/70" : "bg-ink/[0.03] text-muted/40 line-through"
+                }`}
+              >
+                {t.label}
+              </span>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
@@ -478,9 +512,9 @@ function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
         <span className="label-mono text-muted/60">{plan.pages.length} pages this cycle</span>
       </div>
       <p className="mt-1 text-[12.5px] text-muted">
-        Every page carries its Ascent Method pillar scores and an information
-        gain check against the pages currently ranking. Under 75 overall or
-        0.50 IG, it never publishes.
+        Every page carries its Ascent Method pillar scores, an information
+        gain check, a GEO tactics checklist for AI answer engines, and a
+        freshness clock. Under 75 overall or 0.50 IG, it never publishes.
       </p>
       <div className="mt-5 grid gap-3">
         {plan.pages.map((page) => (
@@ -510,7 +544,10 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
       </div>
       <p className="mt-1 px-6 text-[12.5px] text-muted">
         Ordered by business potential: how likely a searcher is to become a
-        customer, not just how many people search.
+        customer, not just how many people search. Off-site opportunity flags
+        where a Reddit, Quora, or Wikipedia presence would help this keyword
+        get cited by AI answer engines, based on where each engine draws its
+        citations from.
       </p>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-left text-[13px]">
@@ -521,6 +558,7 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
               <th className="px-4 py-3 font-medium">Intent</th>
               <th className="px-4 py-3 font-medium">Est. volume</th>
               <th className="px-4 py-3 font-medium">Difficulty</th>
+              <th className="px-4 py-3 font-medium">Off-site opportunity</th>
               <th className="px-6 py-3 text-right font-medium">Status</th>
             </tr>
           </thead>
@@ -551,6 +589,15 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
                 <td className="px-4 py-3.5 text-muted">{k.intent}</td>
                 <td className="px-4 py-3.5 text-muted">{k.volume.toLocaleString()}/mo</td>
                 <td className="px-4 py-3.5 text-muted">{k.difficulty}</td>
+                <td className="px-4 py-3.5">
+                  <span
+                    className="inline-flex items-center gap-1.5 text-muted"
+                    title={k.citationPlatform.reason}
+                  >
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-ink/20" />
+                    {k.citationPlatform.platform}
+                  </span>
+                </td>
                 <td className="px-6 py-3.5 text-right">
                   <StatusPill status={k.status} />
                 </td>
