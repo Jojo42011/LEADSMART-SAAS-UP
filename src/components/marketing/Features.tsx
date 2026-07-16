@@ -44,8 +44,8 @@ const features = [
     ),
   },
   {
-    title: "Live page monitoring",
-    text: "Checks every published page daily and flags anything that stops resolving before it costs you traffic.",
+    title: "Built for AI search",
+    text: "Every page cites real sources, carries real schema markup, and is structured so ChatGPT, Perplexity and AI Overviews can find and cite it, not just Google.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <circle cx="12" cy="12" r="8" />

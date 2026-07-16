@@ -10,6 +10,14 @@
 
 import type { Cadence, OnboardingData } from "./onboarding";
 import { scoreGeoTactics, scoreFreshness, suggestCitationPlatform, type GeoScore, type Freshness, type CitationPlatform } from "./geo";
+import {
+  breadcrumbListSchema,
+  faqPageSchema,
+  localBusinessSchema,
+  organizationSchema,
+  validateRequiredFields,
+  type JsonLd,
+} from "./schema";
 
 export type KeywordRow = {
   term: string;
@@ -63,6 +71,8 @@ export type PageDraft = {
   schemaTypes: string[];
   /** How many required fields are populated across those schemas, 0-100. */
   schemaRichness: number;
+  /** The actual generated JSON-LD for this page, keyed by schema type. */
+  schemaJsonLd: Record<string, JsonLd>;
   /** A single critical-failure check that caps the whole page's score when triggered. */
   veto: Veto;
   /** The one fix the agent works next, ordered by causal on-page priority. */
@@ -237,6 +247,9 @@ export function buildPlan(data: OnboardingData): Plan {
 
   /* ------------------------------- Pages -------------------------------- */
 
+  const siteUrl = (data.website.url || `https://${(data.business.name || "yoursite").toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`).replace(/\/$/, "");
+  const slug = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
   const buildPage = (k: KeywordRow, i: number, role: PageDraft["role"]): PageDraft => {
     const h = hash(k.term);
     const service =
@@ -244,10 +257,75 @@ export function buildPlan(data: OnboardingData): Plan {
       k.term.replace(/^best\s+/, "");
     const location = k.intent === "Local" ? k.term.slice(service.length).trim() : "";
     const geo = scoreGeoTactics(k.term, data.market.industry);
-    const schemaTypes =
-      role === "hub" ? ["Organization", "FAQPage", "BreadcrumbList"] : ["LocalBusiness", "FAQPage", "BreadcrumbList"];
-    const schemaRichness = 70 + (h % 31); // 5+ populated attributes is the bar for full credit
+    const title =
+      role === "hub"
+        ? `${titleCase(service)}: Complete Guide`
+        : location && k.term.startsWith(service.toLowerCase())
+          ? `${titleCase(service)} in ${titleCase(location)}`
+          : titleCase(k.term);
+    const pageUrl = `${siteUrl}/${slug(title)}`;
+
+    // Real generated JSON-LD, not a placeholder — see src/lib/schema.ts.
+    const breadcrumb = breadcrumbListSchema([
+      { name: "Home", url: siteUrl },
+      { name: titleCase(service), url: `${siteUrl}/${slug(service)}` },
+      { name: title, url: pageUrl },
+    ]);
+    const faq = faqPageSchema([
+      {
+        question: `How much does ${service} cost${location ? ` in ${titleCase(location)}` : ""}?`,
+        answer: `Cost depends on scope, but ${data.business.name || "we"} can walk you through exact pricing for your project${
+          data.business.phone ? ` — call ${data.business.phone}` : ""
+        }.`,
+      },
+      {
+        question: `Does ${data.business.name || "your team"} serve ${location ? titleCase(location) : titleCase(data.business.city || "this area")}?`,
+        answer: `Yes${data.business.serviceArea ? `, across ${data.business.serviceArea}` : ""}.`,
+      },
+    ]);
+    const entity =
+      role === "hub"
+        ? organizationSchema({
+            name: data.business.name || "Your business",
+            url: siteUrl,
+            sameAs: [],
+          })
+        : localBusinessSchema({
+            name: data.business.name || "Your business",
+            url: siteUrl,
+            telephone: data.business.phone || undefined,
+            address: data.business.city
+              ? {
+                  streetAddress: data.business.address || undefined,
+                  addressLocality: data.business.city,
+                  addressRegion: data.business.region || undefined,
+                  addressCountry: "US",
+                }
+              : undefined,
+          });
+
+    const schemaJsonLd: Record<string, JsonLd> = {
+      [role === "hub" ? "Organization" : "LocalBusiness"]: entity,
+      FAQPage: faq,
+      BreadcrumbList: breadcrumb,
+    };
+    const schemaTypes = Object.keys(schemaJsonLd);
+
+    // Richness is driven by real validation, not a guess: every populated
+    // required field earns credit, matching the "5+ populated attributes for
+    // full credit" bar from the schema research.
+    const requiredByType: Record<string, string[]> = {
+      LocalBusiness: ["name", "url", "telephone", "address.addressLocality"],
+      Organization: ["name", "url"],
+      FAQPage: ["mainEntity"],
+      BreadcrumbList: ["itemListElement"],
+    };
+    const missing = Object.entries(schemaJsonLd).flatMap(
+      ([type, obj]) => validateRequiredFields(obj, requiredByType[type] ?? [])
+    );
+    const schemaRichness = Math.max(40, 100 - missing.length * 15);
     const structureBonus = schemaRichness >= 90 ? 2 : 0;
+
     const pillars: PillarScores = {
       substance: 88 + (h % 11),
       signal: 84 + (h % 13),
@@ -257,12 +335,7 @@ export function buildPlan(data: OnboardingData): Plan {
     const rawAudit = Math.round((pillars.substance + pillars.signal + pillars.structure) / 3);
     const audit = veto.triggered ? Math.min(rawAudit, 59) : rawAudit;
     return {
-      title:
-        role === "hub"
-          ? `${titleCase(service)}: Complete Guide`
-          : location && k.term.startsWith(service.toLowerCase())
-            ? `${titleCase(service)} in ${titleCase(location)}`
-            : titleCase(k.term),
+      title,
       keyword: k.term,
       status: i === 0 ? "Drafting" : i < 3 ? "Queued" : "Researching",
       note: veto.triggered
@@ -283,6 +356,7 @@ export function buildPlan(data: OnboardingData): Plan {
       freshness: scoreFreshness(k.term, i),
       schemaTypes,
       schemaRichness,
+      schemaJsonLd,
       veto,
       priorityFix: derivePriorityFix(pillars),
       role,

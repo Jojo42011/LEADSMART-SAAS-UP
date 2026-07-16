@@ -92,7 +92,10 @@ function StatusPill({ status }: { status: string }) {
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-line bg-white ${className}`}>{children}</div>;
+  // min-w-0 stops grid/flex blowout: without it, a card with unbreakable
+  // content (long labels, mono numbers) can force its grid track wider than
+  // the viewport, since grid items default to min-width: auto.
+  return <div className={`min-w-0 rounded-2xl border border-line bg-white ${className}`}>{children}</div>;
 }
 
 function EmptyState({ title, sub }: { title: string; sub: string }) {
@@ -144,31 +147,31 @@ export function Dashboard() {
       </aside>
 
       {/* Main */}
-      <div className="flex min-h-screen flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-line bg-white px-6 py-4">
-          <div>
-            <h1 className="text-[16px] font-medium tracking-tight">{siteName}</h1>
-            {siteUrl && <p className="text-[12.5px] text-muted">{siteUrl}</p>}
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between gap-3 border-b border-line bg-white px-4 py-4 sm:px-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[16px] font-medium tracking-tight">{siteName}</h1>
+            {siteUrl && <p className="truncate text-[12.5px] text-muted">{siteUrl}</p>}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             {/* Mobile tab switcher */}
             <select
               value={tab}
               onChange={(e) => setTab(e.target.value as Tab)}
-              className="rounded-lg border border-line bg-white px-3 py-1.5 text-[13px] md:hidden"
+              className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[13px] md:hidden"
             >
               {navItems.map((item) => (
                 <option key={item.label}>{item.label}</option>
               ))}
             </select>
-            <span className="inline-flex items-center gap-2 rounded-full border border-line px-3.5 py-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
-              <span className="label-mono text-muted">Agent active</span>
+            <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-line px-3 py-1.5 sm:px-3.5">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-livepulse" />
+              <span className="label-mono hidden text-muted sm:inline">Agent active</span>
             </span>
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
+        <main className="mx-auto w-full max-w-5xl min-w-0 flex-1 px-4 py-10 sm:px-6">
           <motion.div
             key={tab}
             initial={{ opacity: 0, y: 16 }}
@@ -321,7 +324,7 @@ function Overview({
           </div>
           <div className="mt-4 grid gap-3">
             {plan.roadmap.map((r, i) => (
-              <div key={r.period} className="rounded-xl border border-line p-4">
+              <div key={r.period} className="min-w-0 rounded-xl border border-line p-4">
                 <div className="flex items-center justify-between gap-3">
                   <span className="label-mono text-accent">{r.period}</span>
                   <span className="text-[12px] text-muted">{r.pages} pages</span>
@@ -407,8 +410,9 @@ function Overview({
 }
 
 function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: boolean }) {
+  const [openSchema, setOpenSchema] = useState<string | null>(null);
   return (
-    <div className="rounded-xl border border-line p-4">
+    <div className="min-w-0 rounded-xl border border-line p-4">
       <div className="flex items-center gap-4">
         <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-paper-warm">
           <span className="text-[13px] font-medium leading-none">{page.grade}</span>
@@ -506,12 +510,26 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
             </span>
             <span className="flex flex-wrap gap-1.5">
               {page.schemaTypes.map((s) => (
-                <span key={s} className="rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[10.5px] text-muted">
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setOpenSchema(openSchema === s ? null : s)}
+                  className={`rounded-full px-2.5 py-1 font-mono text-[10.5px] transition-colors ${
+                    openSchema === s ? "bg-ink text-white" : "bg-ink/[0.04] text-muted hover:bg-ink/[0.08]"
+                  }`}
+                >
                   {s}
-                </span>
+                </button>
               ))}
             </span>
           </div>
+          {openSchema && page.schemaJsonLd[openSchema] && (
+            <div className="mt-3 overflow-x-auto rounded-lg bg-ink p-4">
+              <pre className="font-mono text-[11px] leading-relaxed text-white/80">
+                {JSON.stringify(page.schemaJsonLd[openSchema], null, 2)}
+              </pre>
+            </div>
+          )}
         </>
       )}
     </div>
