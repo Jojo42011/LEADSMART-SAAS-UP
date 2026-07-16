@@ -36,6 +36,8 @@ export type OnboardingData = {
     services: string;
     locations: string;
     competitors: string;
+    /** Average sale / job value in dollars. Powers revenue projections. */
+    avgSaleValue: string;
   };
   launch: {
     cadence: Cadence;
@@ -55,7 +57,7 @@ export const emptyOnboarding: OnboardingData = {
   website: { url: "", platform: null },
   publishing: { wpUser: "", wpAppPassword: "", githubRepo: "", githubToken: "" },
   searchConsole: { connected: false, skipped: false },
-  market: { industry: "", services: "", locations: "", competitors: "" },
+  market: { industry: "", services: "", locations: "", competitors: "", avgSaleValue: "" },
   launch: { cadence: "daily", mode: "autopilot" },
 };
 
@@ -66,7 +68,16 @@ export function loadOnboarding(): OnboardingData {
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return emptyOnboarding;
-    return { ...emptyOnboarding, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw) as Partial<OnboardingData>;
+    // Merge per section so data saved before a field existed stays valid.
+    return {
+      business: { ...emptyOnboarding.business, ...parsed.business },
+      website: { ...emptyOnboarding.website, ...parsed.website },
+      publishing: { ...emptyOnboarding.publishing, ...parsed.publishing },
+      searchConsole: { ...emptyOnboarding.searchConsole, ...parsed.searchConsole },
+      market: { ...emptyOnboarding.market, ...parsed.market },
+      launch: { ...emptyOnboarding.launch, ...parsed.launch },
+    };
   } catch {
     return emptyOnboarding;
   }

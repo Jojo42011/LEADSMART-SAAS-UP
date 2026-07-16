@@ -11,7 +11,7 @@ import {
   type Cadence,
   type PublishMode,
 } from "@/lib/onboarding";
-import { buildPlan } from "@/lib/plan";
+import { buildPlan, type PageDraft } from "@/lib/plan";
 
 type Tab = "Overview" | "Content" | "Keywords" | "Competitors" | "Settings";
 
@@ -197,6 +197,23 @@ export function Dashboard() {
 
 /* ------------------------------- Overview ------------------------------- */
 
+function PillarBar({ label, value, delay = 0 }: { label: string; value: number; delay?: number }) {
+  return (
+    <div className="flex items-center gap-4">
+      <span className="w-24 shrink-0 text-[12.5px] text-muted">{label}</span>
+      <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-ink/[0.06]">
+        <motion.div
+          className="h-full rounded-full bg-accent"
+          initial={{ width: 0 }}
+          animate={{ width: `${value}%` }}
+          transition={{ duration: 0.9, delay, ease: [0.21, 0.47, 0.32, 0.98] }}
+        />
+      </div>
+      <span className="w-8 shrink-0 text-right font-mono text-[11.5px] text-muted">{value}</span>
+    </div>
+  );
+}
+
 function Overview({
   plan,
   goTo,
@@ -208,13 +225,27 @@ function Overview({
     { label: "Workspace created" },
     { label: "Brand and design ingest" },
     { label: "Keyword gap analysis" },
-    { label: "Content plan built" },
+    { label: "90 day roadmap built" },
   ];
+
+  const overall = Math.round(
+    (plan.pillars.substance + plan.pillars.signal + plan.pillars.structure) / 3
+  );
 
   const kpis = [
     { label: "Pages in queue", value: String(plan.pages.length), note: "First page within 24 hours" },
-    { label: "Keywords tracked", value: String(plan.keywords.length), note: "From your services and locations" },
-    { label: "Average audit score", value: "—", note: "Scored at publish time" },
+    { label: "Keywords tracked", value: String(plan.keywords.length), note: "Prioritized by business potential" },
+    plan.projection
+      ? {
+          label: "Projected monthly value",
+          value: `$${plan.projection.monthlyValue.toLocaleString()}`,
+          note: `~${plan.projection.leads} leads/mo at $${plan.projection.avgSaleValue.toLocaleString()} each, month 6 pace`,
+        }
+      : {
+          label: "Projected monthly value",
+          value: "—",
+          note: "Add your average sale value in Settings to project revenue",
+        },
   ];
 
   return (
@@ -225,12 +256,12 @@ function Overview({
           <div>
             <span className="label-mono text-accent">Setup complete</span>
             <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">
-              Your content plan is ready.
+              Your 90 day roadmap is ready.
             </h2>
             <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-white/55">
               The agent mapped {plan.keywords.length} keywords across your
               services and locations and queued the first {plan.pages.length}{" "}
-              pages. Your first draft is being written now.
+              pages. The roadmap rebuilds itself from live results every cycle.
             </p>
           </div>
           <div className="w-full max-w-[240px] shrink-0">
@@ -257,6 +288,59 @@ function Overview({
         ))}
       </div>
 
+      {/* Method scores + roadmap */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Card className="p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-[14.5px] font-medium">Ascent Method score</p>
+              <p className="mt-1 text-[12.5px] text-muted">
+                Queue average across the three pillars
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="font-display text-4xl leading-none tracking-tight">{overall || "—"}</p>
+              <p className="label-mono mt-1 text-accent">
+                {overall >= 92 ? "Grade A" : overall > 0 ? "Grade B" : "Pending"}
+              </p>
+            </div>
+          </div>
+          <div className="mt-6 space-y-3.5">
+            <PillarBar label="Substance" value={plan.pillars.substance} />
+            <PillarBar label="Signal" value={plan.pillars.signal} delay={0.1} />
+            <PillarBar label="Structure" value={plan.pillars.structure} delay={0.2} />
+          </div>
+          <p className="mt-5 border-t border-line pt-4 text-[12px] leading-relaxed text-muted">
+            Substance is depth and originality. Signal is links and trust.
+            Structure is the technical layer. Pages under 75 never publish.
+          </p>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <p className="text-[14.5px] font-medium">90 day roadmap</p>
+            <span className="label-mono text-muted/60">Rebuilds every cycle</span>
+          </div>
+          <div className="mt-4 grid gap-3">
+            {plan.roadmap.map((r, i) => (
+              <div key={r.period} className="rounded-xl border border-line p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="label-mono text-accent">{r.period}</span>
+                  <span className="text-[12px] text-muted">{r.pages} pages</span>
+                </div>
+                <p className="mt-1.5 text-[13.5px] font-medium">{r.focus}</p>
+                {r.samples.length > 0 && (
+                  <p className="mt-1 truncate text-[12px] text-muted">
+                    {i === 0 ? "Starting with: " : "e.g. "}
+                    {r.samples.join(", ")}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
       {/* Queue preview */}
       <Card className="mt-6 p-6">
         <div className="flex items-center justify-between">
@@ -280,22 +364,47 @@ function Overview({
   );
 }
 
-function QueueRow({ page }: { page: { title: string; keyword: string; status: string; note: string } }) {
+function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: boolean }) {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-line p-4">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-paper-warm">
-        <svg viewBox="0 0 24 24" className="h-4.5 w-4.5 text-ink/50" fill="none" stroke="currentColor" strokeWidth="1.6">
-          <rect x="5" y="3" width="14" height="18" rx="2" />
-          <path d="M9 8h6M9 12h6M9 16h4" strokeLinecap="round" />
-        </svg>
+    <div className="rounded-xl border border-line p-4">
+      <div className="flex items-center gap-4">
+        <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-paper-warm">
+          <span className="text-[13px] font-medium leading-none">{page.grade}</span>
+          <span className="mt-0.5 font-mono text-[9.5px] leading-none text-muted">{page.audit}</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13.5px] font-medium">{page.title}</p>
+          <p className="truncate text-[12px] text-muted">
+            {page.keyword} &middot; {page.note}
+          </p>
+        </div>
+        <span
+          className="hidden shrink-0 rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted sm:inline-flex"
+          title="Information gain vs. current top-ranking pages. Must clear 0.50 to publish."
+        >
+          IG {page.infoGain.toFixed(2)}
+        </span>
+        <StatusPill status={page.status} />
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13.5px] font-medium">{page.title}</p>
-        <p className="truncate text-[12px] text-muted">
-          {page.keyword} &middot; {page.note}
-        </p>
-      </div>
-      <StatusPill status={page.status} />
+      {detailed && (
+        <div className="mt-3.5 grid gap-2 border-t border-line pt-3.5 sm:grid-cols-3">
+          {(
+            [
+              ["Substance", page.pillars.substance],
+              ["Signal", page.pillars.signal],
+              ["Structure", page.pillars.structure],
+            ] as const
+          ).map(([label, value]) => (
+            <div key={label} className="flex items-center gap-2.5">
+              <span className="w-16 shrink-0 text-[11.5px] text-muted">{label}</span>
+              <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-ink/[0.06]">
+                <div className="h-full rounded-full bg-accent" style={{ width: `${value}%` }} />
+              </div>
+              <span className="w-6 shrink-0 text-right font-mono text-[10.5px] text-muted">{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -317,9 +426,14 @@ function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
         <p className="text-[14.5px] font-medium">Content queue</p>
         <span className="label-mono text-muted/60">{plan.pages.length} pages this cycle</span>
       </div>
+      <p className="mt-1 text-[12.5px] text-muted">
+        Every page carries its Ascent Method pillar scores and an information
+        gain check against the pages currently ranking. Under 75 overall or
+        0.50 IG, it never publishes.
+      </p>
       <div className="mt-5 grid gap-3">
         {plan.pages.map((page) => (
-          <QueueRow key={page.keyword} page={page} />
+          <QueueRow key={page.keyword} page={page} detailed />
         ))}
       </div>
     </Card>
@@ -343,11 +457,16 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
         <p className="text-[14.5px] font-medium">Tracked keywords</p>
         <span className="label-mono text-muted/60">{plan.keywords.length} keywords</span>
       </div>
+      <p className="mt-1 px-6 text-[12.5px] text-muted">
+        Ordered by business potential: how likely a searcher is to become a
+        customer, not just how many people search.
+      </p>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-left text-[13px]">
           <thead>
             <tr className="border-y border-line text-muted">
               <th className="px-6 py-3 font-medium">Keyword</th>
+              <th className="px-4 py-3 font-medium">Potential</th>
               <th className="px-4 py-3 font-medium">Intent</th>
               <th className="px-4 py-3 font-medium">Est. volume</th>
               <th className="px-4 py-3 font-medium">Difficulty</th>
@@ -358,6 +477,14 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
             {plan.keywords.map((k) => (
               <tr key={k.term} className="border-b border-line last:border-0">
                 <td className="px-6 py-3.5 font-medium">{k.term}</td>
+                <td className="px-4 py-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-[4px] w-14 overflow-hidden rounded-full bg-ink/[0.06]">
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${k.potential}%` }} />
+                    </div>
+                    <span className="font-mono text-[11.5px] text-muted">{k.potential}</span>
+                  </div>
+                </td>
                 <td className="px-4 py-3.5 text-muted">{k.intent}</td>
                 <td className="px-4 py-3.5 text-muted">{k.volume.toLocaleString()}/mo</td>
                 <td className="px-4 py-3.5 text-muted">{k.difficulty}</td>
@@ -399,27 +526,66 @@ function Competitors({
       </Card>
     );
 
+  const totalGaps = plan.competitors.reduce((s, c) => s + c.gapCount, 0);
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {plan.competitors.map((c) => (
-        <Card key={c.name} className="p-6">
-          <div className="flex items-start justify-between gap-4">
-            <p className="text-[14.5px] font-medium">{c.name}</p>
-            <span className="label-mono shrink-0 text-muted/60">{c.keywords} keywords</span>
+    <>
+      <Card className="p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[14.5px] font-medium">Keyword gap analysis</p>
+            <p className="mt-1 text-[12.5px] text-muted">
+              Keywords competitors rank for that you don&apos;t. Every gap
+              becomes a page in your queue.
+            </p>
           </div>
-          <p className="mt-1 text-[12.5px] text-muted">{c.note}</p>
-          <div className="mt-5">
-            <div className="flex items-center justify-between text-[12px] text-muted">
-              <span>Keyword overlap</span>
-              <span className="font-medium text-ink">{c.overlap}%</span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${c.overlap}%` }} />
-            </div>
+          <div className="text-right">
+            <p className="font-display text-4xl leading-none tracking-tight">{totalGaps}</p>
+            <p className="label-mono mt-1 text-accent">Open gaps</p>
           </div>
-        </Card>
-      ))}
-    </div>
+        </div>
+      </Card>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        {plan.competitors.map((c) => (
+          <Card key={c.name} className="p-6">
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-[14.5px] font-medium">{c.name}</p>
+              <span className="label-mono shrink-0 text-muted/60">
+                {c.referringDomains} ref. domains
+              </span>
+            </div>
+            <p className="mt-1 text-[12.5px] text-muted">{c.note}</p>
+            <div className="mt-5">
+              <div className="flex items-center justify-between text-[12px] text-muted">
+                <span>Keyword overlap</span>
+                <span className="font-medium text-ink">{c.overlap}%</span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
+                <div className="h-full rounded-full bg-accent" style={{ width: `${c.overlap}%` }} />
+              </div>
+            </div>
+            <div className="mt-5 border-t border-line pt-4">
+              <p className="text-[12px] text-muted">
+                <span className="font-medium text-ink">{c.gapCount} gaps</span>{" "}
+                found &middot; closing via queue
+              </p>
+              {c.gapKeywords.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {c.gapKeywords.map((g) => (
+                    <span
+                      key={g}
+                      className="rounded-full bg-ink/[0.04] px-2.5 py-1 text-[11.5px] text-ink/70"
+                    >
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -487,9 +653,17 @@ function Settings({
           />
           <Field
             label="Competitors"
-            hint="Names or domains, comma separated"
+            hint="Names or domains, comma separated. Their coverage is mapped against yours for the gap analysis."
             value={data.market.competitors}
             onChange={(e) => update({ market: { ...data.market, competitors: e.target.value } })}
+          />
+          <Field
+            label="Average sale value"
+            hint="What a typical customer is worth in dollars. Powers the revenue projection on your overview."
+            placeholder="4500"
+            inputMode="numeric"
+            value={data.market.avgSaleValue}
+            onChange={(e) => update({ market: { ...data.market, avgSaleValue: e.target.value } })}
           />
         </div>
       </Card>

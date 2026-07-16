@@ -434,10 +434,19 @@ function MarketStep({ data, update }: StepProps) {
         <Field
           label="Competitors you watch"
           optional
-          hint="We will find the rest."
+          hint="The agent maps their keyword coverage against yours. Every gap becomes a page in your queue. We will find the rest."
           placeholder="competitor1.com, competitor2.com"
           value={m.competitors}
           onChange={(e) => set({ competitors: e.target.value })}
+        />
+        <Field
+          label="Average sale value"
+          optional
+          hint="What a typical customer is worth in dollars. Turns rankings into revenue projections on your dashboard."
+          placeholder="4500"
+          inputMode="numeric"
+          value={m.avgSaleValue}
+          onChange={(e) => set({ avgSaleValue: e.target.value })}
         />
       </div>
     </div>
