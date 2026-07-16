@@ -43,7 +43,7 @@ If Reddit access is ever restored, the Routine will pick it up automatically.
 even if the community discusses them. Ascent only generates from real,
 verifiable source material. This stance is fixed.
 
-**Last synced:** 2026-07-16
+**Last synced:** 2026-07-16 (run 2)
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -79,3 +79,27 @@ act on what's genuinely new beyond this.
   matches current AEO/SEO/GEO best-practice consensus (freshness, answer-first,
   third-party citations, platform differences). No code changes. Documented the
   Reddit-fetch limitation and the WebSearch fallback strategy.
+
+- **2026-07-16 (run 2)** — Reddit still blocked (WebFetch on r/TechSEO .json
+  failed, as expected). Searched: "Google core update July 2026", "new AI
+  search crawler user agent 2026 robots.txt". Findings:
+  - **NEW + applied:** the canonical 2026 AI-crawler references (Cubitrek,
+    evolveamz, openhermit, LumenGEO) list **Meta-ExternalAgent** and
+    **cohere-ai** as standard training crawlers among the ~12 every site should
+    know. Both were missing from our `robots.ts` allowlist. Added both to the
+    training tier. This closes a real (if small) gap for a product that
+    promises AI crawlers can reach client pages.
+  - **Noted, not applied (needs official-source verification):** some 2026
+    blogs now classify **ClaudeBot** as training-only and **anthropic-ai** as a
+    public-search/citation crawler — the reverse of our current tiering.
+    Sources are secondary marketing blogs and conflict with earlier references,
+    and the tier labels have no functional effect today (we allow both tiers;
+    the split only matters for a future per-client "opt out of AI training"
+    toggle). Leaving classifications unchanged until confirmable against
+    Anthropic's official crawler docs, to avoid churning labels on conflicting
+    secondary sourcing.
+  - **Confirmed, no action:** March/May 2026 Google core updates emphasized
+    people-first content and a "Gemini semantic filter" penalizing AI content
+    published at scale without human editorial oversight — which is exactly
+    what Ascent's quality gate, information-gain gate, and E-E-A-T veto already
+    defend against. No change needed; consistent with existing design.

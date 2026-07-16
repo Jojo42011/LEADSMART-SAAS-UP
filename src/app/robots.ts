@@ -17,6 +17,8 @@ const TRAINING_CRAWLERS = [
   "Google-Extended", // Gemini / AI Overviews training
   "CCBot", // Common Crawl, feeds many third-party LLM training sets
   "Applebot-Extended", // Apple Intelligence training
+  "Meta-ExternalAgent", // Meta AI training / indexing (Llama, Meta AI assistant)
+  "cohere-ai", // Cohere training
 ];
 
 /** Power live citations in AI answers. Blocking these makes a site invisible to AI search. */
