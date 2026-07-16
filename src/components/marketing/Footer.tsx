@@ -7,8 +7,8 @@ const columns = [
     title: "Product",
     links: [
       { label: "How it works", href: "/#how-it-works" },
-      { label: "Features", href: "/#features" },
-      { label: "Scoring", href: "/#scoring" },
+      { label: "Method", href: "/#method" },
+      { label: "Compare", href: "/#compare" },
       { label: "Pricing", href: "/#pricing" },
     ],
   },
@@ -17,6 +17,7 @@ const columns = [
     links: [
       { label: "About", href: "#" },
       { label: "Blog", href: "#" },
+      { label: "AI information", href: "/ai-information" },
       { label: "Contact", href: "#" },
     ],
   },

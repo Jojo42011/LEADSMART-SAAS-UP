@@ -4,12 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
-import {
-  type OnboardingData,
-  emptyOnboarding,
-  loadOnboarding,
-  saveOnboarding,
-} from "@/lib/onboarding";
+import { type OnboardingData, useOnboarding } from "@/lib/onboarding";
 import { site } from "@/lib/site";
 import { ChoiceCard, Field, StepHeading } from "./fields";
 
@@ -26,21 +21,9 @@ const ease = [0.21, 0.47, 0.32, 0.98] as const;
 
 export function Wizard() {
   const router = useRouter();
-  const [data, setData] = useState<OnboardingData>(emptyOnboarding);
+  const [data, update] = useOnboarding();
   const [step, setStep] = useState(0);
   const [launching, setLaunching] = useState(false);
-
-  useEffect(() => {
-    setData(loadOnboarding());
-  }, []);
-
-  const update = (patch: Partial<OnboardingData>) => {
-    setData((prev) => {
-      const next = { ...prev, ...patch };
-      saveOnboarding(next);
-      return next;
-    });
-  };
 
   const canContinue = useMemo(() => {
     switch (steps[step].key) {
@@ -217,6 +200,8 @@ function BusinessStep({ data, update }: StepProps) {
         <div className="grid gap-5 sm:grid-cols-2">
           <Field
             label="Phone"
+            optional
+            hint="Shown on every page and included in your business schema markup."
             placeholder="(480) 555 0184"
             value={b.phone}
             onChange={(e) => set({ phone: e.target.value })}
@@ -238,6 +223,7 @@ function BusinessStep({ data, update }: StepProps) {
           />
           <Field
             label="State or region"
+            optional
             placeholder="Arizona"
             value={b.region}
             onChange={(e) => set({ region: e.target.value })}
@@ -434,10 +420,27 @@ function MarketStep({ data, update }: StepProps) {
         <Field
           label="Competitors you watch"
           optional
-          hint="We will find the rest."
+          hint="The agent maps their keyword coverage against yours. Every gap becomes a page in your queue. We will find the rest."
           placeholder="competitor1.com, competitor2.com"
           value={m.competitors}
           onChange={(e) => set({ competitors: e.target.value })}
+        />
+        <Field
+          label="Average sale value"
+          optional
+          hint="What a typical customer is worth in dollars. Turns rankings into revenue projections on your dashboard."
+          placeholder="4500"
+          inputMode="numeric"
+          value={m.avgSaleValue}
+          onChange={(e) => set({ avgSaleValue: e.target.value })}
+        />
+        <Field
+          label="Keyword wishlist"
+          optional
+          hint="Keywords you already know you want to win. The agent seeds its queue with these first."
+          placeholder="pool remodeling scottsdale, best pool builder phoenix"
+          value={m.wishlist}
+          onChange={(e) => set({ wishlist: e.target.value })}
         />
       </div>
     </div>
@@ -459,6 +462,7 @@ function LaunchStep({ data, update }: StepProps) {
       value: data.searchConsole.connected ? "Search Console connected" : "Internal tracking",
     },
     { label: "Industry", value: data.market.industry || "Not set" },
+    { label: "Services", value: data.market.services || "Not set" },
   ];
   return (
     <div>

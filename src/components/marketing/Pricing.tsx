@@ -7,14 +7,15 @@ const tiers = [
   {
     name: "Starter",
     price: 49,
+    cadence: "A page every 3 days",
     blurb: "For one site that needs to start climbing.",
     features: [
       "1 website",
-      "15 pages per month",
-      "Competitor and keyword research",
-      "Nine dimension audit scoring",
-      "Search Console ranking sync",
-      "Live page monitoring",
+      "Up to 10 pages per month",
+      "Full keyword and competitor research",
+      "90 day roadmap, rebuilt every cycle",
+      "Ascent Method audits on every page",
+      "Live dashboard and Search Console sync",
     ],
     cta: "Start free trial",
     featured: false,
@@ -22,14 +23,15 @@ const tiers = [
   {
     name: "Growth",
     price: 129,
+    cadence: "A page every day",
     blurb: "For businesses serious about owning their market.",
     features: [
-      "5 websites",
-      "31 pages per site per month",
+      "1 website at full daily cadence",
+      "Up to 31 pages per month",
       "Everything in Starter",
       "AI image generation on every page",
+      "Revenue projections from your sale value",
       "Priority publish scheduling",
-      "Weekly strategy reports",
     ],
     cta: "Start free trial",
     featured: true,
@@ -37,9 +39,10 @@ const tiers = [
   {
     name: "Scale",
     price: 299,
-    blurb: "For agencies running SEO across a client roster.",
+    cadence: "Daily, across your roster",
+    blurb: "For agencies running SEO across many clients.",
     features: [
-      "15 websites",
+      "10 websites, daily cadence on each",
       "Unlimited page generation",
       "Everything in Growth",
       "White label reports",
@@ -58,13 +61,15 @@ export function Pricing() {
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="label-mono text-accent">Pricing</span>
           <h2 className="font-display mt-5 text-4xl leading-[1.08] tracking-tight sm:text-5xl">
-            Less than one hour
+            Priced by pace,
             <br />
-            <em className="text-muted">of an agency retainer.</em>
+            <em className="text-muted">not by the hour.</em>
           </h2>
           <p className="mt-5 text-[15.5px] leading-relaxed text-muted">
-            Agencies charge thousands per month and publish a handful of pages.
-            This publishes every day and costs less than your phone bill.
+            An agency retainer starts around $3,000 a month, on a contract,
+            after a sales call. Every Ascent plan is public, month to month,
+            and costs less than one of those days. Pick how fast you want to
+            publish.
           </p>
         </Reveal>
 
@@ -83,9 +88,10 @@ export function Pricing() {
                   Most popular
                 </span>
               )}
-              <h3 className="text-[15px] font-medium tracking-tight">
-                {t.name}
-              </h3>
+              <div className="flex items-baseline justify-between gap-3">
+                <h3 className="text-[15px] font-medium tracking-tight">{t.name}</h3>
+                <span className="label-mono text-[10.5px] text-muted/70">{t.cadence}</span>
+              </div>
               <div className="mt-4 flex items-baseline gap-1.5">
                 <span className="font-display text-5xl tracking-tight">
                   ${t.price}
@@ -129,7 +135,7 @@ export function Pricing() {
 
         <Reveal className="mt-10 text-center">
           <p className="label-mono text-muted/70">
-            Every plan starts with a 14 day free trial &middot; No card required
+            14 day free trial &middot; No card required &middot; Month to month, cancel anytime
           </p>
         </Reveal>
       </div>
