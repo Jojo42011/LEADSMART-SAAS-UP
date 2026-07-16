@@ -85,7 +85,7 @@ export function Method() {
                 </p>
               </div>
               <div className="rounded-xl border border-line-dark bg-white/[0.03] p-6 font-mono text-[12.5px]">
-                <p className="text-white/40">// information gain check</p>
+                <p className="text-white/40">{"// information gain check"}</p>
                 <p className="mt-3 text-white/70">
                   draft vs. top 10 ranking pages
                 </p>

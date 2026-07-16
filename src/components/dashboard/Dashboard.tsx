@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { Field } from "@/components/onboarding/fields";
 import {
-  loadOnboarding,
-  saveOnboarding,
+  useOnboarding,
   type OnboardingData,
   type Cadence,
   type PublishMode,
@@ -106,26 +105,13 @@ function EmptyState({ title, sub }: { title: string; sub: string }) {
 }
 
 export function Dashboard() {
-  const [data, setData] = useState<OnboardingData | null>(null);
+  const [data, update] = useOnboarding();
   const [tab, setTab] = useState<Tab>("Overview");
 
-  useEffect(() => {
-    setData(loadOnboarding());
-  }, []);
+  const plan = useMemo(() => buildPlan(data), [data]);
 
-  const plan = useMemo(() => (data ? buildPlan(data) : null), [data]);
-
-  const update = (patch: Partial<OnboardingData>) => {
-    setData((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, ...patch };
-      saveOnboarding(next);
-      return next;
-    });
-  };
-
-  const siteName = data?.business.name || "Your site";
-  const siteUrl = data?.website.url?.replace(/^https?:\/\//, "") || "";
+  const siteName = data.business.name || "Your site";
+  const siteUrl = data.website.url?.replace(/^https?:\/\//, "") || "";
 
   return (
     <div className="flex min-h-screen bg-paper-warm">
@@ -183,20 +169,18 @@ export function Dashboard() {
         </header>
 
         <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-          {plan && data && (
-            <motion.div
-              key={tab}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.21, 0.47, 0.32, 0.98] }}
-            >
-              {tab === "Overview" && <Overview plan={plan} goTo={setTab} />}
-              {tab === "Content" && <Content plan={plan} />}
-              {tab === "Keywords" && <Keywords plan={plan} />}
-              {tab === "Competitors" && <Competitors plan={plan} goTo={setTab} />}
-              {tab === "Settings" && <Settings data={data} update={update} />}
-            </motion.div>
-          )}
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: [0.21, 0.47, 0.32, 0.98] }}
+          >
+            {tab === "Overview" && <Overview plan={plan} goTo={setTab} />}
+            {tab === "Content" && <Content plan={plan} />}
+            {tab === "Keywords" && <Keywords plan={plan} />}
+            {tab === "Competitors" && <Competitors plan={plan} goTo={setTab} />}
+            {tab === "Settings" && <Settings data={data} update={update} />}
+          </motion.div>
         </main>
       </div>
     </div>

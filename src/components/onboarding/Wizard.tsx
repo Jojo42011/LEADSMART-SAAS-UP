@@ -4,12 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
-import {
-  type OnboardingData,
-  emptyOnboarding,
-  loadOnboarding,
-  saveOnboarding,
-} from "@/lib/onboarding";
+import { type OnboardingData, useOnboarding } from "@/lib/onboarding";
 import { site } from "@/lib/site";
 import { ChoiceCard, Field, StepHeading } from "./fields";
 
@@ -26,21 +21,9 @@ const ease = [0.21, 0.47, 0.32, 0.98] as const;
 
 export function Wizard() {
   const router = useRouter();
-  const [data, setData] = useState<OnboardingData>(emptyOnboarding);
+  const [data, update] = useOnboarding();
   const [step, setStep] = useState(0);
   const [launching, setLaunching] = useState(false);
-
-  useEffect(() => {
-    setData(loadOnboarding());
-  }, []);
-
-  const update = (patch: Partial<OnboardingData>) => {
-    setData((prev) => {
-      const next = { ...prev, ...patch };
-      saveOnboarding(next);
-      return next;
-    });
-  };
 
   const canContinue = useMemo(() => {
     switch (steps[step].key) {

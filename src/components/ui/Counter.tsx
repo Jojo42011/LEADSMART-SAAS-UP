@@ -25,11 +25,7 @@ export function Counter({
   const [value, setValue] = useState(0);
 
   useEffect(() => {
-    if (!inView) return;
-    if (reduced) {
-      setValue(to);
-      return;
-    }
+    if (!inView || reduced) return;
     let raf = 0;
     const start = performance.now();
     const tick = (now: number) => {
@@ -42,10 +38,12 @@ export function Counter({
     return () => cancelAnimationFrame(raf);
   }, [inView, to, duration, reduced]);
 
+  const display = reduced && inView ? to : value;
+
   return (
     <span ref={ref} className={className}>
       {prefix}
-      {value.toLocaleString()}
+      {display.toLocaleString()}
       {suffix}
     </span>
   );

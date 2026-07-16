@@ -1,8 +1,12 @@
+"use client";
+
 /**
  * Onboarding state. Persisted to localStorage for now; swaps to the
  * multi tenant API once the backend lands. Every field here maps to
  * something the agent needs before its first run.
  */
+
+import { useEffect, useState } from "react";
 
 export type Platform = "wordpress" | "github";
 export type PublishMode = "autopilot" | "review";
@@ -97,4 +101,29 @@ export function saveOnboarding(data: OnboardingData) {
 export function clearOnboarding() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(KEY);
+}
+
+/**
+ * Hydrates onboarding state from localStorage after mount (localStorage is
+ * browser-only, so the server and the initial client render both use
+ * `emptyOnboarding` to stay hydration-safe) and returns an updater that
+ * persists every patch immediately.
+ */
+export function useOnboarding(): [OnboardingData, (patch: Partial<OnboardingData>) => void] {
+  const [data, setData] = useState<OnboardingData>(emptyOnboarding);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from a browser-only store (localStorage); the server and first client render intentionally match on emptyOnboarding.
+    setData(loadOnboarding());
+  }, []);
+
+  const update = (patch: Partial<OnboardingData>) => {
+    setData((prev) => {
+      const next = { ...prev, ...patch };
+      saveOnboarding(next);
+      return next;
+    });
+  };
+
+  return [data, update];
 }
