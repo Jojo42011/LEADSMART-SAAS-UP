@@ -200,6 +200,8 @@ function BusinessStep({ data, update }: StepProps) {
         <div className="grid gap-5 sm:grid-cols-2">
           <Field
             label="Phone"
+            optional
+            hint="Shown on every page and included in your business schema markup."
             placeholder="(480) 555 0184"
             value={b.phone}
             onChange={(e) => set({ phone: e.target.value })}
@@ -221,6 +223,7 @@ function BusinessStep({ data, update }: StepProps) {
           />
           <Field
             label="State or region"
+            optional
             placeholder="Arizona"
             value={b.region}
             onChange={(e) => set({ region: e.target.value })}
@@ -459,6 +462,7 @@ function LaunchStep({ data, update }: StepProps) {
       value: data.searchConsole.connected ? "Search Console connected" : "Internal tracking",
     },
     { label: "Industry", value: data.market.industry || "Not set" },
+    { label: "Services", value: data.market.services || "Not set" },
   ];
   return (
     <div>
