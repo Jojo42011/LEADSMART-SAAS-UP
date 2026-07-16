@@ -73,6 +73,13 @@ const statusStyles: Record<string, string> = {
   Tracking: "bg-ink/[0.06] text-ink/70",
 };
 
+const gapTypeStyles: Record<string, string> = {
+  Core: "bg-accent/10 text-accent",
+  Differentiator: "bg-ink/[0.08] text-ink/80",
+  Commodity: "bg-ink/[0.04] text-muted",
+  Opportunity: "bg-ink text-white",
+};
+
 function StatusPill({ status }: { status: string }) {
   return (
     <span
@@ -424,7 +431,20 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
           <span className="mt-0.5 font-mono text-[9.5px] leading-none text-muted">{page.audit}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[13.5px] font-medium">{page.title}</p>
+          <p className="flex items-center gap-2 truncate text-[13.5px] font-medium">
+            {page.title}
+            <span className="shrink-0 rounded-full bg-ink/[0.04] px-2 py-0.5 text-[10px] font-normal uppercase tracking-wide text-muted">
+              {page.role}
+            </span>
+            {page.veto.triggered && (
+              <span
+                className="shrink-0 rounded-full bg-ink px-2 py-0.5 text-[10px] font-normal text-white"
+                title={page.veto.reason ?? undefined}
+              >
+                Held: critical check
+              </span>
+            )}
+          </p>
           <p className="truncate text-[12px] text-muted">
             {page.keyword} &middot; {page.note}
           </p>
@@ -437,9 +457,9 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
         </span>
         <span
           className="hidden shrink-0 rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted sm:inline-flex"
-          title="GEO tactics satisfied, of 9 (citations, quotations, statistics, fluency, plain language, unique phrasing, authoritative tone, technical terms, keyword alignment)."
+          title="Weighted GEO score: tactics weighted by their real measured impact on AI-answer visibility, minus penalties for keyword stuffing, thin content, or excessive CTAs."
         >
-          GEO {page.geo.count}/9
+          GEO {page.geo.score}/100
         </span>
         <StatusPill status={page.status} />
       </div>
@@ -487,6 +507,26 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
                 {t.label}
               </span>
             ))}
+            {page.geo.negativeSignals
+              .filter((n) => n.triggered)
+              .map((n) => (
+                <span key={n.key} className="rounded-full bg-ink px-2.5 py-1 text-[11px] text-white">
+                  &minus; {n.label}
+                </span>
+              ))}
+          </div>
+          <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3.5">
+            <span className="text-[12px] text-muted">
+              <span className="label-mono mr-1.5 text-accent">Next fix (Group {page.priorityFix.group})</span>
+              {page.priorityFix.label}
+            </span>
+            <span className="flex flex-wrap gap-1.5">
+              {page.schemaTypes.map((s) => (
+                <span key={s} className="rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[10.5px] text-muted">
+                  {s}
+                </span>
+              ))}
+            </span>
           </div>
         </>
       )}
@@ -513,8 +553,10 @@ function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
       </div>
       <p className="mt-1 text-[12.5px] text-muted">
         Every page carries its Ascent Method pillar scores, an information
-        gain check, a GEO tactics checklist for AI answer engines, and a
-        freshness clock. Under 75 overall or 0.50 IG, it never publishes.
+        gain check, a weighted GEO score for AI answer engines, real schema
+        markup, and a freshness clock. Under 75 overall, 0.50 IG, or a failed
+        critical check, it never publishes. Spoke pages (location-specific)
+        always go out before the hub page they link back to.
       </p>
       <div className="mt-5 grid gap-3">
         {plan.pages.map((page) => (
@@ -645,8 +687,11 @@ function Competitors({
           <div>
             <p className="text-[14.5px] font-medium">Keyword gap analysis</p>
             <p className="mt-1 text-[12.5px] text-muted">
-              Keywords competitors rank for that you don&apos;t. Every gap
-              becomes a page in your queue.
+              Every gap is classified: <span className="font-medium text-ink/80">Core</span> (all
+              top competitors cover it — add now), <span className="font-medium text-ink/80">Differentiator</span> (some
+              do, and outrank you), <span className="font-medium text-ink/80">Commodity</span> (everyone
+              covers it shallowly — a sentence is enough), or <span className="font-medium text-ink/80">Opportunity</span> (nobody
+              owns this angle yet — a real chance to lead).
             </p>
           </div>
           <div className="text-right">
@@ -677,17 +722,20 @@ function Competitors({
             <div className="mt-5 border-t border-line pt-4">
               <p className="text-[12px] text-muted">
                 <span className="font-medium text-ink">{c.gapCount} gaps</span>{" "}
-                found &middot; closing via queue
+                found &middot; classified below
               </p>
-              {c.gapKeywords.length > 0 && (
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {c.gapKeywords.map((g) => (
-                    <span
-                      key={g}
-                      className="rounded-full bg-ink/[0.04] px-2.5 py-1 text-[11.5px] text-ink/70"
-                    >
-                      {g}
-                    </span>
+              {c.gapItems.length > 0 && (
+                <div className="mt-2.5 grid gap-2">
+                  {c.gapItems.map((g) => (
+                    <div key={g.keyword} className="flex items-start gap-2.5">
+                      <span
+                        className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${gapTypeStyles[g.type]}`}
+                        title={g.action}
+                      >
+                        {g.type}
+                      </span>
+                      <span className="text-[12px] text-ink/70">{g.keyword}</span>
+                    </div>
                   ))}
                 </div>
               )}

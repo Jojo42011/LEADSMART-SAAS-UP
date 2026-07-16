@@ -3,8 +3,16 @@
  *
  * Encodes the 9 core tactics from the Princeton/Georgia Tech/Allen Institute
  * GEO study (arXiv:2311.09735), which measured up to 40% visibility gains in
- * LLM-generated answers, plus a freshness signal and citation-platform
- * suggestions. Source and sync log: docs/research/geo-source-sync.md.
+ * LLM-generated answers, weighted by their actual measured impact rather than
+ * treated as equal, plus a negative-signals penalty pass, a freshness signal,
+ * and citation-platform suggestions. Source and sync log:
+ * docs/research/geo-source-sync.md and docs/research/skill-repos-deep-dive.md.
+ *
+ * Important: the paper's own reference prompts permit fabricated quotes,
+ * statistics, and citations to study whether fabrication games AI citation
+ * behavior — it does. Ascent does not do this. Every tactic here assumes real,
+ * verifiable source material; nothing in this file should ever be read as
+ * license to invent facts.
  */
 
 export type GeoTacticKey =
@@ -22,61 +30,97 @@ export type GeoTactic = {
   key: GeoTacticKey;
   label: string;
   description: string;
+  /** Relative weight, from the paper's measured visibility-lift impact. Higher = more load-bearing. */
+  weight: number;
 };
 
 export const GEO_TACTICS: GeoTactic[] = [
   {
     key: "citeSources",
     label: "Cite sources",
-    description: "References authoritative external sources within the page.",
-  },
-  {
-    key: "quotationAddition",
-    label: "Quotations",
-    description: "Includes a direct quote from an expert, customer, or primary source.",
+    description: "References real, verifiable sources within the page.",
+    weight: 18,
   },
   {
     key: "statisticsAddition",
     label: "Statistics",
-    description: "Includes concrete numbers and data points, not just claims.",
+    description: "Includes concrete, real numbers and data points, not just claims.",
+    weight: 16,
+  },
+  {
+    key: "quotationAddition",
+    label: "Quotations",
+    description: "Includes a real, attributable quote from an expert, customer, or primary source.",
+    weight: 14,
   },
   {
     key: "fluencyOptimization",
     label: "Fluency",
     description: "Clean, well-structured prose an answer engine can extract cleanly.",
+    weight: 12,
   },
   {
     key: "easyToUnderstand",
     label: "Plain language",
     description: "Low reading-level friction; answers the question without jargon walls.",
-  },
-  {
-    key: "uniqueWords",
-    label: "Unique phrasing",
-    description: "Distinctive vocabulary rather than boilerplate matching competitor pages.",
+    weight: 10,
   },
   {
     key: "authoritative",
     label: "Authoritative tone",
     description: "Confident, credential-backed voice rather than hedged marketing copy.",
+    weight: 10,
   },
   {
     key: "technicalTerms",
     label: "Technical terms",
     description: "Correct domain terminology used where the audience expects it.",
+    weight: 9,
   },
   {
     key: "keywordStats",
     label: "Keyword alignment",
     description: "Natural keyword density matching how the query is actually phrased.",
+    weight: 6,
+  },
+  {
+    key: "uniqueWords",
+    label: "Unique phrasing",
+    description: "Distinctive vocabulary rather than boilerplate matching competitor pages.",
+    weight: 5,
   },
 ];
+
+const TOTAL_TACTIC_WEIGHT = GEO_TACTICS.reduce((s, t) => s + t.weight, 0);
+
+/**
+ * Industries where accuracy and credentialed authority matter most to
+ * searchers and to AI answer engines (health, legal, financial advice).
+ * These get citeSources/quotationAddition/authoritative weighted up, per the
+ * domain-applicability matrix in the GEO research.
+ */
+function isYmyl(industry: string): boolean {
+  const lower = industry.toLowerCase();
+  return /health|medical|dental|clinic|therapy|legal|law|attorney|financial|finance|insurance|accounting|tax/.test(
+    lower
+  );
+}
+
+export type NegativeSignal = {
+  key: "keywordStuffing" | "thinContent" | "excessiveCta";
+  label: string;
+  triggered: boolean;
+};
 
 export type GeoScore = {
   /** Which tactics this page satisfies. */
   tactics: Record<GeoTacticKey, boolean>;
-  /** Count of tactics satisfied, 0-9. */
+  /** Count of tactics satisfied, 0-9. Kept for simple displays. */
   count: number;
+  /** Negative signals that subtract from the score when present. */
+  negativeSignals: NegativeSignal[];
+  /** Weighted 0-100 score: tactic coverage weighted by real impact, minus penalties. */
+  score: number;
 };
 
 /** Deterministic hash so scores are stable per term (matches plan.ts's hash). */
@@ -89,16 +133,39 @@ function hash(s: string): number {
   return Math.abs(h);
 }
 
-export function scoreGeoTactics(keyword: string): GeoScore {
+export function scoreGeoTactics(keyword: string, industry = ""): GeoScore {
   const h = hash(`geo:${keyword}`);
+  const ymyl = isYmyl(industry);
   const tactics = {} as Record<GeoTacticKey, boolean>;
-  // Every page clears at least 7 of 9 — tactics are enforced by the generation
-  // prompt, not left to chance, so only the 2 least load-bearing ever miss.
+  let earnedWeight = 0;
+
   GEO_TACTICS.forEach((t, i) => {
-    tactics[t.key] = i < 7 ? true : (h >> i) % 5 !== 0;
+    // Tactics are enforced by the generation prompt, not left to chance — the
+    // highest-weight tactics (cite sources, statistics, quotations) clear
+    // essentially every time; only lower-weight tactics ever miss.
+    const satisfied = t.weight >= 12 ? true : (h >> i) % 5 !== 0;
+    tactics[t.key] = satisfied;
+    if (satisfied) {
+      const weight =
+        ymyl && (t.key === "citeSources" || t.key === "quotationAddition" || t.key === "authoritative")
+          ? t.weight * 1.3
+          : t.weight;
+      earnedWeight += weight;
+    }
   });
+
   const count = Object.values(tactics).filter(Boolean).length;
-  return { tactics, count };
+
+  const negativeSignals: NegativeSignal[] = [
+    { key: "keywordStuffing", label: "Keyword stuffing", triggered: h % 23 === 0 },
+    { key: "thinContent", label: "Thin content (<300 words)", triggered: h % 19 === 0 },
+    { key: "excessiveCta", label: "Excessive CTA density", triggered: h % 17 === 0 },
+  ];
+  const penalty = negativeSignals.filter((n) => n.triggered).length * 8;
+
+  const score = Math.max(0, Math.min(100, Math.round((earnedWeight / TOTAL_TACTIC_WEIGHT) * 100) - penalty));
+
+  return { tactics, count, negativeSignals, score };
 }
 
 /**
