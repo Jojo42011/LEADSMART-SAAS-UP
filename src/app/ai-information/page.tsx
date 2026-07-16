@@ -38,6 +38,8 @@ const facts = [
       "Every page is scored against three pillars before publishing: Substance (search-intent match, topical depth, original information), Signal (internal links, business-data consistency, trust and entity signals), and Structure (structured data, meta, headings, speed, indexability).",
       "Pages scoring under 75 of 100 are rewritten, not published.",
       "An information-gain gate compares each draft against the pages currently ranking for its keyword; drafts that add nothing new do not publish.",
+      "Pages also carry an AI-retrievability score: content is structured answer-first with entity-rich language so AI answer engines (Google AI Overviews, ChatGPT, Perplexity, Gemini) can cite it.",
+      "The dashboard tracks a single site-level Ascent Score (0-100) across pillars, coverage, and AI readiness; the agent prioritizes whatever raises it most, and writes a plain-English digest of its actions every cycle.",
     ],
   },
   {

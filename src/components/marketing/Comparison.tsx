@@ -5,12 +5,12 @@ import { Reveal, Stagger, StaggerItem } from "@/components/ui/Reveal";
 const rows = [
   {
     label: "Monthly cost",
-    agency: "$3,000 to $10,000 retainer",
+    agency: "$1,500 to $20,000 retainer",
     ascent: "$49 to $299",
   },
   {
     label: "Contract",
-    agency: "6 to 12 month commitment",
+    agency: "12 month lock-ins are standard",
     ascent: "Month to month, cancel anytime",
   },
   {
@@ -96,8 +96,9 @@ export function Comparison() {
 
         <Reveal className="mt-10 text-center">
           <p className="mx-auto max-w-xl text-[13px] leading-relaxed text-muted/70">
-            Agency figures reflect typical published retainer ranges and
-            contract terms across the US SEO industry. If you have an agency
+            Agency figures reflect published retainer guidance from leading US
+            SEO agencies: typical minimums run $1,500 to $6,000 a month, with
+            12-month commitments recommended to start. If you have an agency
             you love, keep them — point Ascent at the work they don&apos;t
             have hours for.
           </p>

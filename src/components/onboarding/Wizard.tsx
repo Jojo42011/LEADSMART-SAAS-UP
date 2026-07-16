@@ -448,6 +448,14 @@ function MarketStep({ data, update }: StepProps) {
           value={m.avgSaleValue}
           onChange={(e) => set({ avgSaleValue: e.target.value })}
         />
+        <Field
+          label="Keyword wishlist"
+          optional
+          hint="Keywords you already know you want to win. The agent seeds its queue with these first."
+          placeholder="pool remodeling scottsdale, best pool builder phoenix"
+          value={m.wishlist}
+          onChange={(e) => set({ wishlist: e.target.value })}
+        />
       </div>
     </div>
   );

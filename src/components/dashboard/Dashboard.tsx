@@ -228,13 +228,14 @@ function Overview({
     { label: "90 day roadmap built" },
   ];
 
-  const overall = Math.round(
-    (plan.pillars.substance + plan.pillars.signal + plan.pillars.structure) / 3
-  );
-
   const kpis = [
     { label: "Pages in queue", value: String(plan.pages.length), note: "First page within 24 hours" },
     { label: "Keywords tracked", value: String(plan.keywords.length), note: "Prioritized by business potential" },
+    {
+      label: "Organic traffic value",
+      value: plan.trafficValue > 0 ? `$${plan.trafficValue.toLocaleString()}/mo` : "—",
+      note: "What the same clicks would cost in ads",
+    },
     plan.projection
       ? {
           label: "Projected monthly value",
@@ -278,41 +279,46 @@ function Overview({
       </div>
 
       {/* KPIs */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
           <Card key={kpi.label} className="p-6">
             <p className="label-mono text-muted/70">{kpi.label}</p>
-            <p className="font-display mt-2 text-4xl tracking-tight">{kpi.value}</p>
+            <p className="font-display mt-2 text-[27px] leading-tight tracking-tight sm:text-3xl">{kpi.value}</p>
             <p className="mt-1.5 text-[12.5px] text-muted">{kpi.note}</p>
           </Card>
         ))}
       </div>
 
-      {/* Method scores + roadmap */}
+      {/* Ascent Score + roadmap */}
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[14.5px] font-medium">Ascent Method score</p>
+              <p className="text-[14.5px] font-medium">Ascent Score</p>
               <p className="mt-1 text-[12.5px] text-muted">
-                Queue average across the three pillars
+                Site health across pillars, coverage and AI readiness
               </p>
             </div>
             <div className="text-right">
-              <p className="font-display text-4xl leading-none tracking-tight">{overall || "—"}</p>
+              <p className="font-display text-4xl leading-none tracking-tight">
+                {plan.ascentScore.value || "—"}
+              </p>
               <p className="label-mono mt-1 text-accent">
-                {overall >= 92 ? "Grade A" : overall > 0 ? "Grade B" : "Pending"}
+                {plan.ascentScore.delta > 0 ? `▲ +${plan.ascentScore.delta} this cycle` : "Pending"}
               </p>
             </div>
           </div>
           <div className="mt-6 space-y-3.5">
             <PillarBar label="Substance" value={plan.pillars.substance} />
-            <PillarBar label="Signal" value={plan.pillars.signal} delay={0.1} />
-            <PillarBar label="Structure" value={plan.pillars.structure} delay={0.2} />
+            <PillarBar label="Signal" value={plan.pillars.signal} delay={0.08} />
+            <PillarBar label="Structure" value={plan.pillars.structure} delay={0.16} />
+            <PillarBar label="AI retrieval" value={plan.retrievability} delay={0.24} />
           </div>
           <p className="mt-5 border-t border-line pt-4 text-[12px] leading-relaxed text-muted">
             Substance is depth and originality. Signal is links and trust.
-            Structure is the technical layer. Pages under 75 never publish.
+            Structure is the technical layer. AI retrieval is how citable your
+            pages are in AI answers. The agent works on whatever raises this
+            score most.
           </p>
         </Card>
 
@@ -335,6 +341,50 @@ function Overview({
                     {r.samples.join(", ")}
                   </p>
                 )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* Cycle digest + AI visibility */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <p className="text-[14.5px] font-medium">This cycle</p>
+            <span className="label-mono text-muted/60">Written by your agent</span>
+          </div>
+          <p className="mt-3 text-[13.5px] leading-relaxed text-ink/80">{plan.digest.summary}</p>
+          <div className="mt-4 grid gap-2 border-t border-line pt-4">
+            {plan.digest.actions.map((a) => (
+              <div key={a} className="flex items-start gap-2.5 text-[13px] text-muted">
+                <svg viewBox="0 0 16 16" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {a}
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <p className="text-[14.5px] font-medium">AI visibility</p>
+            <span className="label-mono text-muted/60">Retrievability {plan.retrievability || "—"}/100</span>
+          </div>
+          <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
+            Every page is structured so AI answer engines can cite it: direct
+            answers first, entity-rich language, machine-readable structure.
+            Citations are tracked here once your first pages are live.
+          </p>
+          <div className="mt-4 grid gap-2 border-t border-line pt-4">
+            {["Google AI Overviews", "ChatGPT", "Perplexity", "Gemini"].map((engine) => (
+              <div key={engine} className="flex items-center justify-between text-[13px]">
+                <span className="text-ink/80">{engine}</span>
+                <span className="inline-flex items-center gap-2 text-[11.5px] text-muted">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
+                  Monitoring
+                </span>
               </div>
             ))}
           </div>
@@ -387,16 +437,17 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
         <StatusPill status={page.status} />
       </div>
       {detailed && (
-        <div className="mt-3.5 grid gap-2 border-t border-line pt-3.5 sm:grid-cols-3">
+        <div className="mt-3.5 grid gap-2 border-t border-line pt-3.5 sm:grid-cols-2 lg:grid-cols-4">
           {(
             [
               ["Substance", page.pillars.substance],
               ["Signal", page.pillars.signal],
               ["Structure", page.pillars.structure],
+              ["AI retrieval", page.retrievability],
             ] as const
           ).map(([label, value]) => (
             <div key={label} className="flex items-center gap-2.5">
-              <span className="w-16 shrink-0 text-[11.5px] text-muted">{label}</span>
+              <span className="w-[74px] shrink-0 text-[11.5px] text-muted">{label}</span>
               <div className="h-[4px] flex-1 overflow-hidden rounded-full bg-ink/[0.06]">
                 <div className="h-full rounded-full bg-accent" style={{ width: `${value}%` }} />
               </div>
@@ -476,7 +527,19 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
           <tbody>
             {plan.keywords.map((k) => (
               <tr key={k.term} className="border-b border-line last:border-0">
-                <td className="px-6 py-3.5 font-medium">{k.term}</td>
+                <td className="px-6 py-3.5 font-medium">
+                  <span className="inline-flex items-center gap-2">
+                    {k.term}
+                    {k.wishlisted && (
+                      <span
+                        className="rounded-full bg-accent/10 px-2 py-0.5 text-[10.5px] font-medium text-accent"
+                        title="You asked for this keyword. The agent prioritizes it."
+                      >
+                        Wishlist
+                      </span>
+                    )}
+                  </span>
+                </td>
                 <td className="px-4 py-3.5">
                   <div className="flex items-center gap-2.5">
                     <div className="h-[4px] w-14 overflow-hidden rounded-full bg-ink/[0.06]">
@@ -664,6 +727,13 @@ function Settings({
             inputMode="numeric"
             value={data.market.avgSaleValue}
             onChange={(e) => update({ market: { ...data.market, avgSaleValue: e.target.value } })}
+          />
+          <Field
+            label="Keyword wishlist"
+            hint="Keywords you want to win, comma separated. The agent seeds its queue with these first."
+            placeholder="pool remodeling scottsdale, best pool builder"
+            value={data.market.wishlist}
+            onChange={(e) => update({ market: { ...data.market, wishlist: e.target.value } })}
           />
         </div>
       </Card>

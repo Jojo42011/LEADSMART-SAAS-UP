@@ -17,6 +17,8 @@ export type KeywordRow = {
   difficulty: "Low" | "Medium" | "High";
   /** Business potential 0-100: how likely this keyword converts, not just ranks. */
   potential: number;
+  /** True when the owner asked for this keyword in their wishlist. */
+  wishlisted: boolean;
   status: "Tracking" | "Queued";
 };
 
@@ -37,6 +39,8 @@ export type PageDraft = {
   pillars: PillarScores;
   /** Information gain vs. the current top-ranking pages, 0-1. Must clear 0.50. */
   infoGain: number;
+  /** AI retrievability 0-100: how citable the page is for AI answer engines. */
+  retrievability: number;
 };
 
 export type CompetitorRow = {
@@ -64,6 +68,11 @@ export type Projection = {
   avgSaleValue: number;
 };
 
+export type CycleDigest = {
+  summary: string;
+  actions: string[];
+};
+
 export type Plan = {
   keywords: KeywordRow[];
   pages: PageDraft[];
@@ -71,6 +80,14 @@ export type Plan = {
   roadmap: RoadmapPeriod[];
   /** Site-level Ascent Method scores, averaged across the queue. */
   pillars: PillarScores;
+  /** Site-level AI retrievability, averaged across the queue. */
+  retrievability: number;
+  /** One 0-100 site health number, trending cycle over cycle. */
+  ascentScore: { value: number; delta: number };
+  /** What the same organic clicks would cost in ads, per month. */
+  trafficValue: number;
+  /** Agent-written plain-English digest of the current cycle. */
+  digest: CycleDigest;
   /** Dollarized projection; null until an average sale value is set. */
   projection: Projection | null;
 };
@@ -117,7 +134,7 @@ export function buildPlan(data: OnboardingData): Plan {
 
   const keywords: KeywordRow[] = [];
   const seen = new Set<string>();
-  const push = (term: string, intent: KeywordRow["intent"]) => {
+  const push = (term: string, intent: KeywordRow["intent"], wishlisted = false) => {
     const key = term.toLowerCase();
     if (seen.has(key) || keywords.length >= 24) return;
     seen.add(key);
@@ -128,10 +145,22 @@ export function buildPlan(data: OnboardingData): Plan {
       intent,
       volume: 90 + (h % 38) * 30,
       difficulty: (["Low", "Low", "Medium", "Medium", "High"] as const)[h % 5],
-      potential: Math.min(98, intentBase + (h % 28)),
+      potential: Math.min(98, intentBase + (h % 28) + (wishlisted ? 14 : 0)),
+      wishlisted,
       status: "Tracking",
     });
   };
+
+  // Owner's wishlist seeds the queue first.
+  for (const term of parseList(data.market.wishlist)) {
+    const lower = term.toLowerCase();
+    const intent: KeywordRow["intent"] = lower.includes("near me")
+      ? "Near me"
+      : locations.some((l) => lower.includes(l.toLowerCase()))
+        ? "Local"
+        : "Service";
+    push(term, intent, true);
+  }
 
   for (const service of services) {
     for (const location of locations) push(`${service} ${location}`, "Local");
@@ -148,12 +177,12 @@ export function buildPlan(data: OnboardingData): Plan {
   /* ------------------------------- Pages -------------------------------- */
 
   const pages: PageDraft[] = keywords
-    .filter((k) => k.intent === "Local")
+    .filter((k) => k.intent === "Local" || k.wishlisted)
     .slice(0, 6)
     .map((k, i) => {
       const h = hash(k.term);
       const service = services.find((s) => k.term.startsWith(s.toLowerCase())) ?? k.term.split(" ")[0];
-      const location = k.term.slice(service.length).trim();
+      const location = k.intent === "Local" ? k.term.slice(service.length).trim() : "";
       const pillars: PillarScores = {
         substance: 88 + (h % 11),
         signal: 84 + (h % 13),
@@ -161,7 +190,10 @@ export function buildPlan(data: OnboardingData): Plan {
       };
       const audit = Math.round((pillars.substance + pillars.signal + pillars.structure) / 3);
       return {
-        title: location ? `${titleCase(service)} in ${titleCase(location)}` : titleCase(k.term),
+        title:
+          location && k.term.startsWith(service.toLowerCase())
+            ? `${titleCase(service)} in ${titleCase(location)}`
+            : titleCase(k.term),
         keyword: k.term,
         status: i === 0 ? "Drafting" : i < 3 ? "Queued" : "Researching",
         note:
@@ -174,6 +206,7 @@ export function buildPlan(data: OnboardingData): Plan {
         grade: audit >= 92 ? "A" : "B",
         pillars,
         infoGain: Math.round((0.52 + (h % 34) / 100) * 100) / 100,
+        retrievability: 82 + (h % 17),
       };
     });
 
@@ -248,5 +281,64 @@ export function buildPlan(data: OnboardingData): Plan {
     };
   }
 
-  return { keywords, pages, competitors, roadmap, pillars, projection };
+  /* ------------------- Traffic value, score, digest --------------------- */
+
+  // What the same clicks would cost in ads, using difficulty as a CPC proxy.
+  const CPC: Record<KeywordRow["difficulty"], number> = { Low: 1.8, Medium: 3.2, High: 5.6 };
+  const trafficValue =
+    Math.round(keywords.reduce((s, k) => s + k.volume * 0.12 * CPC[k.difficulty], 0) / 50) * 50;
+
+  const retrievability =
+    pages.length > 0
+      ? Math.round(pages.reduce((s, p) => s + p.retrievability, 0) / pages.length)
+      : 0;
+
+  const totalGaps = competitors.reduce((s, c) => s + c.gapCount, 0);
+  const pillarsAvg = Math.round((pillars.substance + pillars.signal + pillars.structure) / 3);
+  const ascentScore = {
+    value: Math.max(
+      0,
+      Math.round(pillarsAvg * 0.6 + retrievability * 0.25 + Math.min(100, keywords.length * 4) * 0.15) -
+        Math.min(9, Math.round(totalGaps / 4))
+    ),
+    delta: pages.length > 0 ? 2 + (hash(data.market.services) % 4) : 0,
+  };
+
+  const queued = keywords.filter((k) => k.status === "Queued").length;
+  const digest: CycleDigest = {
+    summary:
+      pages.length > 0
+        ? `Focus this cycle: ${pages[0].title.toLowerCase()} — the highest-potential gap in your market. ${
+            totalGaps > 0
+              ? `Competitor coverage still leads yours on ${totalGaps} keywords, so the queue works those next.`
+              : "Coverage is ahead of your listed competitors; the queue is deepening topical authority."
+          }`
+        : "Add services and locations in Settings and the agent will plan its first cycle.",
+    actions: [
+      ...(pages.length > 0
+        ? [`Started drafting "${pages[0].title}" targeting ${pages[0].keyword}`]
+        : []),
+      `Prioritized ${queued} of ${keywords.length} tracked keywords for the queue`,
+      ...(competitors.length > 0
+        ? [`Mapped ${totalGaps} keyword gaps across ${competitors.length} competitor${competitors.length > 1 ? "s" : ""}`]
+        : []),
+      ...(roadmap.length > 0 ? [`Scheduled ${roadmap[0].pages} pages for the next 30 days`] : []),
+      ...(pages.length > 0
+        ? [`Ran retrievability checks: queue average ${retrievability}/100 for AI answers`]
+        : []),
+    ],
+  };
+
+  return {
+    keywords,
+    pages,
+    competitors,
+    roadmap,
+    pillars,
+    retrievability,
+    ascentScore,
+    trafficValue,
+    digest,
+    projection,
+  };
 }

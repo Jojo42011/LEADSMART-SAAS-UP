@@ -38,6 +38,8 @@ export type OnboardingData = {
     competitors: string;
     /** Average sale / job value in dollars. Powers revenue projections. */
     avgSaleValue: string;
+    /** Keywords the owner wants to win, comma separated. Seeds the queue. */
+    wishlist: string;
   };
   launch: {
     cadence: Cadence;
@@ -57,7 +59,7 @@ export const emptyOnboarding: OnboardingData = {
   website: { url: "", platform: null },
   publishing: { wpUser: "", wpAppPassword: "", githubRepo: "", githubToken: "" },
   searchConsole: { connected: false, skipped: false },
-  market: { industry: "", services: "", locations: "", competitors: "", avgSaleValue: "" },
+  market: { industry: "", services: "", locations: "", competitors: "", avgSaleValue: "", wishlist: "" },
   launch: { cadence: "daily", mode: "autopilot" },
 };
 
