@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { Field } from "@/components/onboarding/fields";
@@ -12,6 +12,7 @@ import {
 } from "@/lib/onboarding";
 import { buildPlan, type PageDraft } from "@/lib/plan";
 import { GEO_TACTICS } from "@/lib/geo";
+import { loadIntel, type Intel } from "@/lib/intel";
 
 type Tab = "Overview" | "Content" | "Keywords" | "Competitors" | "Settings";
 
@@ -110,6 +111,12 @@ function EmptyState({ title, sub }: { title: string; sub: string }) {
 export function Dashboard() {
   const [data, update] = useOnboarding();
   const [tab, setTab] = useState<Tab>("Overview");
+  const [intel, setIntel] = useState<Intel>({});
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from localStorage, same pattern as useOnboarding
+    setIntel(loadIntel());
+  }, []);
 
   const plan = useMemo(() => buildPlan(data), [data]);
 
@@ -180,8 +187,18 @@ export function Dashboard() {
           >
             {tab === "Overview" && <Overview plan={plan} goTo={setTab} />}
             {tab === "Content" && <Content plan={plan} />}
-            {tab === "Keywords" && <Keywords plan={plan} />}
-            {tab === "Competitors" && <Competitors plan={plan} goTo={setTab} />}
+            {tab === "Keywords" && (
+              <div className="grid gap-5">
+                <LiveResearch intel={intel} mode="keywords" />
+                <Keywords plan={plan} />
+              </div>
+            )}
+            {tab === "Competitors" && (
+              <div className="grid gap-5">
+                <LiveResearch intel={intel} mode="competitors" />
+                <Competitors plan={plan} goTo={setTab} />
+              </div>
+            )}
             {tab === "Settings" && <Settings data={data} update={update} />}
           </motion.div>
         </main>
@@ -588,7 +605,7 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
       </div>
       <p className="mt-1 px-6 text-[12.5px] text-muted">
         Ordered by business potential: how likely a searcher is to become a
-        customer, not just how many people search. Off-site opportunity flags
+        customer, not just how many people search. Off site opportunity flags
         where a Reddit, Quora, or Wikipedia presence would help this keyword
         get cited by AI answer engines, based on where each engine draws its
         citations from.
@@ -602,7 +619,7 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
               <th className="px-4 py-3 font-medium">Intent</th>
               <th className="px-4 py-3 font-medium">Est. volume</th>
               <th className="px-4 py-3 font-medium">Difficulty</th>
-              <th className="px-4 py-3 font-medium">Off-site opportunity</th>
+              <th className="px-4 py-3 font-medium">Off site opportunity</th>
               <th className="px-6 py-3 text-right font-medium">Status</th>
             </tr>
           </thead>
@@ -883,4 +900,80 @@ function Settings({
       </div>
     </div>
   );
+}
+
+/* ---------------------------- Live research ---------------------------- */
+
+/**
+ * Findings from the agent's real first research cycle, captured during
+ * onboarding. Shown above the planning views so live market data always
+ * outranks simulation.
+ */
+function LiveResearch({ intel, mode }: { intel: Intel; mode: "keywords" | "competitors" }) {
+  const research = intel.research;
+  if (!research) return null;
+
+  if (mode === "competitors" && research.competitors.length > 0) {
+    return (
+      <Card className="p-6">
+        <div className="flex items-center justify-between">
+          <p className="flex items-center gap-2 text-[14.5px] font-medium">
+            Live research findings
+            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
+          </p>
+          <span className="label-mono text-muted/60">
+            {research.source === "live" ? "From live search" : "First pass"}
+          </span>
+        </div>
+        <p className="mt-1 text-[12.5px] text-muted">{research.summary}</p>
+        <div className="mt-4 grid gap-2.5">
+          {research.competitors.slice(0, 6).map((c) => (
+            <div key={c.domain} className="rounded-xl border border-line p-4">
+              <p className="font-mono text-[12.5px] font-medium">{c.domain}</p>
+              <p className="mt-1 text-[12.5px] text-muted">
+                <span className="font-medium text-ink/70">Ranks because </span>
+                {c.strength}
+              </p>
+              <p className="mt-0.5 text-[12.5px] text-muted">
+                <span className="font-medium text-accent">Your opening </span>
+                {c.weakness}
+              </p>
+            </div>
+          ))}
+        </div>
+      </Card>
+    );
+  }
+
+  if (mode === "keywords" && research.keywords.length > 0) {
+    return (
+      <Card className="p-6">
+        <div className="flex items-center justify-between">
+          <p className="flex items-center gap-2 text-[14.5px] font-medium">
+            Live keyword targets
+            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
+          </p>
+          <span className="label-mono text-muted/60">
+            {research.keywords.length} found {research.source === "live" ? "via live search" : "from your profile"}
+          </span>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {research.keywords.slice(0, 18).map((k) => (
+            <span
+              key={k.keyword}
+              title={k.reason}
+              className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[12px]"
+            >
+              {k.keyword}
+              <span className={`font-mono text-[10.5px] ${k.opportunity >= 70 ? "text-accent" : "text-muted/60"}`}>
+                {k.opportunity}
+              </span>
+            </span>
+          ))}
+        </div>
+      </Card>
+    );
+  }
+
+  return null;
 }

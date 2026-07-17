@@ -30,6 +30,8 @@ export type OnboardingData = {
     wpAppPassword: string;
     githubRepo: string;
     githubToken: string;
+    /** True when GitHub was connected through OAuth; the token lives in an httpOnly cookie server side. */
+    githubOauth: boolean;
   };
   searchConsole: {
     connected: boolean;
@@ -61,7 +63,7 @@ export const emptyOnboarding: OnboardingData = {
     serviceArea: "",
   },
   website: { url: "", platform: null },
-  publishing: { wpUser: "", wpAppPassword: "", githubRepo: "", githubToken: "" },
+  publishing: { wpUser: "", wpAppPassword: "", githubRepo: "", githubToken: "", githubOauth: false },
   searchConsole: { connected: false, skipped: false },
   market: { industry: "", services: "", locations: "", competitors: "", avgSaleValue: "", wishlist: "" },
   launch: { cadence: "daily", mode: "autopilot" },

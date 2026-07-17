@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
-import { type OnboardingData, useOnboarding } from "@/lib/onboarding";
+import { type OnboardingData, useOnboarding, loadOnboarding, saveOnboarding } from "@/lib/onboarding";
+import { saveIntel, type SiteIngest } from "@/lib/intel";
 import { site } from "@/lib/site";
 import { ChoiceCard, Field, StepHeading } from "./fields";
+
+const STEP_KEY = "onboarding.step";
 
 const steps = [
   { key: "business", label: "Business" },
@@ -24,6 +27,50 @@ export function Wizard() {
   const [data, update] = useOnboarding();
   const [step, setStep] = useState(0);
   const [launching, setLaunching] = useState(false);
+  const handledCallback = useRef(false);
+
+  // Handle returns from connect flows (WordPress application password
+  // authorization and GitHub OAuth) and restore the saved step, so the
+  // user lands back exactly where they left, already connected.
+  /* eslint-disable react-hooks/set-state-in-effect -- one-time hydration from URL callback params and sessionStorage, both browser-only; runs exactly once on mount, same pattern as useOnboarding */
+  useEffect(() => {
+    if (handledCallback.current) return;
+    handledCallback.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const wpLogin = params.get("user_login");
+    const wpPassword = params.get("password");
+    const github = params.get("github");
+    const saved = Number(window.sessionStorage.getItem(STEP_KEY) || "0");
+
+    if (wpLogin && wpPassword) {
+      const current = loadOnboarding();
+      saveOnboarding({
+        ...current,
+        publishing: { ...current.publishing, wpUser: wpLogin, wpAppPassword: wpPassword },
+      });
+      // useOnboarding hydrated from the pre-callback snapshot; re-apply so
+      // the connected state renders immediately.
+      update({ publishing: { ...current.publishing, wpUser: wpLogin, wpAppPassword: wpPassword } });
+      setStep(2);
+    } else if (github === "connected") {
+      const current = loadOnboarding();
+      update({ publishing: { ...current.publishing, githubOauth: true } });
+      setStep(2);
+    } else if (!Number.isNaN(saved) && saved > 0 && saved < steps.length) {
+      setStep(saved);
+    }
+
+    if (wpLogin || github) {
+      window.history.replaceState({}, "", "/onboarding");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount by design
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    window.sessionStorage.setItem(STEP_KEY, String(step));
+  }, [step]);
 
   const canContinue = useMemo(() => {
     switch (steps[step].key) {
@@ -35,7 +82,10 @@ export function Wizard() {
         if (data.website.platform === "wordpress")
           return data.publishing.wpUser.trim() !== "" && data.publishing.wpAppPassword.trim() !== "";
         if (data.website.platform === "github")
-          return data.publishing.githubRepo.trim() !== "" && data.publishing.githubToken.trim() !== "";
+          return (
+            data.publishing.githubRepo.trim() !== "" &&
+            (data.publishing.githubOauth || data.publishing.githubToken.trim() !== "")
+          );
         return false;
       case "searchconsole":
         return data.searchConsole.connected || data.searchConsole.skipped;
@@ -49,7 +99,7 @@ export function Wizard() {
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
-  if (launching) return <LaunchSequence onDone={() => router.push("/dashboard")} />;
+  if (launching) return <LaunchSequence data={data} onDone={() => router.push("/dashboard")} />;
 
   return (
     <div className="flex min-h-screen bg-paper-warm">
@@ -245,12 +295,40 @@ function BusinessStep({ data, update }: StepProps) {
 function WebsiteStep({ data, update }: StepProps) {
   const w = data.website;
   const set = (patch: Partial<typeof w>) => update({ website: { ...w, ...patch } });
+  const [studying, setStudying] = useState(false);
+  const [ingest, setIngest] = useState<SiteIngest | null>(null);
+  const lastStudied = useRef("");
+
+  const study = async () => {
+    const url = w.url.trim();
+    if (!url || url === lastStudied.current) return;
+    lastStudied.current = url;
+    setStudying(true);
+    try {
+      const res = await fetch("/api/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const json = (await res.json()) as SiteIngest;
+      setIngest(json);
+      if (json.ok) {
+        saveIntel({ ingest: json });
+        if (json.platform === "wordpress" && !w.platform) set({ platform: "wordpress" });
+      }
+    } catch {
+      setIngest(null);
+    } finally {
+      setStudying(false);
+    }
+  };
+
   return (
     <div>
       <StepHeading
         eyebrow="Step 2"
         title={<>Where do we publish?</>}
-        sub="Point the agent at your live site and tell us what it runs on. Pages publish directly there, so the equity stays yours."
+        sub="Point the agent at your live site. It reads the site immediately: brand, structure, platform. Pages publish directly there, so the equity stays yours."
       />
       <div className="mt-8 grid gap-5">
         <Field
@@ -259,20 +337,65 @@ function WebsiteStep({ data, update }: StepProps) {
           type="url"
           value={w.url}
           onChange={(e) => set({ url: e.target.value })}
+          onBlur={study}
         />
+
+        {studying && (
+          <div className="flex items-center gap-3 rounded-xl border border-line bg-white p-4">
+            <span className="h-4 w-4 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+            <p className="text-[13px] text-muted">Reading your site: brand, structure, platform</p>
+          </div>
+        )}
+
+        {!studying && ingest?.ok && (
+          <div className="rounded-xl border border-line bg-white p-5">
+            <p className="label-mono text-accent">Site studied</p>
+            <div className="mt-3 grid gap-1.5 text-[13px]">
+              {ingest.title && (
+                <p className="truncate">
+                  <span className="text-muted">Title </span>
+                  <span className="font-medium">{ingest.title}</span>
+                </p>
+              )}
+              {ingest.platform !== "unknown" && (
+                <p>
+                  <span className="text-muted">Platform </span>
+                  <span className="font-medium">
+                    {ingest.platform === "wordpress" ? "WordPress detected" : "Static site"}
+                  </span>
+                </p>
+              )}
+              {ingest.pageCount !== null && (
+                <p>
+                  <span className="text-muted">Pages in sitemap </span>
+                  <span className="font-medium">{ingest.pageCount}</span>
+                </p>
+              )}
+              {ingest.colors.length > 0 && (
+                <p className="flex items-center gap-2">
+                  <span className="text-muted">Brand colors</span>
+                  {ingest.colors.slice(0, 5).map((c) => (
+                    <span key={c} className="h-3.5 w-3.5 rounded-full border border-line" style={{ background: c }} />
+                  ))}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="grid gap-3">
           <span className="text-[13px] font-medium text-ink">Platform</span>
           <ChoiceCard
             selected={w.platform === "wordpress"}
             onClick={() => set({ platform: "wordpress" })}
             title="WordPress"
-            text="We publish through the WordPress REST API. Works with any theme or page builder."
+            text="One click connect. We publish through the WordPress REST API. Works with any theme or page builder."
           />
           <ChoiceCard
             selected={w.platform === "github"}
             onClick={() => set({ platform: "github" })}
             title="Static site on GitHub"
-            text="We commit pages straight into your repository and wire them into your navigation."
+            text="Sign in with GitHub and pick the repository. We commit pages straight into it."
           />
         </div>
       </div>
@@ -284,6 +407,55 @@ function PublishingStep({ data, update }: StepProps) {
   const p = data.publishing;
   const set = (patch: Partial<typeof p>) => update({ publishing: { ...p, ...patch } });
   const isWp = data.website.platform === "wordpress";
+  const [manual, setManual] = useState(false);
+  const [repos, setRepos] = useState<{ fullName: string }[]>([]);
+  const [ghLogin, setGhLogin] = useState("");
+  const [connecting, setConnecting] = useState(false);
+
+  const wpConnected = Boolean(p.wpUser && p.wpAppPassword);
+  const ghConnected = p.githubOauth || Boolean(p.githubRepo && p.githubToken);
+
+  // After GitHub OAuth, load the repo list for the picker.
+  useEffect(() => {
+    if (!isWp && p.githubOauth && repos.length === 0) {
+      fetch("/api/github/repos")
+        .then((r) => r.json())
+        .then((j: { connected: boolean; login?: string; repos?: { fullName: string }[] }) => {
+          if (j.connected) {
+            setRepos(j.repos || []);
+            setGhLogin(j.login || "");
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isWp, p.githubOauth, repos.length]);
+
+  const connectWordpress = () => {
+    const raw = data.website.url.trim();
+    if (!raw) return;
+    const origin = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const successUrl = `${window.location.origin}/onboarding`;
+    const url = new URL("/wp-admin/authorize-application.php", origin);
+    url.searchParams.set("app_name", site.name);
+    url.searchParams.set("success_url", successUrl);
+    window.location.href = url.toString();
+  };
+
+  const connectGithub = async () => {
+    setConnecting(true);
+    try {
+      const probe = await fetch("/api/connect/github/start", { redirect: "manual" });
+      if (probe.status === 503) {
+        setManual(true);
+        setConnecting(false);
+        return;
+      }
+      window.location.href = "/api/connect/github/start";
+    } catch {
+      window.location.href = "/api/connect/github/start";
+    }
+  };
+
   return (
     <div>
       <StepHeading
@@ -291,44 +463,140 @@ function PublishingStep({ data, update }: StepProps) {
         title={<>Connect publishing.</>}
         sub={
           isWp
-            ? "Create an application password in WordPress under Users, then Profile, then Application Passwords. It grants publish access without sharing your real password."
-            : "Create a fine grained access token in GitHub with content write access to your site repository. We never touch anything else."
+            ? "One click. You sign in on your own WordPress site and approve the connection. No passwords are typed here and you can revoke access from WordPress at any time."
+            : "Sign in with GitHub and pick the repository your site lives in. We request access to repository contents only."
         }
       />
       <div className="mt-8 grid gap-5">
         {isWp ? (
+          wpConnected ? (
+            <ConnectedCard
+              title="WordPress connected"
+              detail={`Signed in as ${p.wpUser}. The agent can now publish pages to your site.`}
+              onDisconnect={() => set({ wpUser: "", wpAppPassword: "" })}
+            />
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={connectWordpress}
+                disabled={!data.website.url.trim()}
+                className="group flex w-full items-center justify-between rounded-xl border border-ink bg-ink p-5 text-left text-white transition-colors hover:bg-accent hover:border-accent disabled:opacity-40"
+              >
+                <span className="flex items-center gap-3.5">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2Zm0 1.5c2.13 0 4.08.79 5.57 2.09-.36-.02-.7.05-.7.05-.79.05-.9 1.12-.16 1.17 0 0 .74.06 1.22.1l1.72 4.7-2.17 6.49-3.61-10.74c.48-.03 1.16-.1 1.16-.1.75-.09.66-1.16-.09-1.12 0 0-1.64.13-2.7.13-1 0-2.67-.13-2.67-.13-.75-.04-.84 1.08-.09 1.12 0 0 .52.07 1.09.1l1.61 4.41-2.26 6.77L6.4 6.91c.49-.03 1.17-.1 1.17-.1.75-.09.66-1.16-.09-1.12 0 0-.5.04-.95.06A8.47 8.47 0 0 1 12 3.5Zm8.5 8.5c0 3.14-1.71 5.88-4.24 7.35l2.6-7.51c.44-1.21.64-2.17.64-3.03 0-.24-.01-.47-.04-.68.71 1.16 1.04 2.46 1.04 3.87Zm-12.66 7.72A8.5 8.5 0 0 1 3.5 12c0-1.24.26-2.42.74-3.48l3.6 9.2Zm4.36-3.55 2.53 6.51c-.86.27-1.77.42-2.73.42-.8 0-1.58-.11-2.32-.3l2.52-6.63Z" />
+                  </svg>
+                  <span>
+                    <span className="block text-[15px] font-medium">Connect WordPress</span>
+                    <span className="block text-[12.5px] text-white/60">
+                      Opens {data.website.url.replace(/^https?:\/\//, "") || "your site"} to approve access
+                    </span>
+                  </span>
+                </span>
+                <span className="text-lg transition-transform duration-200 group-hover:translate-x-1">&rarr;</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setManual(!manual)}
+                className="text-left text-[12.5px] text-muted underline-offset-2 hover:text-ink hover:underline"
+              >
+                Or enter an application password manually
+              </button>
+              {manual && (
+                <>
+                  <Field
+                    label="WordPress username"
+                    placeholder="admin"
+                    value={p.wpUser}
+                    onChange={(e) => set({ wpUser: e.target.value })}
+                  />
+                  <Field
+                    label="Application password"
+                    type="password"
+                    placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
+                    hint="Created under Users, Profile, Application Passwords in WordPress."
+                    value={p.wpAppPassword}
+                    onChange={(e) => set({ wpAppPassword: e.target.value })}
+                  />
+                </>
+              )}
+            </>
+          )
+        ) : ghConnected && p.githubOauth ? (
           <>
-            <Field
-              label="WordPress username"
-              placeholder="admin"
-              value={p.wpUser}
-              onChange={(e) => set({ wpUser: e.target.value })}
+            <ConnectedCard
+              title="GitHub connected"
+              detail={ghLogin ? `Signed in as ${ghLogin}. Pick the repository your site lives in.` : "Signed in. Pick the repository your site lives in."}
+              onDisconnect={() => {
+                set({ githubOauth: false, githubRepo: "" });
+                setRepos([]);
+              }}
             />
-            <Field
-              label="Application password"
-              type="password"
-              placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
-              hint="Stored encrypted. Revoke it in WordPress at any time."
-              value={p.wpAppPassword}
-              onChange={(e) => set({ wpAppPassword: e.target.value })}
-            />
+            <label className="block">
+              <span className="text-[13px] font-medium text-ink">Repository</span>
+              <select
+                value={p.githubRepo}
+                onChange={(e) => set({ githubRepo: e.target.value })}
+                className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+              >
+                <option value="">Choose the repository</option>
+                {repos.map((r) => (
+                  <option key={r.fullName} value={r.fullName}>
+                    {r.fullName}
+                  </option>
+                ))}
+              </select>
+            </label>
           </>
         ) : (
           <>
-            <Field
-              label="Repository"
-              placeholder="yourname/your-site"
-              value={p.githubRepo}
-              onChange={(e) => set({ githubRepo: e.target.value })}
-            />
-            <Field
-              label="Access token"
-              type="password"
-              placeholder="github_pat_..."
-              hint="Needs content write access to this one repository only. Stored encrypted."
-              value={p.githubToken}
-              onChange={(e) => set({ githubToken: e.target.value })}
-            />
+            <button
+              type="button"
+              onClick={connectGithub}
+              disabled={connecting}
+              className="group flex w-full items-center justify-between rounded-xl border border-ink bg-ink p-5 text-left text-white transition-colors hover:bg-accent hover:border-accent disabled:opacity-60"
+            >
+              <span className="flex items-center gap-3.5">
+                <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.09.68-.22.68-.49 0-.24-.01-.89-.01-1.74-2.78.62-3.37-1.37-3.37-1.37-.45-1.19-1.11-1.5-1.11-1.5-.91-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.57 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.7 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 2.5-.35c.85 0 1.71.12 2.5.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.4.2 2.44.1 2.7.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.05 10.05 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z" />
+                </svg>
+                <span>
+                  <span className="block text-[15px] font-medium">
+                    {connecting ? "Opening GitHub" : "Sign in with GitHub"}
+                  </span>
+                  <span className="block text-[12.5px] text-white/60">
+                    Approve once, then pick your repository from a list
+                  </span>
+                </span>
+              </span>
+              <span className="text-lg transition-transform duration-200 group-hover:translate-x-1">&rarr;</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setManual(!manual)}
+              className="text-left text-[12.5px] text-muted underline-offset-2 hover:text-ink hover:underline"
+            >
+              Or enter a repository and access token manually
+            </button>
+            {manual && (
+              <>
+                <Field
+                  label="Repository"
+                  placeholder="yourname/your-site"
+                  value={p.githubRepo}
+                  onChange={(e) => set({ githubRepo: e.target.value })}
+                />
+                <Field
+                  label="Access token"
+                  type="password"
+                  placeholder="github_pat_..."
+                  hint="Needs content write access to this one repository only."
+                  value={p.githubToken}
+                  onChange={(e) => set({ githubToken: e.target.value })}
+                />
+              </>
+            )}
           </>
         )}
         <div className="rounded-xl border border-line bg-white p-4">
@@ -337,12 +605,48 @@ function PublishingStep({ data, update }: StepProps) {
               <rect x="5" y="10" width="14" height="10" rx="2" />
               <path d="M8 10V7a4 4 0 1 1 8 0v3" />
             </svg>
-            Credentials are encrypted at rest and used for exactly one thing:
-            publishing the pages you can see in your queue. Nothing is ever
+            Access is scoped to publishing only, held in secure storage, and
+            revocable from your own account at any time. Nothing is ever
             deleted or modified without a record.
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ConnectedCard({
+  title,
+  detail,
+  onDisconnect,
+}: {
+  title: string;
+  detail: string;
+  onDisconnect: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-white p-5">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink">
+          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+        <div>
+          <p className="flex items-center gap-2 text-[14.5px] font-medium">
+            {title}
+            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
+          </p>
+          <p className="mt-0.5 text-[13px] text-muted">{detail}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onDisconnect}
+        className="shrink-0 text-[12.5px] text-muted hover:text-ink"
+      >
+        Disconnect
+      </button>
     </div>
   );
 }
@@ -532,17 +836,45 @@ const launchLines = [
   "Scheduling the first page",
 ];
 
-function LaunchSequence({ onDone }: { onDone: () => void }) {
+function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => void }) {
   const [count, setCount] = useState(0);
+  const [researchDone, setResearchDone] = useState(false);
+  const started = useRef(false);
+
+  // The launch sequence is real: it runs the agent's first research cycle
+  // while the checklist animates, and stores the findings for the dashboard.
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    const finish = () => setResearchDone(true);
+    fetch("/api/research", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        business: data.business,
+        market: data.market,
+        websiteUrl: data.website.url,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    })
+      .then((r) => r.json())
+      .then((research) => {
+        saveIntel({ research: { ...research, ranAt: new Date().toISOString() } });
+        finish();
+      })
+      .catch(finish);
+  }, [data]);
 
   useEffect(() => {
     if (count < launchLines.length) {
+      // Hold on the research line until the live cycle returns.
+      if (count === launchLines.length - 1 && !researchDone) return;
       const t = setTimeout(() => setCount((c) => c + 1), 750);
       return () => clearTimeout(t);
     }
     const t = setTimeout(onDone, 1100);
     return () => clearTimeout(t);
-  }, [count, onDone]);
+  }, [count, onDone, researchDone]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-ink px-6 text-white">
