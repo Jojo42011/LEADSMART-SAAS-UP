@@ -59,6 +59,11 @@ export function localBusinessSchema(input: {
   type?: string; // e.g. "PlumbingService", "Dentist" — prefer the most specific subtype available
   name: string;
   url: string;
+  // A factual one-line summary. Optional properties like description are what
+  // give AI answer engines the context to cite a page confidently rather than
+  // skip it (Fischman SSRN cross-platform study; BrightEdge). See
+  // docs/research/community-seo-sync.md 2026-07-17.
+  description?: string;
   telephone?: string;
   address?: { streetAddress?: string; addressLocality?: string; addressRegion?: string; postalCode?: string; addressCountry?: string };
   hours?: BusinessHours[];
@@ -67,6 +72,7 @@ export function localBusinessSchema(input: {
   return buildJsonLdSkeleton(input.type ?? "LocalBusiness", {
     name: input.name,
     url: input.url,
+    description: input.description,
     telephone: input.telephone,
     address: input.address
       ? { "@type": "PostalAddress", ...input.address }
@@ -124,10 +130,11 @@ export function breadcrumbListSchema(crumbs: { name: string; url: string }[]): J
   });
 }
 
-export function organizationSchema(input: { name: string; url: string; logo?: string; sameAs?: string[] }): JsonLd {
+export function organizationSchema(input: { name: string; url: string; description?: string; logo?: string; sameAs?: string[] }): JsonLd {
   return buildJsonLdSkeleton("Organization", {
     name: input.name,
     url: input.url,
+    description: input.description,
     logo: input.logo,
     sameAs: input.sameAs,
   });

@@ -43,7 +43,7 @@ If Reddit access is ever restored, the Routine will pick it up automatically.
 even if the community discusses them. Ascent only generates from real,
 verifiable source material. This stance is fixed.
 
-**Last synced:** 2026-07-16 (run 2)
+**Last synced:** 2026-07-17
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -103,3 +103,35 @@ act on what's genuinely new beyond this.
     published at scale without human editorial oversight — which is exactly
     what Ascent's quality gate, information-gain gate, and E-E-A-T veto already
     defend against. No change needed; consistent with existing design.
+
+- **2026-07-17** — Reddit still blocked (r/aeo .json fetch failed). Searched
+  schema markup + AI citation studies. Source: Fischman cross-platform
+  empirical study (SSRN) + BrightEdge. Findings:
+  - **NEW + applied:** schema *completeness* — populated optional properties
+    (description, sameAs, dateModified, image) — is what tips AI answer engines
+    from skipping a page to citing it; the study frames the March 2026 shift as
+    "schema as AI trust/entity-verification signal, not just a SERP display
+    trigger." Our LocalBusiness/Organization generators had no `description`
+    field. Added optional `description` support to both generators
+    (`schema.ts`) and populated it with a factual, deterministic one-liner in
+    `plan.ts` (e.g. "Pool Installation in Mesa from Desert Pools AZ, serving
+    Scottsdale and Paradise Valley."). Verified it renders in the dashboard's
+    live JSON-LD preview. Non-fabricated (a true summary of the page), so it
+    respects the guardrail.
+  - **Noted, not applied (needs real data + backend):** the single
+    highest-cited schema type in the study is Product/Review with populated
+    concrete attributes (pricing, aggregateRating) — 61.7% cited vs 41.6% for
+    generic types. Ascent cannot add Review/AggregateRating markup without real
+    review data, and must never fabricate it (guardrail; fabricated review
+    schema is also one of our own E-E-A-T auto-veto red flags). Deferred: when
+    a client connects real review/rating data, prioritize AggregateRating/Review
+    schema — it is the highest-leverage schema type for AI citation.
+  - **Noted, no action:** one Ahrefs-cited piece claims schema "didn't move AI
+    citations" and notes Google retired FAQ *rich results*. This concerns the
+    SERP display feature, not FAQ schema's AEO/entity value, and conflicts with
+    the BrightEdge/SSRN findings. Our FAQPage schema is used for AI citation,
+    not rich-result display, so no change; keeping FAQPage in the stack.
+  - **Already covered:** the general "populated fields matter" principle is
+    already encoded as our `schemaRichness` score (required-field validation).
+    Today's change operationalizes it by actually adding one of the missing
+    high-value fields.

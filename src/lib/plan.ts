@@ -283,16 +283,29 @@ export function buildPlan(data: OnboardingData): Plan {
         answer: `Yes${data.business.serviceArea ? `, across ${data.business.serviceArea}` : ""}.`,
       },
     ]);
+    // A factual one-line description — schema completeness (populated optional
+    // fields like description) measurably lifts AI citation rates.
+    const bizName = data.business.name || "Your business";
+    const entityDescription =
+      role === "hub"
+        ? `${bizName} provides ${services.join(", ") || data.market.industry || "professional services"}${
+            data.business.city ? ` in ${data.business.city} and the surrounding area` : ""
+          }.`
+        : `${titleCase(service)}${location ? ` in ${titleCase(location)}` : ""} from ${bizName}${
+            data.business.city ? `, serving ${data.business.city}${data.business.serviceArea ? ` and ${data.business.serviceArea}` : ""}` : ""
+          }.`;
     const entity =
       role === "hub"
         ? organizationSchema({
-            name: data.business.name || "Your business",
+            name: bizName,
             url: siteUrl,
+            description: entityDescription,
             sameAs: [],
           })
         : localBusinessSchema({
-            name: data.business.name || "Your business",
+            name: bizName,
             url: siteUrl,
+            description: entityDescription,
             telephone: data.business.phone || undefined,
             address: data.business.city
               ? {
