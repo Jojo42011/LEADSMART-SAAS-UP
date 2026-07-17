@@ -7,6 +7,7 @@ import { Counter } from "@/components/ui/Counter";
 const dimensions = [
   { name: "Meta tags", score: 18, max: 18 },
   { name: "Content depth", score: 16, max: 16 },
+  { name: "Originality (info gain)", score: 8, max: 8 },
   { name: "Structured data", score: 16, max: 16 },
   { name: "Internal links", score: 14, max: 14 },
   { name: "Headings", score: 12, max: 12 },
@@ -30,10 +31,10 @@ export function Scoring() {
             <em className="text-muted">below the bar.</em>
           </h2>
           <p className="mt-6 max-w-md text-[15.5px] leading-relaxed text-muted">
-            Every page is audited across nine ranking dimensions before it
-            reaches your site: meta quality, content depth, structured data,
-            internal linking, headings, local signals, trust signals, images,
-            and readiness for AI search engines.
+            Every page is audited across ten ranking dimensions, the Ascent
+            Method pillars broken down into checks: meta quality, content
+            depth, originality, structured data, internal linking, headings,
+            local signals, trust signals, images, and readiness for AI search.
           </p>
           <p className="mt-4 max-w-md text-[15.5px] leading-relaxed text-muted">
             A page that scores under 75 never publishes. It goes back through

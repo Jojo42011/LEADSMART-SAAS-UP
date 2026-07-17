@@ -36,7 +36,7 @@ export function Hero() {
 
           <motion.h1
             {...fade(0.1)}
-            className="font-display mt-7 text-[44px] leading-[1.04] tracking-tight sm:text-[68px] md:text-[78px]"
+            className="font-display text-[44px] leading-[1.04] tracking-tight sm:text-[68px] md:text-[78px]"
           >
             Win the rankings.
             <br />

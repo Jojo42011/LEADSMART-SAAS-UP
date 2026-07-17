@@ -7,10 +7,11 @@ const included = [
   "Daily competitor and keyword research",
   "Complete pages with AI generated imagery",
   "SEO and AEO optimization on every page",
-  "Nine dimension audit before anything ships",
+  "90 day roadmap, rebuilt every cycle",
+  "Full audit before anything ships",
   "Publishing to WordPress or GitHub",
   "Search Console ranking sync",
-  "Live page monitoring",
+  "Live dashboard and page monitoring",
   "Self improving content strategy",
 ];
 
@@ -26,9 +27,10 @@ export function Pricing() {
             <em className="text-muted">Everything included.</em>
           </h2>
           <p className="mt-5 text-[15.5px] leading-relaxed text-muted">
-            Agencies charge thousands per month and publish a handful of
-            pages. This publishes every day for less than your phone bill.
-            Add as many websites as you want, each one is its own agent.
+            An agency retainer starts around $3,000 a month, on a contract,
+            after a sales call. This is $49 per website, month to month, and
+            it publishes every day. Add as many websites as you want, each
+            one gets its own agent.
           </p>
         </Reveal>
 
@@ -86,7 +88,8 @@ export function Pricing() {
 
         <Reveal className="mt-10 text-center">
           <p className="label-mono text-muted/70">
-            14 day free trial &middot; No card required &middot; Cancel anytime
+            14 day free trial &middot; No card required &middot; Month to
+            month, cancel anytime
           </p>
         </Reveal>
       </div>

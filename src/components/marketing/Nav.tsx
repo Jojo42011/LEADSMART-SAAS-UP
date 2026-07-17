@@ -6,9 +6,10 @@ import { Wordmark } from "@/components/ui/Wordmark";
 
 const links = [
   { href: "#how-it-works", label: "How it works" },
+  { href: "#method", label: "Method" },
   { href: "#features", label: "Features" },
-  { href: "#scoring", label: "Scoring" },
   { href: "#ai-search", label: "AI search" },
+  { href: "#compare", label: "Compare" },
   { href: "#pricing", label: "Pricing" },
 ];
 

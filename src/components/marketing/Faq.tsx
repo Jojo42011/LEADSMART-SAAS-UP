@@ -11,7 +11,11 @@ const faqs = [
   },
   {
     q: "Will Google penalize AI generated pages?",
-    a: "Google ranks pages on quality and usefulness, not on who wrote them. Every page here passes a nine dimension audit covering depth, structure, trust signals and local relevance before it ships, and pages below the bar never publish. Thin, duplicated content is what gets penalized, and the quality gate exists precisely to prevent it.",
+    a: "Google ranks pages on quality and usefulness, not on who wrote them. Every page here passes a ten dimension audit covering depth, structure, trust signals and local relevance before it ships, and pages below the bar never publish. Thin, duplicated content is what gets penalized, and the quality gate exists precisely to prevent it.",
+  },
+  {
+    q: "Will my pages show up in ChatGPT, Perplexity and Google AI Overviews?",
+    a: "That's what the GEO tactics in the Ascent Method are for. Every page cites real sources, includes real statistics and quotes, and is structured so AI answer engines can extract and cite it. We also publish an AI crawler allowlist and an llms.txt file so the pages are actually reachable by ChatGPT, Perplexity, Copilot and Claude, not just Google.",
   },
   {
     q: "Do I need to review pages before they go live?",

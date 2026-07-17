@@ -45,7 +45,7 @@ const features = [
   },
   {
     title: "AI answer optimization",
-    text: "Structures every page with quotable, question style passages that ChatGPT, Perplexity and AI Overviews lift and cite by name.",
+    text: "Quotable, question style passages, real citations and real schema markup, structured so ChatGPT, Perplexity and AI Overviews cite you by name.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V6Z" strokeLinejoin="round" />
