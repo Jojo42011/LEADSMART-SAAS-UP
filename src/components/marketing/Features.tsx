@@ -44,12 +44,12 @@ const features = [
     ),
   },
   {
-    title: "Live page monitoring",
-    text: "Checks every published page daily and flags anything that stops resolving before it costs you traffic.",
+    title: "AI answer optimization",
+    text: "Structures every page with quotable, question style passages that ChatGPT, Perplexity and AI Overviews lift and cite by name.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <circle cx="12" cy="12" r="8" />
-        <path d="M12 8v4l2.5 2.5" strokeLinecap="round" />
+        <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4V6Z" strokeLinejoin="round" />
+        <path d="M8.5 9h7M8.5 12.5h4" strokeLinecap="round" />
       </svg>
     ),
   },

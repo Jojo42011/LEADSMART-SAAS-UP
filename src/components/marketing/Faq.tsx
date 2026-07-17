@@ -6,6 +6,10 @@ import { Reveal } from "@/components/ui/Reveal";
 
 const faqs = [
   {
+    q: "What does SEO plus AEO actually mean?",
+    a: "SEO gets you ranked in classic Google results. AEO, answer engine optimization, gets you cited and recommended when people ask ChatGPT, Perplexity or Google AI Overviews instead of scrolling results. Every page we publish is built for both at once: the structured data and depth that rankings demand, plus the quotable, question style passages that answer engines lift.",
+  },
+  {
     q: "Will Google penalize AI generated pages?",
     a: "Google ranks pages on quality and usefulness, not on who wrote them. Every page here passes a nine dimension audit covering depth, structure, trust signals and local relevance before it ships, and pages below the bar never publish. Thin, duplicated content is what gets penalized, and the quality gate exists precisely to prevent it.",
   },

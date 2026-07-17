@@ -1,54 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { Reveal, Stagger, StaggerItem } from "@/components/ui/Reveal";
+import { Reveal } from "@/components/ui/Reveal";
 
-const tiers = [
-  {
-    name: "Starter",
-    price: 49,
-    blurb: "For one site that needs to start climbing.",
-    features: [
-      "1 website",
-      "15 pages per month",
-      "Competitor and keyword research",
-      "Nine dimension audit scoring",
-      "Search Console ranking sync",
-      "Live page monitoring",
-    ],
-    cta: "Start free trial",
-    featured: false,
-  },
-  {
-    name: "Growth",
-    price: 129,
-    blurb: "For businesses serious about owning their market.",
-    features: [
-      "5 websites",
-      "31 pages per site per month",
-      "Everything in Starter",
-      "AI image generation on every page",
-      "Priority publish scheduling",
-      "Weekly strategy reports",
-    ],
-    cta: "Start free trial",
-    featured: true,
-  },
-  {
-    name: "Scale",
-    price: 299,
-    blurb: "For agencies running SEO across a client roster.",
-    features: [
-      "15 websites",
-      "Unlimited page generation",
-      "Everything in Growth",
-      "White label reports",
-      "API access",
-      "Dedicated support",
-    ],
-    cta: "Talk to us",
-    featured: false,
-  },
+const included = [
+  "Daily competitor and keyword research",
+  "Complete pages with AI generated imagery",
+  "SEO and AEO optimization on every page",
+  "Nine dimension audit before anything ships",
+  "Publishing to WordPress or GitHub",
+  "Search Console ranking sync",
+  "Live page monitoring",
+  "Self improving content strategy",
 ];
 
 export function Pricing() {
@@ -58,78 +21,72 @@ export function Pricing() {
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="label-mono text-accent">Pricing</span>
           <h2 className="font-display mt-5 text-4xl leading-[1.08] tracking-tight sm:text-5xl">
-            Less than one hour
+            One plan.
             <br />
-            <em className="text-muted">of an agency retainer.</em>
+            <em className="text-muted">Everything included.</em>
           </h2>
           <p className="mt-5 text-[15.5px] leading-relaxed text-muted">
-            Agencies charge thousands per month and publish a handful of pages.
-            This publishes every day and costs less than your phone bill.
+            Agencies charge thousands per month and publish a handful of
+            pages. This publishes every day for less than your phone bill.
+            Add as many websites as you want, each one is its own agent.
           </p>
         </Reveal>
 
-        <Stagger className="mt-14 grid gap-5 lg:grid-cols-3" stagger={0.1}>
-          {tiers.map((t) => (
-            <StaggerItem
-              key={t.name}
-              className={`relative flex flex-col rounded-2xl border bg-white p-8 ${
-                t.featured
-                  ? "border-ink shadow-2xl shadow-black/[0.08] lg:-translate-y-3"
-                  : "border-line"
-              }`}
-            >
-              {t.featured && (
-                <span className="absolute -top-3 left-8 rounded-full bg-accent px-3 py-1 text-[11px] font-medium tracking-wide text-white">
-                  Most popular
-                </span>
-              )}
-              <h3 className="text-[15px] font-medium tracking-tight">
-                {t.name}
-              </h3>
-              <div className="mt-4 flex items-baseline gap-1.5">
-                <span className="font-display text-5xl tracking-tight">
-                  ${t.price}
-                </span>
-                <span className="text-[13px] text-muted">/month</span>
+        <Reveal delay={0.15} className="mx-auto mt-14 max-w-2xl">
+          <div className="overflow-hidden rounded-2xl border border-ink bg-white shadow-2xl shadow-black/[0.08]">
+            <div className="grid sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+              <div className="flex flex-col justify-between bg-ink p-8 text-white">
+                <div>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
+                    <span className="label-mono text-white/70">Per website</span>
+                  </span>
+                  <div className="mt-6 flex items-baseline gap-1.5">
+                    <span className="font-display text-7xl tracking-tight">$49</span>
+                    <span className="text-[14px] text-white/50">/month</span>
+                  </div>
+                  <p className="mt-3 text-[13.5px] leading-relaxed text-white/55">
+                    Every website gets its own autonomous agent, its own
+                    strategy and its own publishing schedule.
+                  </p>
+                </div>
+                <Link
+                  href="/signup"
+                  className="group mt-8 inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-[14.5px] font-medium text-ink transition-colors hover:bg-accent hover:text-white"
+                >
+                  Start free trial
+                  <span className="transition-transform duration-200 group-hover:translate-x-0.5">
+                    &rarr;
+                  </span>
+                </Link>
               </div>
-              <p className="mt-3 text-[13.5px] leading-relaxed text-muted">
-                {t.blurb}
-              </p>
 
-              <ul className="mt-7 flex flex-col gap-3 border-t border-line pt-7">
-                {t.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5 text-[13.5px]">
-                    <svg
-                      viewBox="0 0 16 16"
-                      className={`mt-0.5 h-4 w-4 shrink-0 ${t.featured ? "text-accent" : "text-ink/50"}`}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    >
-                      <path d="m3 8.5 3.5 3.5L13 4" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <span className="text-ink/80">{f}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="/signup"
-                className={`mt-8 inline-flex items-center justify-center rounded-full px-6 py-3 text-[14px] font-medium transition-colors ${
-                  t.featured
-                    ? "bg-ink text-white hover:bg-accent"
-                    : "border border-line text-ink hover:border-ink"
-                }`}
-              >
-                {t.cta}
-              </Link>
-            </StaggerItem>
-          ))}
-        </Stagger>
+              <div className="p-8">
+                <p className="label-mono text-muted/70">Everything included</p>
+                <ul className="mt-5 grid gap-3">
+                  {included.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-[13.5px]">
+                      <svg
+                        viewBox="0 0 16 16"
+                        className="mt-0.5 h-4 w-4 shrink-0 text-accent"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                      >
+                        <path d="m3 8.5 3.5 3.5L13 4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="text-ink/80">{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </Reveal>
 
         <Reveal className="mt-10 text-center">
           <p className="label-mono text-muted/70">
-            Every plan starts with a 14 day free trial &middot; No card required
+            14 day free trial &middot; No card required &middot; Cancel anytime
           </p>
         </Reveal>
       </div>

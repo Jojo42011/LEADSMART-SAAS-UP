@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
-import { AgentConsole } from "./AgentConsole";
+import { HeroDashboard } from "./HeroDashboard";
 
 const ease = [0.21, 0.47, 0.32, 0.98] as const;
 
@@ -29,7 +29,7 @@ export function Hero() {
             <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3.5 py-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
               <span className="label-mono text-muted">
-                Autonomous SEO platform
+                Autonomous SEO and AEO platform
               </span>
             </span>
           </motion.div>
@@ -38,18 +38,19 @@ export function Hero() {
             {...fade(0.1)}
             className="font-display mt-7 text-[44px] leading-[1.04] tracking-tight sm:text-[68px] md:text-[78px]"
           >
-            SEO that runs
+            Win the rankings.
             <br />
-            <em className="text-accent">itself.</em>
+            <em className="text-accent">And the AI answers.</em>
           </motion.h1>
 
           <motion.p
             {...fade(0.2)}
             className="mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-muted"
           >
-            An AI agent that studies your market, writes pages built to rank,
-            and publishes them to your live site every single day. No agency.
-            No retainers. No busywork.
+            An autonomous agent that studies your market, writes pages built
+            to rank on Google and get cited by ChatGPT, Perplexity and AI
+            Overviews, then publishes them to your live site every day. No
+            agency. No retainers. No busywork.
           </motion.p>
 
           <motion.div
@@ -82,9 +83,9 @@ export function Hero() {
           initial={reduced ? false : { opacity: 0, y: 48 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 0.5, ease }}
-          className="mx-auto mt-16 max-w-3xl sm:mt-20"
+          className="mx-auto mt-16 max-w-4xl sm:mt-20"
         >
-          <AgentConsole />
+          <HeroDashboard />
         </motion.div>
       </div>
     </section>

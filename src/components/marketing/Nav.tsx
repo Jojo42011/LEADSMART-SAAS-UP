@@ -8,6 +8,7 @@ const links = [
   { href: "#how-it-works", label: "How it works" },
   { href: "#features", label: "Features" },
   { href: "#scoring", label: "Scoring" },
+  { href: "#ai-search", label: "AI search" },
   { href: "#pricing", label: "Pricing" },
 ];
 

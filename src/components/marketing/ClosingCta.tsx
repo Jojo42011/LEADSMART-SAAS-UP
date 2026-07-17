@@ -19,7 +19,8 @@ export function ClosingCta() {
           </h2>
           <p className="mx-auto mt-6 max-w-md text-[16px] leading-relaxed text-white/55">
             Every day without new pages is a day someone else takes the
-            ranking. Turn the agent on and stop giving them the head start.
+            ranking and the AI recommendation. Turn the agent on and stop
+            giving them the head start.
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Link

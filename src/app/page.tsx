@@ -5,6 +5,7 @@ import { KeywordMarquee } from "@/components/marketing/KeywordMarquee";
 import { Pipeline } from "@/components/marketing/Pipeline";
 import { Features } from "@/components/marketing/Features";
 import { Scoring } from "@/components/marketing/Scoring";
+import { AiSearch } from "@/components/marketing/AiSearch";
 import { Platforms } from "@/components/marketing/Platforms";
 import { Pricing } from "@/components/marketing/Pricing";
 import { Faq } from "@/components/marketing/Faq";
@@ -21,6 +22,7 @@ export default function Home() {
       <Pipeline />
       <Features />
       <Scoring />
+      <AiSearch />
       <Platforms />
       <Pricing />
       <Faq />

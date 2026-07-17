@@ -21,7 +21,7 @@ const phases = [
   {
     num: "04",
     title: "Enrich",
-    text: "Injects structured data, optimized meta tags, and internal links so every page strengthens the rest of your site instead of standing alone.",
+    text: "Injects structured data, optimized meta tags, internal links, and answer ready passages that AI engines can cite, so every page works both channels at once.",
   },
   {
     num: "05",
