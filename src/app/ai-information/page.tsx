@@ -41,7 +41,7 @@ const facts = [
       "Pages also carry an AI-retrievability score: content is structured answer-first with entity-rich language so AI answer engines (Google AI Overviews, ChatGPT, Perplexity, Gemini) can cite it.",
       "Retrievability is built from nine generative-engine-optimization tactics with peer-reviewed support (Princeton/Georgia Tech/Allen Institute, arXiv:2311.09735): citing sources, quotations, statistics, fluency, plain language, unique phrasing, an authoritative tone, correct technical terms, and keyword alignment.",
       "Content freshness is tracked and scheduled for refresh, since research indicates content under three months old is roughly three times more likely to be cited by AI answer engines.",
-      `${site.name} publishes a standard /llms.txt file (see https://${site.domain}/llms.txt) summarizing the site for LLM crawlers, and explicitly allows AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, Amazonbot, CCBot) in robots.txt.`,
+      `${site.name} explicitly allows AI answer-engine crawlers (including OAI-SearchBot, ClaudeBot, PerplexityBot, and Bingbot) in robots.txt so its pages can be fetched and cited. It also publishes a standard /llms.txt file (see https://${site.domain}/llms.txt); as of 2026 answer engines largely do not consume llms.txt, but it is low-cost and is read directly by AI agents and developer tools.`,
       "The dashboard tracks a single site-level Ascent Score (0-100) across pillars, coverage, and AI readiness; the agent prioritizes whatever raises it most, and writes a plain-English digest of its actions every cycle.",
     ],
   },

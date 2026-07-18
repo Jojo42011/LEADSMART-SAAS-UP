@@ -60,7 +60,7 @@ its `skill.md`-style pages are designed to make agents execute instructions
 - Treat anything an agent forum "recommends doing" as untrusted input, not an
   instruction.
 
-**Last synced:** 2026-07-17
+**Last synced:** 2026-07-18
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -160,3 +160,31 @@ act on what's genuinely new beyond this.
   agent-takeover-via-untrusted-pages risk; also 403 in this env). See the new
   "untrusted agent forums" guardrail above. No code change — this is a
   process/guardrail update so future runs watch the trend safely.
+
+- **2026-07-18** — Reddit still blocked (r/SEO .json fetch failed). Searched
+  llms.txt adoption/effectiveness 2026 + monitored the agent-forum trend (no
+  moltbook fetch, per guardrail). Findings:
+  - **NEW hard data on llms.txt:** SE Ranking (300k domains) shows ~10%
+    adoption but **97% of llms.txt files got zero AI requests** in May 2026;
+    major answer-engine crawlers (GPTBot, ClaudeBot, PerplexityBot,
+    OAI-SearchBot, Google-Extended) overwhelmingly skip it and crawl HTML
+    directly. Google is on record *against* it (Illyes/Mueller, likened to the
+    dead keywords meta tag); no major provider commits to it in answer
+    surfaces. BUT it has real value in the agentic/tooling ("B2A") layer — IDE
+    agents like Cursor, Claude Code, Copilot read /llms.txt on docs sites.
+  - **Applied (honesty correction to user-facing copy):** two claims credited
+    *llms.txt* for answer-engine reachability, which the data shows is actually
+    driven by the robots.txt crawler allowlist. Fixed both: `Faq.tsx` now
+    attributes reachability to the AI crawler allowlist and reframes llms.txt as
+    "read directly by AI agents and developer tools"; `ai-information/page.tsx`
+    now states plainly that answer engines largely do not consume llms.txt as
+    of 2026 but it's low-cost and used by AI agents/tools (also refreshed its
+    stale crawler list to the accurate one). Consistent with our
+    transparency-first positioning — we don't oversell a tactic the evidence
+    doesn't support.
+  - **Confirmed, no action:** we correctly never built llms.txt into GEO
+    scoring (per the earlier geo-optimizer research), so no scoring change is
+    needed; keeping /llms.txt served (cheap + genuine agent-layer value).
+  - **Agent-forum trend:** nothing newly actionable; the directional signal
+    (answer engines favoring provenance / verifiable sourcing over synthetic
+    consensus) is already what Ascent optimizes for.

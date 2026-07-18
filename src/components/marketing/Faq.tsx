@@ -11,7 +11,7 @@ const faqs = [
   },
   {
     q: "Will my pages show up in ChatGPT, Perplexity and Google AI Overviews?",
-    a: "That's what the GEO tactics in the Ascent Method are for. Every page cites real sources, includes real statistics and quotes, and is structured so AI answer engines can extract and cite it. We also publish an AI crawler allowlist and an llms.txt file so the pages are actually reachable by ChatGPT, Perplexity, Copilot and Claude, not just Google.",
+    a: "That's what the GEO tactics in the Ascent Method are for. Every page cites real sources, includes real statistics and quotes, and is structured so AI answer engines can extract and cite it. We also publish an AI crawler allowlist in robots.txt so ChatGPT, Perplexity, Copilot and Claude can actually reach your pages, not just Google — plus an llms.txt file, which AI agents and developer tools read directly.",
   },
   {
     q: "Do I need to review pages before they go live?",
