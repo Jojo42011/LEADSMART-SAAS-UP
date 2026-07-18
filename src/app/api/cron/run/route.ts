@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
+import { storeConfigured, getDueSites, recoverStuckRuns } from "@/lib/engine/store";
+import { runSiteCycle, type CycleResult } from "@/lib/engine/orchestrator";
 
 /**
- * Daily agent heartbeat, invoked by the Vercel cron in vercel.json.
- * The full autonomous loop (research, generate, publish per tenant) runs
- * here once tenants live in a database. Until then this endpoint verifies
- * the pipeline pieces are configured and reports readiness, so the cron
- * wiring is proven before the data layer lands.
+ * The daily heartbeat, fired by the Vercel cron in vercel.json.
+ * With DATABASE_URL set this is the real autonomous loop: recover stuck
+ * cycles, pick the sites whose cadence is due, and run one full cycle
+ * per site (research, plan, generate, audit, publish). Without a
+ * database it reports pipeline readiness so the wiring stays provable.
  */
+
+export const maxDuration = 300;
+
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   const secret = process.env.CRON_SECRET;
@@ -14,14 +19,31 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
+  if (!storeConfigured()) {
+    return NextResponse.json({
+      ok: true,
+      ranAt: new Date().toISOString(),
+      readiness: {
+        tenantStore: false,
+        research: Boolean(process.env.GEMINI_API_KEY),
+        githubOauth: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET),
+      },
+      note: "Set DATABASE_URL and apply db/schema.sql to activate per site autonomous cycles. Pipeline endpoints are live and callable now.",
+    });
+  }
+
+  const recovered = await recoverStuckRuns();
+  const due = await getDueSites(2); // bounded per invocation to fit the function window
+  const results: CycleResult[] = [];
+  for (const site of due) {
+    results.push(await runSiteCycle(site));
+  }
+
   return NextResponse.json({
     ok: true,
     ranAt: new Date().toISOString(),
-    readiness: {
-      research: Boolean(process.env.GEMINI_API_KEY),
-      githubOauth: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET),
-      tenantStore: false,
-    },
-    note: "Per tenant runs activate when the tenant database is connected. Pipeline endpoints (research, generate, publish) are live and callable now.",
+    recoveredStuckRuns: recovered,
+    sitesDue: due.length,
+    results,
   });
 }
