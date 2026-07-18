@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { type OnboardingData, useOnboarding, loadOnboarding, saveOnboarding } from "@/lib/onboarding";
+import { loadBilling } from "@/lib/billing";
 import { saveIntel, type SiteIngest } from "@/lib/intel";
 import { site } from "@/lib/site";
 import { ChoiceCard, Field, StepHeading } from "./fields";
@@ -36,6 +37,13 @@ export function Wizard() {
   useEffect(() => {
     if (handledCallback.current) return;
     handledCallback.current = true;
+
+    // Onboarding is unlocked by checkout. Swaps to a server side
+    // subscription check when Stripe is attached.
+    if (!loadBilling().active) {
+      router.replace("/checkout");
+      return;
+    }
 
     const params = new URLSearchParams(window.location.search);
     const wpLogin = params.get("user_login");

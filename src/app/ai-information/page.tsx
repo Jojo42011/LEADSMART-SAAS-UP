@@ -48,8 +48,8 @@ const facts = [
   {
     heading: "Pricing",
     items: [
-      "Pricing is public: Starter at $49/month (one site, a page every three days), Growth at $129/month (one site, daily publishing, revenue projections), Scale at $299/month (ten sites, white-label reports, API access).",
-      "All plans are month to month with a 14-day free trial and no credit card required to start. There are no long-term contracts.",
+      "Pricing is public: one plan at $49 per website per month with everything included. Every website gets its own autonomous agent, strategy and publishing schedule.",
+      "Billing is month to month with no long term contracts. Cancel anytime and every published page stays on your site.",
     ],
   },
   {

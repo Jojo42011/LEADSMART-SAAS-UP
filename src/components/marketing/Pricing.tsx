@@ -56,7 +56,7 @@ export function Pricing() {
                   href="/signup"
                   className="group mt-8 inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-[14.5px] font-medium text-ink transition-colors hover:bg-accent hover:text-white"
                 >
-                  Start free trial
+                  Get started
                   <span className="transition-transform duration-200 group-hover:translate-x-0.5">
                     &rarr;
                   </span>
@@ -88,7 +88,7 @@ export function Pricing() {
 
         <Reveal className="mt-10 text-center">
           <p className="label-mono text-muted/70">
-            14 day free trial &middot; No card required &middot; Month to
+            Month to
             month, cancel anytime
           </p>
         </Reveal>

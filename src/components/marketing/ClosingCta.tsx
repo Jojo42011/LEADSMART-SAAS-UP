@@ -27,7 +27,7 @@ export function ClosingCta() {
               href="/signup"
               className="group inline-flex items-center gap-2 rounded-full bg-white px-8 py-4 text-[15px] font-medium text-ink transition-colors hover:bg-accent hover:text-white"
             >
-              Start ranking free
+              Get started
               <span className="transition-transform duration-200 group-hover:translate-x-1">
                 &rarr;
               </span>

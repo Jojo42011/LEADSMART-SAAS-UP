@@ -58,7 +58,7 @@ export function Nav() {
             href="/signup"
             className="group inline-flex items-center gap-1.5 rounded-full bg-ink px-4.5 py-2 text-sm font-medium text-white transition-colors hover:bg-accent"
           >
-            Start free
+            Get started
             <span className="transition-transform duration-200 group-hover:translate-x-0.5">
               &rarr;
             </span>
@@ -100,7 +100,7 @@ export function Nav() {
                 href="/signup"
                 className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-white"
               >
-                Start free
+                Get started
               </Link>
             </div>
           </div>

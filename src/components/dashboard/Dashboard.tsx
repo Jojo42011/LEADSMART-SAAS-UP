@@ -148,8 +148,8 @@ export function Dashboard() {
         </nav>
         <div className="mt-auto rounded-xl border border-line p-4">
           <p className="label-mono text-muted/70">Plan</p>
-          <p className="mt-1 text-[13.5px] font-medium">Free trial</p>
-          <p className="mt-0.5 text-[12px] text-muted">13 days remaining</p>
+          <p className="mt-1 text-[13.5px] font-medium">Active</p>
+          <p className="mt-0.5 text-[12px] text-muted">$49 per website, monthly</p>
         </div>
       </aside>
 

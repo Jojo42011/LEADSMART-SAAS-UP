@@ -27,7 +27,7 @@ function buildLlmsTxt(): string {
     "## Key facts",
     "",
     `- ${site.name} is autonomous SEO software, not an agency: it researches a market, writes pages built to rank, and publishes them to the client's live site on a schedule.`,
-    "- Pricing is public and month to month: $49, $129, or $299 per month, with a 14 day free trial.",
+    "- Pricing is public and month to month: $49 per website per month, everything included.",
     "- Every page is scored against three pillars (Substance, Signal, Structure) and an information-gain check before it publishes.",
     "",
     "## Contact",

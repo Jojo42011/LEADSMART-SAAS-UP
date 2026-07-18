@@ -19,7 +19,8 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
     e.preventDefault();
     setBusy(true);
     // Auth wiring lands with the backend; route into the product for now.
-    setTimeout(() => router.push(isSignup ? "/onboarding" : "/dashboard"), 500);
+    // New accounts go through checkout, which unlocks onboarding.
+    setTimeout(() => router.push(isSignup ? "/checkout" : "/dashboard"), 500);
   };
 
   return (
@@ -85,14 +86,14 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
               <>
                 New here?{" "}
                 <Link href="/signup" className="font-medium text-ink hover:text-accent">
-                  Start free
+                  Create account
                 </Link>
               </>
             )}
           </div>
         </div>
         <p className="label-mono mt-6 text-center text-muted/60">
-          14 day free trial &middot; No card required
+          Month to month &middot; Cancel anytime
         </p>
       </motion.div>
     </div>
