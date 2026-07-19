@@ -373,7 +373,7 @@ function Overview({
             Citations are tracked here once your first pages are live.
           </p>
           <div className="mt-4 grid gap-2 border-t border-line pt-4">
-            {["Google AI Overviews", "ChatGPT", "Perplexity", "Gemini"].map((engine) => (
+            {["Google AI Mode", "Google AI Overviews", "ChatGPT", "Perplexity", "Gemini"].map((engine) => (
               <div key={engine} className="flex items-center justify-between text-[13px]">
                 <span className="text-ink/80">{engine}</span>
                 <span className="inline-flex items-center gap-2 text-[11.5px] text-muted">
