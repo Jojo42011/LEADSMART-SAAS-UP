@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { type OnboardingData, useOnboarding } from "@/lib/onboarding";
+import { buildPlan } from "@/lib/plan";
 import { site } from "@/lib/site";
 import { ChoiceCard, Field, StepHeading } from "./fields";
 
@@ -49,7 +50,7 @@ export function Wizard() {
   const next = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
-  if (launching) return <LaunchSequence onDone={() => router.push("/dashboard")} />;
+  if (launching) return <LaunchSequence data={data} onDone={() => router.push("/dashboard")} />;
 
   return (
     <div className="flex min-h-screen bg-paper-warm">
@@ -450,6 +451,12 @@ function MarketStep({ data, update }: StepProps) {
 function LaunchStep({ data, update }: StepProps) {
   const l = data.launch;
   const set = (patch: Partial<typeof l>) => update({ launch: { ...l, ...patch } });
+  // The same plan builder the dashboard runs — the preview below IS the
+  // first cycle, not marketing copy about it.
+  const plan = useMemo(() => buildPlan(data), [data]);
+  const firstPage = plan.pages.find((p) => p.status !== "Rewriting") ?? plan.pages[0];
+  const queuedCount = plan.keywords.filter((k) => k.status === "Queued").length;
+  const totalGaps = plan.competitors.reduce((s, c) => s + c.gapCount, 0);
   const summary = [
     { label: "Business", value: data.business.name || "Not set" },
     { label: "Website", value: data.website.url || "Not set" },
@@ -506,7 +513,48 @@ function LaunchStep({ data, update }: StepProps) {
           ))}
         </div>
 
-        <div className="mt-4 rounded-xl border border-line bg-white p-5">
+        <div className="mt-4 rounded-xl border border-line-dark bg-ink p-5 text-white">
+          <p className="label-mono text-white/50">First cycle preview</p>
+          {firstPage ? (
+            <dl className="mt-3 grid gap-2">
+              <div className="flex justify-between gap-6 text-[13px]">
+                <dt className="text-white/50">First page</dt>
+                <dd className="truncate font-medium">{firstPage.title}</dd>
+              </div>
+              <div className="flex justify-between gap-6 text-[13px]">
+                <dt className="text-white/50">Keyword queue</dt>
+                <dd className="font-medium">
+                  {queuedCount} queued of {plan.keywords.length} tracked
+                </dd>
+              </div>
+              <div className="flex justify-between gap-6 text-[13px]">
+                <dt className="text-white/50">First 30 days</dt>
+                <dd className="font-medium">{plan.roadmap[0]?.pages ?? 0} pages planned</dd>
+              </div>
+              {totalGaps > 0 && (
+                <div className="flex justify-between gap-6 text-[13px]">
+                  <dt className="text-white/50">Competitor gaps</dt>
+                  <dd className="font-medium">{totalGaps} mapped, feeding the queue</dd>
+                </div>
+              )}
+              {plan.projection && (
+                <div className="flex justify-between gap-6 text-[13px]">
+                  <dt className="text-white/50">Projected value</dt>
+                  <dd className="font-medium text-accent">
+                    ${plan.projection.monthlyValue.toLocaleString()}/mo at month 6
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (
+            <p className="mt-3 text-[13px] text-white/60">
+              Add services and locations in the Market step and the agent will
+              draft its first-cycle plan here.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-1 rounded-xl border border-line bg-white p-5">
           <p className="label-mono text-muted/70">Configuration</p>
           <dl className="mt-3 grid gap-2">
             {summary.map((s) => (
@@ -524,16 +572,23 @@ function LaunchStep({ data, update }: StepProps) {
 
 /* ---------- Launch animation ---------- */
 
-const launchLines = [
-  "Creating your workspace",
-  "Ingesting your brand and design tokens",
-  "Mapping competitors in your market",
-  "Building your first keyword gap analysis",
-  "Scheduling the first page",
-];
-
-function LaunchSequence({ onDone }: { onDone: () => void }) {
+function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => void }) {
   const [count, setCount] = useState(0);
+  // Built from the real plan so the launch narration matches what the
+  // dashboard shows two seconds later.
+  const launchLines = useMemo(() => {
+    const plan = buildPlan(data);
+    const firstPage = plan.pages.find((p) => p.status !== "Rewriting") ?? plan.pages[0];
+    return [
+      "Creating your workspace",
+      "Ingesting your brand and design tokens",
+      plan.competitors.length > 0
+        ? `Mapping ${plan.competitors.length} competitor${plan.competitors.length > 1 ? "s" : ""} in your market`
+        : "Mapping your market",
+      `Prioritizing ${plan.keywords.length} keywords into a queue`,
+      firstPage ? `Scheduling "${firstPage.title}" as your first page` : "Scheduling the first page",
+    ];
+  }, [data]);
 
   useEffect(() => {
     if (count < launchLines.length) {
@@ -542,7 +597,7 @@ function LaunchSequence({ onDone }: { onDone: () => void }) {
     }
     const t = setTimeout(onDone, 1100);
     return () => clearTimeout(t);
-  }, [count, onDone]);
+  }, [count, onDone, launchLines.length]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-ink px-6 text-white">
