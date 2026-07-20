@@ -437,8 +437,8 @@ function MarketStep({ data, update }: StepProps) {
         <Field
           label="Keyword wishlist"
           optional
-          hint="Keywords you already know you want to win. The agent seeds its queue with these first."
-          placeholder="pool remodeling scottsdale, best pool builder phoenix"
+          hint="Keywords you already know you want to win. The agent seeds its queue with these first — question phrasing works too, and gets built as an answer-first page for AI search."
+          placeholder="pool remodeling scottsdale, how much does a pool remodel cost"
           value={m.wishlist}
           onChange={(e) => set({ wishlist: e.target.value })}
         />

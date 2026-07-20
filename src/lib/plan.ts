@@ -286,7 +286,9 @@ export function buildPlan(data: OnboardingData): Plan {
       keywords: 18 + (h % 60),
       referringDomains: 40 + (h % 380),
       gapItems,
-      gapCount: gapItems.length + 2 + (h % 14),
+      // No mapped keywords means no basis to claim gaps — an "N open gaps"
+      // headline over an empty list would be incoherent.
+      gapCount: gapItems.length === 0 ? 0 : gapItems.length + 2 + (h % 14),
       note: h % 2 === 0 ? "Strong local landing pages" : "Thin service coverage, gap to exploit",
     };
   });

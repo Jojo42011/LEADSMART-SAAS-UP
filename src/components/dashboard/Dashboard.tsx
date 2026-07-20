@@ -158,6 +158,7 @@ export function Dashboard() {
             {/* Mobile tab switcher */}
             <select
               value={tab}
+              aria-label="Dashboard section"
               onChange={(e) => setTab(e.target.value as Tab)}
               className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[13px] md:hidden"
             >
@@ -736,10 +737,17 @@ function Competitors({
               </div>
             </div>
             <div className="mt-5 border-t border-line pt-4">
-              <p className="text-[12px] text-muted">
-                <span className="font-medium text-ink">{c.gapCount} gaps</span>{" "}
-                found &middot; classified below
-              </p>
+              {c.gapItems.length > 0 ? (
+                <p className="text-[12px] text-muted">
+                  <span className="font-medium text-ink">{c.gapCount} gaps</span>{" "}
+                  found &middot; classified below
+                </p>
+              ) : (
+                <p className="text-[12px] text-muted">
+                  No gaps mapped yet — add services and locations in Settings so
+                  the agent has keywords to compare coverage against.
+                </p>
+              )}
               {c.gapItems.length > 0 && (
                 <div className="mt-2.5 grid gap-2">
                   {c.gapItems.map((g) => (

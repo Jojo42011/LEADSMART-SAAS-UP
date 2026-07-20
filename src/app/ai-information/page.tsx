@@ -29,6 +29,7 @@ const facts = [
       "The agent runs a six-phase cycle: Research (scan live search results and competitors), Plan (find keyword and location gaps), Generate (write a complete page in the brand's voice), Enrich (structured data, meta tags, internal links), Score (audit against the Ascent Method), and Publish (commit to the live site and verify).",
       "It publishes to WordPress via the REST API, or to static sites via direct commits to a GitHub repository.",
       "It builds a 90-day content roadmap at onboarding and rebuilds it from live ranking data every cycle.",
+      "Competitor gap analysis feeds the queue directly: keywords competitors cover that the site doesn't are classified (Core, Differentiator, Commodity, Opportunity) and raise their own queue priority, and pages past the content-freshness threshold are automatically scheduled for refresh.",
       "Publishing cadence is configurable: daily, every three days, or weekly. Pages can publish automatically or wait for the owner's approval.",
     ],
   },
