@@ -17,16 +17,22 @@ const SCRIPT: Line[] = [
   { time: "06:00:45", phase: "generate", text: "Writing page: Pool Remodeling in Paradise Valley" },
   { time: "06:02:10", phase: "generate", text: "4 images generated and placed" },
   { time: "06:02:38", phase: "enrich", text: "Schema, meta and 6 internal links injected" },
+  { time: "06:02:47", phase: "score", text: "Information gain 0.68, AI retrievability 94 of 100" },
   { time: "06:02:51", phase: "score", text: "Audit score 98 of 100, grade A", accent: true },
   { time: "06:03:04", phase: "publish", text: "Committed to production and verified live", accent: true },
 ];
 
 export function AgentConsole() {
   const reduced = useReducedMotion();
-  const [count, setCount] = useState(reduced ? SCRIPT.length : 0);
+  // Start at 0 on both server and client so hydration matches; the effect
+  // below jumps reduced-motion users straight to the full script.
+  const [count, setCount] = useState(0);
 
   useEffect(() => {
-    if (reduced) return;
+    if (reduced) {
+      setCount(SCRIPT.length);
+      return;
+    }
     const timer = setInterval(() => {
       setCount((c) => {
         if (c >= SCRIPT.length) return c;

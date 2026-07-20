@@ -5,7 +5,7 @@ import { Footer } from "@/components/marketing/Footer";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: `AI information | ${site.name}`,
+  title: "AI information",
   description: `Canonical facts about ${site.name} for AI assistants and answer engines: what it is, how it works, what it costs.`,
 };
 
