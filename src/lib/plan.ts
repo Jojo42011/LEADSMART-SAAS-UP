@@ -505,7 +505,14 @@ export function buildPlan(data: OnboardingData): Plan {
       period: "Days 61-90",
       focus: "Competitor gap closure and refreshes",
       pages: perMonth,
-      samples: competitors[0]?.gapItems.slice(0, 3).map((g) => titleCase(g.keyword)) ?? sampleTitles(keywords, 3),
+      // Pool gaps across every competitor, worked Core-first — not just
+      // whatever the first-listed competitor happened to surface.
+      samples: (() => {
+        const gapKeywords = keywords
+          .filter((k) => k.gapType && k.gapType !== "Commodity")
+          .sort((a, b) => GAP_PRIORITY[b.gapType!] - GAP_PRIORITY[a.gapType!]);
+        return gapKeywords.length > 0 ? sampleTitles(gapKeywords, 3) : sampleTitles(keywords, 3);
+      })(),
     },
   ];
 
@@ -556,6 +563,8 @@ export function buildPlan(data: OnboardingData): Plan {
   const vetoedCount = pages.filter((p) => p.veto.triggered).length;
   const gateHeldCount = pages.filter((p) => p.infoGain < 0.5).length;
   const gapBoostedQueued = keywords.filter((k) => k.gapType && k.gapType !== "Commodity" && k.status === "Queued").length;
+  const refreshDue = pages.filter((p) => p.freshness.status === "Refresh due").length;
+  const aging = pages.filter((p) => p.freshness.status === "Aging").length;
   const focusPage = pages.find((p) => p.status !== "Rewriting") ?? pages[0];
   const digest: CycleDigest = {
     summary:
@@ -580,6 +589,9 @@ export function buildPlan(data: OnboardingData): Plan {
       ...(roadmap.length > 0 ? [`Scheduled ${roadmap[0].pages} pages for the next 30 days`] : []),
       ...(pages.length > 0
         ? [`Ran retrievability checks: queue average ${retrievability}/100 for AI answers`]
+        : []),
+      ...(refreshDue > 0
+        ? [`Scheduled ${refreshDue} refresh${refreshDue > 1 ? "es" : ""} — content under 3 months old is ~3x more likely to be cited by AI answers${aging > 0 ? `, ${aging} more page${aging > 1 ? "s" : ""} aging toward the threshold` : ""}`]
         : []),
       ...(gateHeldCount > 0
         ? [`Held ${gateHeldCount} draft${gateHeldCount > 1 ? "s" : ""} at the information-gain gate — rewriting until they add something the top results don't`]

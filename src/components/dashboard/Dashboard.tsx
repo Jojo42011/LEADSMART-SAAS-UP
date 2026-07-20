@@ -704,7 +704,10 @@ function Competitors({
               top competitors cover it — add now), <span className="font-medium text-ink/80">Differentiator</span> (some
               do, and outrank you), <span className="font-medium text-ink/80">Commodity</span> (everyone
               covers it shallowly — a sentence is enough), or <span className="font-medium text-ink/80">Opportunity</span> (nobody
-              owns this angle yet — a real chance to lead).
+              owns this angle yet — a real chance to lead). Gap findings feed
+              the queue automatically: Core and Opportunity keywords get a
+              priority boost on the Keywords tab, and Core gaps jump straight
+              into the page queue.
             </p>
           </div>
           <div className="text-right">

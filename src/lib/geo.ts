@@ -181,9 +181,10 @@ export type Freshness = {
 
 export function scoreFreshness(keyword: string, queuePosition: number): Freshness {
   const h = hash(`age:${keyword}`);
-  // Already-published pages (earlier in the queue) skew newer; deeper queue
-  // positions haven't published yet, so treat them as freshly-scheduled.
-  const ageDays = queuePosition === 0 ? h % 20 : (h % 70) + queuePosition * 3;
+  // The page being drafted now is always fresh; deeper queue positions span
+  // the full age range so Aging (>90d) and Refresh due (>150d) states are
+  // actually reachable and the refresh scheduler has something to act on.
+  const ageDays = queuePosition === 0 ? h % 20 : (h % 170) + queuePosition * 5;
   const status: Freshness["status"] =
     ageDays <= 90 ? "Fresh" : ageDays <= 150 ? "Aging" : "Refresh due";
   return { ageDays, status };
