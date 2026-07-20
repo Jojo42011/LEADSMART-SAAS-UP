@@ -623,6 +623,14 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
                         Wishlist
                       </span>
                     )}
+                    {k.gapType && k.gapType !== "Commodity" && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${gapTypeStyles[k.gapType]}`}
+                        title="Flagged by competitor gap analysis — the gap finding raised this keyword's queue priority."
+                      >
+                        {k.gapType} gap
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className="px-4 py-3.5">

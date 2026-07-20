@@ -28,6 +28,8 @@ export type KeywordRow = {
   potential: number;
   /** True when the owner asked for this keyword in their wishlist. */
   wishlisted: boolean;
+  /** Set when competitor analysis flags this keyword as a coverage gap; feeds queue priority. */
+  gapType?: GapType;
   status: "Tracking" | "Queued";
   /** Off-site platform worth seeding for this keyword's citation profile. */
   citationPlatform: CitationPlatform;
@@ -257,7 +259,60 @@ export function buildPlan(data: OnboardingData): Plan {
     push(`how much does ${service} cost`, "Question");
   }
 
-  // The agent works highest business potential first.
+  /* ----------------------------- Competitors ---------------------------- */
+  // Computed before queue prioritization so gap findings feed the queue
+  // instead of just sitting on the Competitors tab.
+
+  const GAP_TYPES: GapType[] = ["Core", "Differentiator", "Commodity", "Opportunity"];
+  const GAP_ACTIONS: Record<GapType, string> = {
+    Core: "All top competitors cover this substantively — must add this cycle",
+    Differentiator: "Some competitors cover it and outrank you — add if scope allows",
+    Commodity: "Everyone covers this shallowly — a sentence is enough, don't overbuild",
+    Opportunity: "No competitor owns this angle — a real chance to lead the page",
+  };
+
+  const competitors: CompetitorRow[] = parseList(data.market.competitors).map((name) => {
+    const h = hash(name.toLowerCase());
+    const gapItems: GapItem[] = keywords
+      .filter((k) => hash(name.toLowerCase() + k.term) % 3 === 0)
+      .slice(0, 4)
+      .map((k) => {
+        const type = GAP_TYPES[hash(name.toLowerCase() + "type" + k.term) % GAP_TYPES.length];
+        return { keyword: k.term, type, action: GAP_ACTIONS[type] };
+      });
+    return {
+      name,
+      overlap: 42 + (h % 47),
+      keywords: 18 + (h % 60),
+      referringDomains: 40 + (h % 380),
+      gapItems,
+      gapCount: gapItems.length + 2 + (h % 14),
+      note: h % 2 === 0 ? "Strong local landing pages" : "Thin service coverage, gap to exploit",
+    };
+  });
+
+  // Gap findings boost queue priority: a Core gap (every competitor covers
+  // it) outranks an Opportunity (nobody covers it), which outranks a
+  // Differentiator; Commodity gaps get no boost — they aren't worth a page.
+  const GAP_PRIORITY: Record<GapType, number> = { Core: 3, Opportunity: 2, Differentiator: 1, Commodity: 0 };
+  const GAP_BOOST: Record<GapType, number> = { Core: 12, Opportunity: 8, Differentiator: 5, Commodity: 0 };
+  const gapByTerm = new Map<string, GapType>();
+  for (const c of competitors) {
+    for (const g of c.gapItems) {
+      const existing = gapByTerm.get(g.keyword);
+      if (!existing || GAP_PRIORITY[g.type] > GAP_PRIORITY[existing]) gapByTerm.set(g.keyword, g.type);
+    }
+  }
+  for (const k of keywords) {
+    const type = gapByTerm.get(k.term);
+    if (type) {
+      k.gapType = type;
+      k.potential = Math.min(98, k.potential + GAP_BOOST[type]);
+    }
+  }
+
+  // The agent works highest business potential first — wishlist and gap
+  // boosts already folded into potential.
   keywords.sort((a, b) => b.potential - a.potential);
   keywords.forEach((k, i) => {
     k.status = i < 8 ? "Queued" : "Tracking";
@@ -406,8 +461,10 @@ export function buildPlan(data: OnboardingData): Plan {
 
   // Spokes first (long-tail location pages), a hub last — a hub published
   // before its spokes exist launches as a link-less orphan.
+  // Core gaps force their way into the page queue regardless of intent —
+  // every top competitor covers them, so not having the page is a live loss.
   const spokeKeywords = keywords
-    .filter((k) => k.intent === "Local" || k.intent === "Question" || k.wishlisted)
+    .filter((k) => k.intent === "Local" || k.intent === "Question" || k.wishlisted || k.gapType === "Core")
     .slice(0, 5);
   const hubKeyword = keywords.find((k) => k.intent === "Service");
 
@@ -424,36 +481,6 @@ export function buildPlan(data: OnboardingData): Plan {
           structure: Math.round(pages.reduce((s, p) => s + p.pillars.structure, 0) / pages.length),
         }
       : { substance: 0, signal: 0, structure: 0 };
-
-  /* ----------------------------- Competitors ---------------------------- */
-
-  const GAP_TYPES: GapType[] = ["Core", "Differentiator", "Commodity", "Opportunity"];
-  const GAP_ACTIONS: Record<GapType, string> = {
-    Core: "All top competitors cover this substantively — must add this cycle",
-    Differentiator: "Some competitors cover it and outrank you — add if scope allows",
-    Commodity: "Everyone covers this shallowly — a sentence is enough, don't overbuild",
-    Opportunity: "No competitor owns this angle — a real chance to lead the page",
-  };
-
-  const competitors: CompetitorRow[] = parseList(data.market.competitors).map((name) => {
-    const h = hash(name.toLowerCase());
-    const gapItems: GapItem[] = keywords
-      .filter((k) => hash(name.toLowerCase() + k.term) % 3 === 0)
-      .slice(0, 4)
-      .map((k) => {
-        const type = GAP_TYPES[hash(name.toLowerCase() + "type" + k.term) % GAP_TYPES.length];
-        return { keyword: k.term, type, action: GAP_ACTIONS[type] };
-      });
-    return {
-      name,
-      overlap: 42 + (h % 47),
-      keywords: 18 + (h % 60),
-      referringDomains: 40 + (h % 380),
-      gapItems,
-      gapCount: gapItems.length + 2 + (h % 14),
-      note: h % 2 === 0 ? "Strong local landing pages" : "Thin service coverage, gap to exploit",
-    };
-  });
 
   /* ------------------------------ Roadmap ------------------------------- */
 
@@ -528,6 +555,7 @@ export function buildPlan(data: OnboardingData): Plan {
   const queued = keywords.filter((k) => k.status === "Queued").length;
   const vetoedCount = pages.filter((p) => p.veto.triggered).length;
   const gateHeldCount = pages.filter((p) => p.infoGain < 0.5).length;
+  const gapBoostedQueued = keywords.filter((k) => k.gapType && k.gapType !== "Commodity" && k.status === "Queued").length;
   const focusPage = pages.find((p) => p.status !== "Rewriting") ?? pages[0];
   const digest: CycleDigest = {
     summary:
@@ -545,6 +573,9 @@ export function buildPlan(data: OnboardingData): Plan {
       `Prioritized ${queued} of ${keywords.length} tracked keywords for the queue`,
       ...(competitors.length > 0
         ? [`Mapped ${totalGaps} keyword gaps across ${competitors.length} competitor${competitors.length > 1 ? "s" : ""}`]
+        : []),
+      ...(gapBoostedQueued > 0
+        ? [`Pulled ${gapBoostedQueued} competitor-gap keyword${gapBoostedQueued > 1 ? "s" : ""} into the queue — gap findings raise priority, they don't just sit on a tab`]
         : []),
       ...(roadmap.length > 0 ? [`Scheduled ${roadmap[0].pages} pages for the next 30 days`] : []),
       ...(pages.length > 0
