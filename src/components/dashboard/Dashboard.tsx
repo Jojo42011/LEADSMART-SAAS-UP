@@ -69,6 +69,7 @@ const statusStyles: Record<string, string> = {
   Drafting: "bg-accent/10 text-accent",
   Queued: "bg-ink/[0.06] text-ink/70",
   Researching: "bg-ink/[0.04] text-muted",
+  Rewriting: "bg-ink text-white",
   Tracking: "bg-ink/[0.06] text-ink/70",
 };
 
@@ -438,7 +439,9 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
           </p>
         </div>
         <span
-          className="hidden shrink-0 rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted sm:inline-flex"
+          className={`hidden shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] sm:inline-flex ${
+            page.infoGain < 0.5 ? "bg-ink text-white" : "bg-ink/[0.04] text-muted"
+          }`}
           title="Information gain vs. current top-ranking pages. Must clear 0.50 to publish."
         >
           IG {page.infoGain.toFixed(2)}

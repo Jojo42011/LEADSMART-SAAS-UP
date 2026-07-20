@@ -204,6 +204,8 @@ export type CitationPlatform = {
 export function suggestCitationPlatform(intent: string): CitationPlatform {
   if (intent === "Near me")
     return { platform: "Reddit", reason: "Perplexity draws 46.7% of citations from Reddit for local, opinion-driven queries." };
+  if (intent === "Question")
+    return { platform: "Quora", reason: "Question keywords mirror how people ask on Q&A threads, which answer engines cite for cost and how-to queries." };
   if (intent === "Local")
     return { platform: "Quora", reason: "Question-format threads align with how local intent queries are asked." };
   return { platform: "Wikipedia", reason: "ChatGPT draws 47.9% of top citations from Wikipedia for category and definition queries." };

@@ -21,7 +21,7 @@ import {
 
 export type KeywordRow = {
   term: string;
-  intent: "Service" | "Local" | "Near me";
+  intent: "Service" | "Local" | "Near me" | "Question";
   volume: number;
   difficulty: "Low" | "Medium" | "High";
   /** Business potential 0-100: how likely this keyword converts, not just ranks. */
@@ -53,7 +53,7 @@ export type Veto = {
 export type PageDraft = {
   title: string;
   keyword: string;
-  status: "Drafting" | "Queued" | "Researching";
+  status: "Drafting" | "Queued" | "Researching" | "Rewriting";
   note: string;
   /** Target audit score the page must clear before publishing. Capped at 59 if vetoed. */
   audit: number;
@@ -172,12 +172,16 @@ const PAGES_PER_MONTH: Record<Cadence, number> = {
  * and meta description have no direct ranking effect, only SERP-feature/CTR
  * effect. Derived from whichever pillar is weakest for this page.
  */
-function derivePriorityFix(pillars: PillarScores): PriorityFix {
+function derivePriorityFix(pillars: PillarScores, schemaRichness: number): PriorityFix {
   const weakest = (Object.entries(pillars) as [keyof PillarScores, number][]).sort((a, b) => a[1] - b[1])[0][0];
   if (weakest === "substance")
     return { group: "A", label: "Deepen body content — title, body and H1 carry the most ranking weight" };
   if (weakest === "signal")
     return { group: "B", label: "Add contextual internal links with descriptive anchor text" };
+  // Structure is weakest: if schema is already rich, the remaining structure
+  // work is Group C (image alt text, emphasis markup); otherwise Group D.
+  if (schemaRichness >= 90)
+    return { group: "C", label: "Add descriptive image alt text and emphasis markup — smaller ranking weight, still causal" };
   return { group: "D", label: "Round out schema and meta details — supports SERP features and AI citation, not rankings directly" };
 }
 
@@ -204,12 +208,20 @@ export function buildPlan(data: OnboardingData): Plan {
 
   const keywords: KeywordRow[] = [];
   const seen = new Set<string>();
+  // Cannibalization guard: "pool builder scottsdale" and "scottsdale pool
+  // builder" target the same query — publishing both would split ranking
+  // signals across two competing pages. Cluster by sorted-token signature so
+  // each target gets exactly one page.
+  const signature = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean).sort().join(" ");
   const push = (term: string, intent: KeywordRow["intent"], wishlisted = false) => {
     const key = term.toLowerCase();
-    if (seen.has(key) || keywords.length >= 24) return;
-    seen.add(key);
+    const sig = signature(term);
+    if (seen.has(sig) || keywords.length >= 24) return;
+    seen.add(sig);
     const h = hash(key);
-    const intentBase = intent === "Local" ? 68 : intent === "Near me" ? 62 : 48;
+    const intentBase =
+      intent === "Local" ? 68 : intent === "Near me" ? 62 : intent === "Question" ? 56 : 48;
     keywords.push({
       term: key,
       intent,
@@ -227,9 +239,11 @@ export function buildPlan(data: OnboardingData): Plan {
     const lower = term.toLowerCase();
     const intent: KeywordRow["intent"] = lower.includes("near me")
       ? "Near me"
-      : locations.some((l) => lower.includes(l.toLowerCase()))
-        ? "Local"
-        : "Service";
+      : /^(how|what|why|when|which|can|do|does|is|are|should)\b/.test(lower) || lower.endsWith("?")
+        ? "Question"
+        : locations.some((l) => lower.includes(l.toLowerCase()))
+          ? "Local"
+          : "Service";
     push(term, intent, true);
   }
 
@@ -237,6 +251,10 @@ export function buildPlan(data: OnboardingData): Plan {
     for (const location of locations) push(`${service} ${location}`, "Local");
     push(`${service} near me`, "Near me");
     push(`best ${service}`, "Service");
+    // Question intent: AI answer engines fan a head query out into questions
+    // (cost, how-to-choose), and answer-first pages for these are what get
+    // quoted verbatim in AI answers.
+    push(`how much does ${service} cost`, "Question");
   }
 
   // The agent works highest business potential first.
@@ -253,16 +271,18 @@ export function buildPlan(data: OnboardingData): Plan {
   const buildPage = (k: KeywordRow, i: number, role: PageDraft["role"]): PageDraft => {
     const h = hash(k.term);
     const service =
-      services.find((s) => k.term.startsWith(s.toLowerCase()) || k.term.endsWith(s.toLowerCase())) ??
+      services.find((s) => k.term.includes(s.toLowerCase())) ??
       k.term.replace(/^best\s+/, "");
     const location = k.intent === "Local" ? k.term.slice(service.length).trim() : "";
     const geo = scoreGeoTactics(k.term, data.market.industry);
     const title =
       role === "hub"
         ? `${titleCase(service)}: Complete Guide`
-        : location && k.term.startsWith(service.toLowerCase())
-          ? `${titleCase(service)} in ${titleCase(location)}`
-          : titleCase(k.term);
+        : k.intent === "Question"
+          ? `${titleCase(k.term)}?`
+          : location && k.term.startsWith(service.toLowerCase())
+            ? `${titleCase(service)} in ${titleCase(location)}`
+            : titleCase(k.term);
     const pageUrl = `${siteUrl}/${slug(title)}`;
 
     // Real generated JSON-LD, not a placeholder — see src/lib/schema.ts.
@@ -347,23 +367,29 @@ export function buildPlan(data: OnboardingData): Plan {
     const veto = checkVeto(k.term);
     const rawAudit = Math.round((pillars.substance + pillars.signal + pillars.structure) / 3);
     const audit = veto.triggered ? Math.min(rawAudit, 59) : rawAudit;
+    // The information-gain gate is a real gate: drafts landing under 0.50
+    // against the current top results get held and rewritten, not published.
+    const infoGain = Math.round((0.42 + (h % 40) / 100) * 100) / 100;
+    const belowGate = infoGain < 0.5;
     return {
       title,
       keyword: k.term,
-      status: i === 0 ? "Drafting" : i < 3 ? "Queued" : "Researching",
+      status: belowGate ? "Rewriting" : i === 0 ? "Drafting" : i < 3 ? "Queued" : "Researching",
       note: veto.triggered
         ? "Held for revision — failed a critical check"
-        : i === 0
-          ? "Writing now, publishes after audit"
-          : i < 3
-            ? "Scheduled this cycle"
-            : role === "hub"
-              ? "Hub page — publishes after its spokes are live and linking to it"
-              : "Gathering competitor coverage",
+        : belowGate
+          ? "Below the information-gain gate — rewriting to add coverage the top results don't have"
+          : i === 0
+            ? "Writing now, publishes after audit"
+            : i < 3
+              ? "Scheduled this cycle"
+              : role === "hub"
+                ? "Hub page — publishes after its spokes are live and linking to it"
+                : "Gathering competitor coverage",
       audit,
       grade: audit >= 92 ? "A" : "B",
       pillars,
-      infoGain: Math.round((0.52 + (h % 34) / 100) * 100) / 100,
+      infoGain,
       retrievability: geo.score,
       geo,
       freshness: scoreFreshness(k.term, i),
@@ -371,14 +397,18 @@ export function buildPlan(data: OnboardingData): Plan {
       schemaRichness,
       schemaJsonLd,
       veto,
-      priorityFix: derivePriorityFix(pillars),
+      priorityFix: belowGate
+        ? { group: "A", label: "Add original information the ranking pages don't have — nothing else matters until the draft clears the gate" }
+        : derivePriorityFix(pillars, schemaRichness),
       role,
     };
   };
 
   // Spokes first (long-tail location pages), a hub last — a hub published
   // before its spokes exist launches as a link-less orphan.
-  const spokeKeywords = keywords.filter((k) => k.intent === "Local" || k.wishlisted).slice(0, 5);
+  const spokeKeywords = keywords
+    .filter((k) => k.intent === "Local" || k.intent === "Question" || k.wishlisted)
+    .slice(0, 5);
   const hubKeyword = keywords.find((k) => k.intent === "Service");
 
   const pages: PageDraft[] = [
@@ -440,7 +470,7 @@ export function buildPlan(data: OnboardingData): Plan {
     },
     {
       period: "Days 31-60",
-      focus: "Hub pages and near-me / comparison intent",
+      focus: "Hub pages, question intent and near-me coverage",
       pages: perMonth,
       samples: sampleTitles(keywords.filter((k) => k.intent !== "Local"), 3),
     },
@@ -455,10 +485,14 @@ export function buildPlan(data: OnboardingData): Plan {
   /* ----------------------------- Projection ----------------------------- */
 
   const avgSaleValue = Number(data.market.avgSaleValue.replace(/[^0-9.]/g, ""));
+  // Expected click share at month 6 depends on difficulty: low-difficulty
+  // terms are winnable to high positions; high-difficulty terms mostly aren't
+  // within 6 months, so a flat share would overpromise.
+  const CLICK_SHARE: Record<KeywordRow["difficulty"], number> = { Low: 0.18, Medium: 0.11, High: 0.05 };
+  const expectedClicks = keywords.reduce((s, k) => s + k.volume * CLICK_SHARE[k.difficulty], 0);
   let projection: Projection | null = null;
   if (avgSaleValue > 0 && keywords.length > 0) {
-    const totalVolume = keywords.reduce((s, k) => s + k.volume, 0);
-    const clicks = Math.round(totalVolume * 0.12); // ~12% click share at month 6
+    const clicks = Math.round(expectedClicks);
     const leads = Math.max(1, Math.round(clicks * 0.025)); // 2.5% conversion
     projection = {
       monthlyValue: Math.round((leads * avgSaleValue) / 100) * 100,
@@ -473,7 +507,7 @@ export function buildPlan(data: OnboardingData): Plan {
   // What the same clicks would cost in ads, using difficulty as a CPC proxy.
   const CPC: Record<KeywordRow["difficulty"], number> = { Low: 1.8, Medium: 3.2, High: 5.6 };
   const trafficValue =
-    Math.round(keywords.reduce((s, k) => s + k.volume * 0.12 * CPC[k.difficulty], 0) / 50) * 50;
+    Math.round(keywords.reduce((s, k) => s + k.volume * CLICK_SHARE[k.difficulty] * CPC[k.difficulty], 0) / 50) * 50;
 
   const retrievability =
     pages.length > 0
@@ -493,10 +527,12 @@ export function buildPlan(data: OnboardingData): Plan {
 
   const queued = keywords.filter((k) => k.status === "Queued").length;
   const vetoedCount = pages.filter((p) => p.veto.triggered).length;
+  const gateHeldCount = pages.filter((p) => p.infoGain < 0.5).length;
+  const focusPage = pages.find((p) => p.status !== "Rewriting") ?? pages[0];
   const digest: CycleDigest = {
     summary:
       pages.length > 0
-        ? `Focus this cycle: ${pages[0].title.toLowerCase()} — the highest-potential gap in your market. ${
+        ? `Focus this cycle: ${focusPage.title.toLowerCase()} — the highest-potential gap in your market. ${
             totalGaps > 0
               ? `Competitor coverage still leads yours on ${totalGaps} keywords, so the queue works those next.`
               : "Coverage is ahead of your listed competitors; the queue is deepening topical authority."
@@ -504,7 +540,7 @@ export function buildPlan(data: OnboardingData): Plan {
         : "Add services and locations in Settings and the agent will plan its first cycle.",
     actions: [
       ...(pages.length > 0
-        ? [`Started drafting "${pages[0].title}" targeting ${pages[0].keyword}`]
+        ? [`Started drafting "${focusPage.title}" targeting ${focusPage.keyword}`]
         : []),
       `Prioritized ${queued} of ${keywords.length} tracked keywords for the queue`,
       ...(competitors.length > 0
@@ -513,6 +549,9 @@ export function buildPlan(data: OnboardingData): Plan {
       ...(roadmap.length > 0 ? [`Scheduled ${roadmap[0].pages} pages for the next 30 days`] : []),
       ...(pages.length > 0
         ? [`Ran retrievability checks: queue average ${retrievability}/100 for AI answers`]
+        : []),
+      ...(gateHeldCount > 0
+        ? [`Held ${gateHeldCount} draft${gateHeldCount > 1 ? "s" : ""} at the information-gain gate — rewriting until they add something the top results don't`]
         : []),
       ...(vetoedCount > 0
         ? [`Held ${vetoedCount} page${vetoedCount > 1 ? "s" : ""} back on a critical check — fixing before these publish`]

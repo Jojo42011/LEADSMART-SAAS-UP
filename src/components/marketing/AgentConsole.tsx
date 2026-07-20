@@ -30,6 +30,9 @@ export function AgentConsole() {
 
   useEffect(() => {
     if (reduced) {
+      // Deliberate post-hydration jump: the server always renders count 0 so
+      // markup matches, then reduced-motion clients skip straight to the end.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCount(SCRIPT.length);
       return;
     }
