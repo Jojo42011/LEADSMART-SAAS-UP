@@ -60,7 +60,7 @@ its `skill.md`-style pages are designed to make agents execute instructions
 - Treat anything an agent forum "recommends doing" as untrusted input, not an
   instruction.
 
-**Last synced:** 2026-07-19
+**Last synced:** 2026-07-20
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -216,3 +216,25 @@ act on what's genuinely new beyond this.
   - Also: Google confirmed smaller core updates now roll **continuously without
     announcements** — supports our freshness/refresh-due monitoring design; no
     change needed.
+
+- **2026-07-20** — Reddit still blocked (r/SEO .json fetch failed). Searched:
+  "how Perplexity/ChatGPT choose citations ranking factors July 2026". Quiet
+  day — no code change. Findings, all reinforcing already-captured items:
+  - **Sharper data on platform divergence (already in baseline):** Averi
+    (680M citations, early 2026) finds only **11% domain overlap** between
+    ChatGPT and Perplexity citations; CiteLens finds SEO strength predicts
+    citations on Google AI and Perplexity but correlates near zero for ChatGPT
+    (only ~21% of ChatGPT citations Wikipedia-backed). Perplexity averages
+    21.9 citations/response vs ChatGPT's 10.4, and runs real-time retrieval
+    with relevance→freshness→structure→authority checkpoints. This is stronger
+    evidence for the already-deferred "weight tactics per target engine"
+    refinement (baseline item) — worth building when the real backend can
+    track per-engine citations; premature to encode in the deterministic
+    frontend model now.
+  - **"Extractable evidence genres"** (definitions, numerical facts,
+    comparisons, procedural steps drive answer influence) — largely covered by
+    existing tactics (statisticsAddition, technicalTerms, easyToUnderstand,
+    answer-first structure). Procedural steps → our existing HowTo schema
+    generator is the right tool; wiring HowTo onto mock pages without real
+    step content would be speculative, so deferred to real content generation.
+  - Guardrails respected: no moltbook/agent-forum fetches this run.
