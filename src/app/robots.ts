@@ -13,7 +13,8 @@ import { site } from "@/lib/site";
 /** Feed model training data. Blocking these has no effect on citation visibility. */
 const TRAINING_CRAWLERS = [
   "GPTBot", // OpenAI training
-  "anthropic-ai", // Anthropic training
+  "ClaudeBot", // Anthropic training (per Anthropic's official three-bot docs)
+  "anthropic-ai", // Anthropic legacy training token
   "Google-Extended", // Gemini / AI Overviews training
   "CCBot", // Common Crawl, feeds many third-party LLM training sets
   "Applebot-Extended", // Apple Intelligence training
@@ -25,8 +26,9 @@ const TRAINING_CRAWLERS = [
 const CITATION_CRAWLERS = [
   "OAI-SearchBot", // decides ChatGPT Search citations — distinct from GPTBot
   "ChatGPT-User",
-  "ClaudeBot",
-  "claude-web",
+  "Claude-SearchBot", // indexes for Claude's search results (Anthropic official docs)
+  "Claude-User", // user-initiated fetches from Claude.ai queries
+  "claude-web", // legacy Anthropic retrieval token, kept for compatibility
   "PerplexityBot",
   "Perplexity-User", // on-demand fetch when a user clicks a Perplexity citation
   "Bingbot", // Microsoft Copilot has no separate crawler; it reads the Bing index
