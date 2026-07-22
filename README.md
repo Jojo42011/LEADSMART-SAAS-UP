@@ -19,8 +19,15 @@ The daily agent cron in vercel.json activates automatically on Vercel.
 Everything runs without keys (deterministic research, template drafts).
 Add keys to unlock live behavior, see .env.example:
 
+- GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET: "Continue with Google" sign in.
+  Register the callback URL /api/auth/google/callback in Google Cloud.
+- GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET: "Continue with GitHub" sign in
+  and one click repo publishing (one OAuth App does both). Callback URL:
+  /api/connect/github/callback
+- AUTH_SECRET: signs the login session cookie, required in production
+  (`openssl rand -base64 32`)
+- DATABASE_URL: activates multi tenant storage and the autonomous cycle
 - GEMINI_API_KEY: live competitor research with Google Search grounding and LLM written pages
-- GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET: one click GitHub sign in during onboarding
 - CRON_SECRET: protects the daily cron endpoint
 
 WordPress connect needs no configuration: it uses the application password
