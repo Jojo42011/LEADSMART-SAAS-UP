@@ -107,7 +107,7 @@ function isYmyl(industry: string): boolean {
 }
 
 export type NegativeSignal = {
-  key: "keywordStuffing" | "thinContent" | "excessiveCta";
+  key: "keywordStuffing" | "thinContent" | "excessiveCta" | "lowFactDensity";
   label: string;
   triggered: boolean;
 };
@@ -160,6 +160,12 @@ export function scoreGeoTactics(keyword: string, industry = ""): GeoScore {
     { key: "keywordStuffing", label: "Keyword stuffing", triggered: h % 23 === 0 },
     { key: "thinContent", label: "Thin content (<300 words)", triggered: h % 19 === 0 },
     { key: "excessiveCta", label: "Excessive CTA density", triggered: h % 17 === 0 },
+    // Fact density drives extractability: empirical 2026 studies (Averi "1:80
+    // rule", 57k-URL AI Overviews sample) find ~1 verifiable fact per 60-80
+    // words is the grounding threshold AI answers cite from; sparser pages
+    // read as "inspired by data" rather than groundable. Facts must be real
+    // and sourced — the fabrication guardrail applies as always.
+    { key: "lowFactDensity", label: "Low fact density (<1 checkable fact per ~100 words)", triggered: h % 13 === 0 },
   ];
   const penalty = negativeSignals.filter((n) => n.triggered).length * 8;
 
