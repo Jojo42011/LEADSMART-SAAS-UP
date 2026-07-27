@@ -73,6 +73,12 @@ const statusStyles: Record<string, string> = {
   Tracking: "bg-ink/[0.06] text-ink/70",
 };
 
+const threatStyles: Record<string, string> = {
+  High: "bg-ink text-white",
+  Moderate: "bg-accent/10 text-accent",
+  Low: "bg-ink/[0.06] text-muted",
+};
+
 const gapTypeStyles: Record<string, string> = {
   Core: "bg-accent/10 text-accent",
   Differentiator: "bg-ink/[0.08] text-ink/80",
@@ -708,7 +714,10 @@ function Competitors({
               owns this angle yet — a real chance to lead). Gap findings feed
               the queue automatically: Core and Opportunity keywords get a
               priority boost on the Keywords tab, and Core gaps jump straight
-              into the page queue.
+              into the page queue. Competitors are ranked by threat so you know
+              which to answer first. Overlap and referring-domain figures are
+              estimates derived from your keyword set — connect Search Console
+              for measured data.
             </p>
           </div>
           <div className="text-right">
@@ -721,20 +730,30 @@ function Competitors({
         {plan.competitors.map((c) => (
           <Card key={c.name} className="p-6">
             <div className="flex items-start justify-between gap-4">
-              <p className="text-[14.5px] font-medium">{c.name}</p>
-              <span className="label-mono shrink-0 text-muted/60">
-                {c.referringDomains} ref. domains
+              <p className="min-w-0 truncate text-[14.5px] font-medium">{c.name}</p>
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${threatStyles[c.threat.level]}`}
+                title={c.threat.reason}
+              >
+                {c.threat.level} threat
               </span>
             </div>
-            <p className="mt-1 text-[12.5px] text-muted">{c.note}</p>
+            <p className="mt-1.5 text-[12.5px] text-muted">{c.threat.reason}</p>
             <div className="mt-5">
               <div className="flex items-center justify-between text-[12px] text-muted">
-                <span>Keyword overlap</span>
+                <span
+                  title="Estimated from your keyword set until Search Console data is connected."
+                >
+                  Keyword overlap <span className="text-muted/50">(est.)</span>
+                </span>
                 <span className="font-medium text-ink">{c.overlap}%</span>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
                 <div className="h-full rounded-full bg-accent" style={{ width: `${c.overlap}%` }} />
               </div>
+              <p className="mt-2 text-[11.5px] text-muted/70">
+                {c.referringDomains} referring domains (est.) &middot; {c.note}
+              </p>
             </div>
             <div className="mt-5 border-t border-line pt-4">
               {c.gapItems.length > 0 ? (
@@ -761,6 +780,24 @@ function Competitors({
                       <span className="text-[12px] text-ink/70">{g.keyword}</span>
                     </div>
                   ))}
+                </div>
+              )}
+              {c.leadCount > 0 && (
+                <div className="mt-4 border-t border-line pt-3.5">
+                  <p className="text-[12px] text-muted">
+                    <span className="font-medium text-ink">{c.leadCount} keyword{c.leadCount > 1 ? "s" : ""}</span>{" "}
+                    where you lead &middot; they have no mapped coverage
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {c.leadItems.map((term) => (
+                      <span
+                        key={term}
+                        className="rounded-full bg-ink/[0.04] px-2 py-0.5 text-[11px] text-muted"
+                      >
+                        {term}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

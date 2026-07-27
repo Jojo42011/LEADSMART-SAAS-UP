@@ -91,6 +91,14 @@ export type GapItem = {
   action: string;
 };
 
+export type ThreatLevel = "High" | "Moderate" | "Low";
+
+export type Threat = {
+  level: ThreatLevel;
+  /** Plain-English why, so the ranking is auditable rather than a black box. */
+  reason: string;
+};
+
 export type CompetitorRow = {
   name: string;
   overlap: number;
@@ -99,6 +107,11 @@ export type CompetitorRow = {
   /** Keywords they cover that the site doesn't yet, classified by gap type. */
   gapItems: GapItem[];
   gapCount: number;
+  /** Keywords the site covers that this competitor doesn't — where you already lead. */
+  leadItems: string[];
+  leadCount: number;
+  /** Which competitor to worry about first, derived from overlap + gap severity + authority. */
+  threat: Threat;
   note: string;
 };
 
@@ -273,25 +286,52 @@ export function buildPlan(data: OnboardingData): Plan {
 
   const competitors: CompetitorRow[] = parseList(data.market.competitors).map((name) => {
     const h = hash(name.toLowerCase());
-    const gapItems: GapItem[] = keywords
-      .filter((k) => hash(name.toLowerCase() + k.term) % 3 === 0)
-      .slice(0, 4)
-      .map((k) => {
-        const type = GAP_TYPES[hash(name.toLowerCase() + "type" + k.term) % GAP_TYPES.length];
-        return { keyword: k.term, type, action: GAP_ACTIONS[type] };
-      });
+    const covered = keywords.filter((k) => hash(name.toLowerCase() + k.term) % 3 === 0);
+    const gapItems: GapItem[] = covered.slice(0, 4).map((k) => {
+      const type = GAP_TYPES[hash(name.toLowerCase() + "type" + k.term) % GAP_TYPES.length];
+      return { keyword: k.term, type, action: GAP_ACTIONS[type] };
+    });
+    // Competitive position is two-sided: a gap list alone reads as pure
+    // deficit. These are terms this competitor does not cover — the
+    // complement of the gap set, from the same keyword universe.
+    const coveredTerms = new Set(covered.map((k) => k.term));
+    const leadTerms = keywords.filter((k) => !coveredTerms.has(k.term)).map((k) => k.term);
+    const referringDomains = 40 + (h % 380);
+    const overlap = 42 + (h % 47);
+    const coreGaps = gapItems.filter((g) => g.type === "Core").length;
+
+    // Threat ranking so the owner knows which competitor to answer first,
+    // with the reasoning stated rather than an opaque score.
+    let threat: Threat;
+    if (gapItems.length === 0) {
+      threat = { level: "Low", reason: "No mapped keyword overlap yet — add services and locations to assess this competitor" };
+    } else if (coreGaps > 0 && overlap >= 70) {
+      threat = { level: "High", reason: `Competes on ${overlap}% of your keywords and holds ${coreGaps} Core gap${coreGaps > 1 ? "s" : ""} you don't cover` };
+    } else if (coreGaps > 0 || (overlap >= 70 && referringDomains >= 250)) {
+      threat = { level: "Moderate", reason: coreGaps > 0 ? "Holds Core coverage you're missing, but overlaps less of your keyword set" : `High keyword overlap and ${referringDomains} referring domains, but no Core gaps` };
+    } else {
+      threat = { level: "Low", reason: "Limited overlap and no Core gaps — monitor, don't chase" };
+    }
+
     return {
       name,
-      overlap: 42 + (h % 47),
+      overlap,
       keywords: 18 + (h % 60),
-      referringDomains: 40 + (h % 380),
+      referringDomains,
       gapItems,
       // No mapped keywords means no basis to claim gaps — an "N open gaps"
       // headline over an empty list would be incoherent.
       gapCount: gapItems.length === 0 ? 0 : gapItems.length + 2 + (h % 14),
+      leadItems: leadTerms.slice(0, 4),
+      leadCount: leadTerms.length,
+      threat,
       note: h % 2 === 0 ? "Strong local landing pages" : "Thin service coverage, gap to exploit",
     };
   });
+
+  // Highest-threat competitors first — the tab should open on what matters.
+  const THREAT_ORDER: Record<ThreatLevel, number> = { High: 0, Moderate: 1, Low: 2 };
+  competitors.sort((a, b) => THREAT_ORDER[a.threat.level] - THREAT_ORDER[b.threat.level]);
 
   // Gap findings boost queue priority: a Core gap (every competitor covers
   // it) outranks an Opportunity (nobody covers it), which outranks a
