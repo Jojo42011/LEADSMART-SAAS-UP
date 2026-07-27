@@ -69,20 +69,43 @@ export const emptyOnboarding: OnboardingData = {
 
 const KEY = "onboarding.v1";
 
+/**
+ * Merges a stored section over its default, keeping only values whose type
+ * matches the default. Stored JSON is untrusted input — a number or object
+ * where a string is expected would otherwise reach `.split()`/`.replace()`
+ * in the plan builder and throw on every render, with no way to recover
+ * short of clearing site data by hand.
+ */
+function mergeSection<T extends object>(fallback: T, stored: unknown): T {
+  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return fallback;
+  const out = { ...fallback };
+  for (const [key, value] of Object.entries(stored)) {
+    if (!(key in fallback)) continue;
+    const expected = fallback[key as keyof T];
+    // null is a legitimate stored value for the nullable platform field.
+    if (value === null && expected === null) continue;
+    if (typeof value === typeof expected && (expected !== null || value === null)) {
+      out[key as keyof T] = value as T[keyof T];
+    }
+  }
+  return out;
+}
+
 export function loadOnboarding(): OnboardingData {
   if (typeof window === "undefined") return emptyOnboarding;
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return emptyOnboarding;
-    const parsed = JSON.parse(raw) as Partial<OnboardingData>;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof parsed !== "object" || parsed === null) return emptyOnboarding;
     // Merge per section so data saved before a field existed stays valid.
     return {
-      business: { ...emptyOnboarding.business, ...parsed.business },
-      website: { ...emptyOnboarding.website, ...parsed.website },
-      publishing: { ...emptyOnboarding.publishing, ...parsed.publishing },
-      searchConsole: { ...emptyOnboarding.searchConsole, ...parsed.searchConsole },
-      market: { ...emptyOnboarding.market, ...parsed.market },
-      launch: { ...emptyOnboarding.launch, ...parsed.launch },
+      business: mergeSection(emptyOnboarding.business, parsed.business),
+      website: mergeSection(emptyOnboarding.website, parsed.website),
+      publishing: mergeSection(emptyOnboarding.publishing, parsed.publishing),
+      searchConsole: mergeSection(emptyOnboarding.searchConsole, parsed.searchConsole),
+      market: mergeSection(emptyOnboarding.market, parsed.market),
+      launch: mergeSection(emptyOnboarding.launch, parsed.launch),
     };
   } catch {
     return emptyOnboarding;

@@ -55,7 +55,7 @@ export type Veto = {
 export type PageDraft = {
   title: string;
   keyword: string;
-  status: "Drafting" | "Queued" | "Researching" | "Rewriting";
+  status: "Drafting" | "Queued" | "Researching" | "Rewriting" | "Held";
   note: string;
   /** Target audit score the page must clear before publishing. Capped at 59 if vetoed. */
   audit: number;
@@ -77,6 +77,8 @@ export type PageDraft = {
   schemaJsonLd: Record<string, JsonLd>;
   /** A single critical-failure check that caps the whole page's score when triggered. */
   veto: Veto;
+  /** True when any publish gate (veto, audit < 75, info gain < 0.50) holds this page. */
+  held: boolean;
   /** The one fix the agent works next, ordered by causal on-page priority. */
   priorityFix: PriorityFix;
   /** Hub pages are broad overviews; spokes are long-tail pages linking back to a hub. */
@@ -133,6 +135,8 @@ export type Projection = {
   clicks: number;
   leads: number;
   avgSaleValue: number;
+  /** Share of leads assumed to close. Stated in the UI so the math is inspectable. */
+  closeRate: number;
 };
 
 export type CycleDigest = {
@@ -233,8 +237,19 @@ export function buildPlan(data: OnboardingData): Plan {
   // builder" target the same query — publishing both would split ranking
   // signals across two competing pages. Cluster by sorted-token signature so
   // each target gets exactly one page.
-  const signature = (s: string) =>
-    s.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean).sort().join(" ");
+  // Unicode-aware: an ASCII-only strip reduces non-Latin terms to "", so every
+  // such keyword collided on the same empty signature and all but the first
+  // were silently dropped.
+  const signature = (s: string) => {
+    const sig = s
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .sort()
+      .join(" ");
+    return sig || s.toLowerCase().trim();
+  };
   const push = (term: string, intent: KeywordRow["intent"], wishlisted = false) => {
     const key = term.toLowerCase();
     const sig = signature(term);
@@ -290,9 +305,21 @@ export function buildPlan(data: OnboardingData): Plan {
     Opportunity: "No competitor owns this angle — a real chance to lead the page",
   };
 
-  const competitors: CompetitorRow[] = parseList(data.market.competitors).map((name) => {
+  // Deduped case-insensitively: the same competitor listed twice would
+  // otherwise duplicate React keys and double-count its gaps in every total.
+  const competitorNames = Array.from(
+    new Map(parseList(data.market.competitors).map((n) => [n.toLowerCase(), n])).values()
+  );
+
+  // Union of every keyword any competitor covers — summing per-competitor
+  // counts double-counts shared keywords and can claim more gap keywords
+  // than exist in the tracked universe.
+  const allCoveredTerms = new Set<string>();
+
+  const competitors: CompetitorRow[] = competitorNames.map((name) => {
     const h = hash(name.toLowerCase());
     const covered = keywords.filter((k) => hash(name.toLowerCase() + k.term) % 3 === 0);
+    covered.forEach((k) => allCoveredTerms.add(k.term));
     const gapItems: GapItem[] = covered.slice(0, 4).map((k) => {
       const type = GAP_TYPES[hash(name.toLowerCase() + "type" + k.term) % GAP_TYPES.length];
       return { keyword: k.term, type, action: GAP_ACTIONS[type] };
@@ -317,9 +344,11 @@ export function buildPlan(data: OnboardingData): Plan {
     } else if (gapItems.length === 0) {
       threat = { level: "Low", reason: "No coverage gaps found against your keyword set — monitor only" };
     } else if (coreGaps > 0 && overlap !== null && overlap >= 70) {
-      threat = { level: "High", reason: `Competes on ${overlap}% of your keywords and holds ${coreGaps} Core gap${coreGaps > 1 ? "s" : ""} you don't cover` };
+      // Overlap and referring domains are estimates — say so rather than
+      // stating them as measured fact inside the reasoning.
+      threat = { level: "High", reason: `Competes on an estimated ${overlap}% of your keywords and holds ${coreGaps} Core gap${coreGaps > 1 ? "s" : ""} you don't cover` };
     } else if (coreGaps > 0 || (overlap !== null && overlap >= 70 && referringDomains >= 250)) {
-      threat = { level: "Moderate", reason: coreGaps > 0 ? "Holds Core coverage you're missing, but overlaps less of your keyword set" : `High keyword overlap and ${referringDomains} referring domains, but no Core gaps` };
+      threat = { level: "Moderate", reason: coreGaps > 0 ? "Holds Core coverage you're missing, but overlaps less of your keyword set" : `High estimated keyword overlap and roughly ${referringDomains} referring domains, but no Core gaps` };
     } else {
       threat = { level: "Low", reason: "Limited overlap and no Core gaps — monitor, don't chase" };
     }
@@ -372,14 +401,31 @@ export function buildPlan(data: OnboardingData): Plan {
 
   /* ------------------------------- Pages -------------------------------- */
 
-  const siteUrl = (data.website.url || `https://${(data.business.name || "yoursite").toLowerCase().replace(/[^a-z0-9]+/g, "")}.com`).replace(/\/$/, "");
-  const slug = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  // Both fall back safely: a name that strips to empty must not produce
+  // "https://.com" or a bare-hyphen slug.
+  const domainFromName = (data.business.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const siteUrl = (data.website.url || `https://${domainFromName || "yoursite"}.com`).replace(/\/$/, "");
+  const slug = (s: string) => {
+    const base = s.toLowerCase().trim().replace(/[^\p{L}\p{N}]+/gu, "-").replace(/(^-|-$)/g, "");
+    return base || "page";
+  };
 
   const buildPage = (k: KeywordRow, i: number, role: PageDraft["role"]): PageDraft => {
     const h = hash(k.term);
+    // Fall back carefully: using a raw Question term as the service noun
+    // produced "How much does how much does a pool remodel cost cost?" in the
+    // generated FAQ schema. Strip question scaffolding, then the industry.
     const service =
       services.find((s) => k.term.includes(s.toLowerCase())) ??
-      k.term.replace(/^best\s+/, "");
+      (k.intent === "Question"
+        ? k.term
+            .replace(/^(how much (does|is)|how do i|what is|what are|why|when|which|can i|should i)\s+/i, "")
+            .replace(/\s+(cost|price|work)\??$/i, "")
+            .replace(/^(a|an|the)\s+/i, "")
+            .trim() ||
+          data.market.industry ||
+          "our services"
+        : k.term.replace(/^best\s+/, ""));
     // Slicing by length is only valid when the service is genuinely a prefix
     // ("pool builder scottsdale"). For location-first phrasings ("scottsdale
     // pool builder") fall back to the known location token found in the term —
@@ -475,11 +521,21 @@ export function buildPlan(data: OnboardingData): Plan {
     const schemaRichness = Math.max(40, 100 - missing.length * 15);
     const structureBonus = schemaRichness >= 90 ? 2 : 0;
 
-    const pillars: PillarScores = {
-      substance: 88 + (h % 11),
-      signal: 84 + (h % 13),
-      structure: Math.min(100, 90 + (h % 9) + structureBonus),
-    };
+    // A weak draft has to be possible for the advertised "under 75 never
+    // publishes" gate to mean anything — with the old floors the lowest
+    // reachable audit was 87, so that gate could never fire.
+    const weak = h % 9 === 0;
+    const pillars: PillarScores = weak
+      ? {
+          substance: 58 + (h % 16),
+          signal: 61 + (h % 14),
+          structure: Math.min(100, 66 + (h % 12) + structureBonus),
+        }
+      : {
+          substance: 88 + (h % 11),
+          signal: 84 + (h % 13),
+          structure: Math.min(100, 90 + (h % 9) + structureBonus),
+        };
     const veto = checkVeto(k.term);
     const rawAudit = Math.round((pillars.substance + pillars.signal + pillars.structure) / 3);
     const audit = veto.triggered ? Math.min(rawAudit, 59) : rawAudit;
@@ -487,32 +543,42 @@ export function buildPlan(data: OnboardingData): Plan {
     // against the current top results get held and rewritten, not published.
     const infoGain = Math.round((0.42 + (h % 40) / 100) * 100) / 100;
     const belowGate = infoGain < 0.5;
+    const belowAudit = audit < 75;
+    // All three publish gates hold the page. A held page must never also
+    // read as actively drafting toward publish.
+    const held = veto.triggered || belowGate || belowAudit;
     return {
       title,
       keyword: k.term,
-      status: belowGate ? "Rewriting" : i === 0 ? "Drafting" : i < 3 ? "Queued" : "Researching",
+      status: veto.triggered ? "Held" : belowGate || belowAudit ? "Rewriting" : i === 0 ? "Drafting" : i < 3 ? "Queued" : "Researching",
       note: veto.triggered
         ? "Held for revision — failed a critical check"
-        : belowGate
-          ? "Below the information-gain gate — rewriting to add coverage the top results don't have"
-          : i === 0
-            ? "Writing now, publishes after audit"
-            : i < 3
-              ? "Scheduled this cycle"
-              : role === "hub"
-                ? "Hub page — publishes after its spokes are live and linking to it"
-                : "Gathering competitor coverage",
+        : belowAudit
+          ? `Audit ${audit} is under the 75 publish threshold — rewriting before it ships`
+          : belowGate
+            ? "Below the information-gain gate — rewriting to add coverage the top results don't have"
+            : i === 0
+              ? "Writing now, publishes after audit"
+              : i < 3
+                ? "Scheduled this cycle"
+                : role === "hub"
+                  ? "Hub page — publishes after its spokes are live and linking to it"
+                  : "Gathering competitor coverage",
       audit,
       grade: audit >= 92 ? "A" : "B",
       pillars,
       infoGain,
       retrievability: geo.score,
       geo,
-      freshness: scoreFreshness(k.term, i),
+      // Every page in the first-cycle queue is unwritten, so none has a
+      // publish date to age from. Real publish timestamps arrive with the
+      // backend; until then the freshness policy shows, not a fake age.
+      freshness: scoreFreshness(k.term, null),
       schemaTypes,
       schemaRichness,
       schemaJsonLd,
       veto,
+      held,
       priorityFix: belowGate
         ? { group: "A", label: "Add original information the ranking pages don't have — nothing else matters until the draft clears the gate" }
         : derivePriorityFix(pillars, schemaRichness),
@@ -591,15 +657,25 @@ export function buildPlan(data: OnboardingData): Plan {
   // within 6 months, so a flat share would overpromise.
   const CLICK_SHARE: Record<KeywordRow["difficulty"], number> = { Low: 0.18, Medium: 0.11, High: 0.05 };
   const expectedClicks = keywords.reduce((s, k) => s + k.volume * CLICK_SHARE[k.difficulty], 0);
+  // Leads are not revenue. The marketing example ("if 1 in 4 closes") applies
+  // a close rate; omitting it here made the dashboard project 4x that
+  // methodology for the same inputs.
+  const CLOSE_RATE = 0.25;
   let projection: Projection | null = null;
   if (avgSaleValue > 0 && keywords.length > 0) {
     const clicks = Math.round(expectedClicks);
     const leads = Math.max(1, Math.round(clicks * 0.025)); // 2.5% conversion
+    const gross = leads * CLOSE_RATE * avgSaleValue;
+    // Round proportionally so a small but real figure never displays as $0
+    // beside a note describing nonzero leads at a nonzero sale value.
+    const monthlyValue =
+      gross >= 1000 ? Math.round(gross / 100) * 100 : Math.max(1, Math.round(gross));
     projection = {
-      monthlyValue: Math.round((leads * avgSaleValue) / 100) * 100,
+      monthlyValue,
       clicks,
       leads,
       avgSaleValue,
+      closeRate: CLOSE_RATE,
     };
   }
 
@@ -615,7 +691,9 @@ export function buildPlan(data: OnboardingData): Plan {
       ? Math.round(pages.reduce((s, p) => s + p.retrievability, 0) / pages.length)
       : 0;
 
-  const totalGaps = competitors.reduce((s, c) => s + c.gapCount, 0);
+  // Distinct keywords with competitor coverage you lack — never more than
+  // the tracked keyword universe, unlike a sum of per-competitor counts.
+  const totalGaps = allCoveredTerms.size;
   const pillarsAvg = Math.round((pillars.substance + pillars.signal + pillars.structure) / 3);
   const ascentScore = {
     value: Math.max(
@@ -633,10 +711,13 @@ export function buildPlan(data: OnboardingData): Plan {
   const queued = keywords.filter((k) => k.status === "Queued").length;
   const vetoedCount = pages.filter((p) => p.veto.triggered).length;
   const gateHeldCount = pages.filter((p) => p.infoGain < 0.5).length;
+  const auditHeldCount = pages.filter((p) => !p.veto.triggered && p.infoGain >= 0.5 && p.audit < 75).length;
   const gapBoostedQueued = keywords.filter((k) => k.gapType && k.gapType !== "Commodity" && k.status === "Queued").length;
   const refreshDue = pages.filter((p) => p.freshness.status === "Refresh due").length;
   const aging = pages.filter((p) => p.freshness.status === "Aging").length;
-  const focusPage = pages.find((p) => p.status !== "Rewriting") ?? pages[0];
+  // The cycle focus must be a page actually moving toward publish — a held
+  // page can't simultaneously be "started drafting" and blocked on a gate.
+  const focusPage = pages.find((p) => !p.held) ?? pages[0];
   const digest: CycleDigest = {
     summary:
       pages.length > 0
@@ -668,6 +749,9 @@ export function buildPlan(data: OnboardingData): Plan {
         : []),
       ...(gateHeldCount > 0
         ? [`Held ${gateHeldCount} draft${gateHeldCount > 1 ? "s" : ""} at the information-gain gate — rewriting until they add something the top results don't`]
+        : []),
+      ...(auditHeldCount > 0
+        ? [`Held ${auditHeldCount} draft${auditHeldCount > 1 ? "s" : ""} under the 75 audit threshold — rewriting rather than publishing a weak page`]
         : []),
       ...(vetoedCount > 0
         ? [`Held ${vetoedCount} page${vetoedCount > 1 ? "s" : ""} back on a critical check — fixing before these publish`]

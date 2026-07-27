@@ -14,22 +14,26 @@ import { ClosingCta } from "@/components/marketing/ClosingCta";
 import { Footer } from "@/components/marketing/Footer";
 
 export default function Home() {
+  // Nav and Footer sit outside <main> so their banner/contentinfo landmarks
+  // survive — nesting them inside main strips both from the a11y tree.
   return (
-    <main>
+    <>
       <Nav />
-      <Hero />
-      <StatStrip />
-      <Pipeline />
-      <Method />
-      <Features />
-      <Scoring />
-      <FirstNinetyDays />
-      <Platforms />
-      <Comparison />
-      <Pricing />
-      <Faq />
-      <ClosingCta />
+      <main>
+        <Hero />
+        <StatStrip />
+        <Pipeline />
+        <Method />
+        <Features />
+        <Scoring />
+        <FirstNinetyDays />
+        <Platforms />
+        <Comparison />
+        <Pricing />
+        <Faq />
+        <ClosingCta />
+      </main>
       <Footer />
-    </main>
+    </>
   );
 }

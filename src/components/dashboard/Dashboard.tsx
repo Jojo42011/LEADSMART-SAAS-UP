@@ -70,6 +70,7 @@ const statusStyles: Record<string, string> = {
   Queued: "bg-ink/[0.06] text-ink/70",
   Researching: "bg-ink/[0.04] text-muted",
   Rewriting: "bg-ink text-white",
+  Held: "bg-ink text-white",
   Tracking: "bg-ink/[0.06] text-ink/70",
 };
 
@@ -130,18 +131,21 @@ export function Dashboard() {
         <div className="px-2">
           <Wordmark href="/dashboard" />
         </div>
-        <nav className="mt-10 flex flex-col gap-1">
+        <nav aria-label="Dashboard sections" className="mt-10 flex flex-col gap-1">
           {navItems.map((item) => (
             <button
               key={item.label}
               onClick={() => setTab(item.label)}
+              // Without this the current section is conveyed by background
+              // colour alone, which assistive tech cannot perceive.
+              aria-current={tab === item.label ? "page" : undefined}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] transition-colors ${
                 tab === item.label
                   ? "bg-paper-warm font-medium text-ink"
                   : "text-muted hover:bg-paper-warm hover:text-ink"
               }`}
             >
-              <span className="h-4.5 w-4.5 [&>svg]:h-full [&>svg]:w-full">{item.icon}</span>
+              <span aria-hidden="true" className="h-4.5 w-4.5 [&>svg]:h-full [&>svg]:w-full">{item.icon}</span>
               {item.label}
             </button>
           ))}
@@ -149,7 +153,8 @@ export function Dashboard() {
         <div className="mt-auto rounded-xl border border-line p-4">
           <p className="label-mono text-muted/70">Plan</p>
           <p className="mt-1 text-[13.5px] font-medium">Free trial</p>
-          <p className="mt-0.5 text-[12px] text-muted">13 days remaining</p>
+          {/* No signup timestamp exists yet, so a countdown would be invented. */}
+          <p className="mt-0.5 text-[12px] text-muted">14 days, no card required</p>
         </div>
       </aside>
 
@@ -243,15 +248,15 @@ function Overview({
     },
     { label: "Keywords tracked", value: String(plan.keywords.length), note: "Prioritized by business potential" },
     {
-      label: "Organic traffic value",
+      label: "Traffic value (est.)",
       value: plan.trafficValue > 0 ? `$${plan.trafficValue.toLocaleString()}/mo` : "—",
-      note: "What the same clicks would cost in ads",
+      note: "What these clicks would cost in ads, at month-6 pace",
     },
     plan.projection
       ? {
-          label: "Projected monthly value",
+          label: "Projected monthly revenue",
           value: `$${plan.projection.monthlyValue.toLocaleString()}`,
-          note: `~${plan.projection.leads} leads/mo at $${plan.projection.avgSaleValue.toLocaleString()} each, month 6 pace`,
+          note: `~${plan.projection.leads} leads/mo, ${Math.round(plan.projection.closeRate * 100)}% closing at $${plan.projection.avgSaleValue.toLocaleString()} each, month 6 pace`,
         }
       : {
           label: "Projected monthly value",
@@ -319,7 +324,7 @@ function Overview({
         <Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[14.5px] font-medium">Ascent Score</p>
+              <h2 className="text-[14.5px] font-medium">Ascent Score</h2>
               <p className="mt-1 text-[12.5px] text-muted">
                 Site health across pillars, coverage and AI readiness
               </p>
@@ -349,7 +354,7 @@ function Overview({
 
         <Card className="p-6">
           <div className="flex items-center justify-between">
-            <p className="text-[14.5px] font-medium">90 day roadmap</p>
+            <h2 className="text-[14.5px] font-medium">90 day roadmap</h2>
             <span className="label-mono text-muted/60">Rebuilds every cycle</span>
           </div>
           {plan.roadmap.length === 0 && (
@@ -382,7 +387,7 @@ function Overview({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card className="p-6">
           <div className="flex items-center justify-between">
-            <p className="text-[14.5px] font-medium">This cycle</p>
+            <h2 className="text-[14.5px] font-medium">This cycle</h2>
             <span className="label-mono text-muted/60">Written by your agent</span>
           </div>
           <p className="mt-3 text-[13.5px] leading-relaxed text-ink/80">{plan.digest.summary}</p>
@@ -400,7 +405,7 @@ function Overview({
 
         <Card className="p-6">
           <div className="flex items-center justify-between">
-            <p className="text-[14.5px] font-medium">AI visibility</p>
+            <h2 className="text-[14.5px] font-medium">AI visibility</h2>
             <span className="label-mono text-muted/60">Retrievability {plan.retrievability || "—"}/100</span>
           </div>
           <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
@@ -425,7 +430,7 @@ function Overview({
       {/* Queue preview */}
       <Card className="mt-6 p-6">
         <div className="flex items-center justify-between">
-          <p className="text-[14.5px] font-medium">Content queue</p>
+          <h2 className="text-[14.5px] font-medium">Content queue</h2>
           <button onClick={() => goTo("Content")} className="label-mono text-muted/60 transition-colors hover:text-ink">
             View all &rarr;
           </button>
@@ -451,8 +456,9 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
     <div className="min-w-0 rounded-xl border border-line p-4">
       <div className="flex items-center gap-4">
         <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-paper-warm">
-          <span className="text-[13px] font-medium leading-none">{page.grade}</span>
-          <span className="mt-0.5 font-mono text-[9.5px] leading-none text-muted">{page.audit}</span>
+          <span className="sr-only">Grade {page.grade}, audit score {page.audit} of 100.</span>
+          <span aria-hidden="true" className="text-[13px] font-medium leading-none">{page.grade}</span>
+          <span aria-hidden="true" className="mt-0.5 font-mono text-[9.5px] leading-none text-muted">{page.audit}</span>
         </div>
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 truncate text-[13.5px] font-medium">
@@ -461,11 +467,10 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
               {page.role}
             </span>
             {page.veto.triggered && (
-              <span
-                className="shrink-0 rounded-full bg-ink px-2 py-0.5 text-[10px] font-normal text-white"
-                title={page.veto.reason ?? undefined}
-              >
+              <span className="shrink-0 rounded-full bg-ink px-2 py-0.5 text-[10px] font-normal text-white">
                 Held: critical check
+                {/* The reason was previously title-only, unreachable by keyboard. */}
+                {page.veto.reason && <span className="sr-only">. {page.veto.reason}</span>}
               </span>
             )}
           </p>
@@ -479,11 +484,14 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
           }`}
           title="Information gain vs. current top-ranking pages. Must clear 0.50 to publish."
         >
-          IG {page.infoGain.toFixed(2)}
+          <span className="sr-only">Information gain </span>
+          <span aria-hidden="true">IG </span>
+          {page.infoGain.toFixed(2)}
+          <span className="sr-only"> of a required 0.50 minimum</span>
         </span>
         <span
           className="hidden shrink-0 rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted sm:inline-flex"
-          title="Weighted GEO score: tactics weighted by their real measured impact on AI-answer visibility, minus penalties for keyword stuffing, thin content, or excessive CTAs."
+          title="Weighted GEO score: tactics weighted by their real measured impact on AI-answer visibility, minus penalties for keyword stuffing, thin content, excessive CTAs, or low fact density."
         >
           GEO {page.geo.score}/100
         </span>
@@ -512,24 +520,31 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
           <div className="mt-3.5 flex flex-wrap items-center gap-1.5 border-t border-line pt-3.5">
             <span
               className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                page.freshness.status === "Fresh"
+                page.freshness.status === "Fresh" || page.freshness.status === "New"
                   ? "bg-accent/10 text-accent"
                   : page.freshness.status === "Aging"
                     ? "bg-ink/[0.06] text-ink/70"
                     : "bg-ink/[0.06] text-muted"
               }`}
-              title={`${page.freshness.ageDays} days since last write. Content under 90 days is roughly 3x more likely to be cited by AI answer engines.`}
+              title={
+                page.freshness.ageDays === null
+                  ? "Not published yet, so it has no age. Once live, the agent refreshes it at 90 days — content under 90 days is roughly 3x more likely to be cited by AI answer engines."
+                  : `${page.freshness.ageDays} days since last write. Content under 90 days is roughly 3x more likely to be cited by AI answer engines.`
+              }
             >
-              {page.freshness.status} &middot; {page.freshness.ageDays}d
+              {page.freshness.ageDays === null
+                ? "New · refresh at 90d"
+                : `${page.freshness.status} · ${page.freshness.ageDays}d`}
             </span>
             {GEO_TACTICS.map((t) => (
               <span
                 key={t.key}
-                title={t.description}
+                title={`${t.description} ${page.geo.tactics[t.key] ? "(satisfied)" : "(not satisfied)"}`}
                 className={`rounded-full px-2.5 py-1 text-[11px] ${
                   page.geo.tactics[t.key] ? "bg-ink/[0.06] text-ink/70" : "bg-ink/[0.03] text-muted/40 line-through"
                 }`}
               >
+                <span className="sr-only">{page.geo.tactics[t.key] ? "Satisfied: " : "Not satisfied: "}</span>
                 {t.label}
               </span>
             ))}
@@ -552,11 +567,13 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
                   key={s}
                   type="button"
                   onClick={() => setOpenSchema(openSchema === s ? null : s)}
+                  aria-expanded={openSchema === s}
                   className={`rounded-full px-2.5 py-1 font-mono text-[10.5px] transition-colors ${
                     openSchema === s ? "bg-ink text-white" : "bg-ink/[0.04] text-muted hover:bg-ink/[0.08]"
                   }`}
                 >
                   {s}
+                  <span className="sr-only"> schema, show generated JSON-LD</span>
                 </button>
               ))}
             </span>
@@ -588,7 +605,7 @@ function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between">
-        <p className="text-[14.5px] font-medium">Content queue</p>
+        <h2 className="text-[14.5px] font-medium">Content queue</h2>
         <span className="label-mono text-muted/60">{plan.pages.length} pages this cycle</span>
       </div>
       <p className="mt-1 text-[12.5px] text-muted">
@@ -621,7 +638,7 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between px-6 pt-6">
-        <p className="text-[14.5px] font-medium">Tracked keywords</p>
+        <h2 className="text-[14.5px] font-medium">Tracked keywords</h2>
         <span className="label-mono text-muted/60">{plan.keywords.length} keywords</span>
       </div>
       <p className="mt-1 px-6 text-[12.5px] text-muted">
@@ -733,7 +750,7 @@ function Competitors({
       <Card className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-[14.5px] font-medium">Keyword gap analysis</p>
+            <h2 className="text-[14.5px] font-medium">Keyword gap analysis</h2>
             <p className="mt-1 text-[12.5px] text-muted">
               Every gap is classified: <span className="font-medium text-ink/80">Core</span> (all
               top competitors cover it — add now), <span className="font-medium text-ink/80">Differentiator</span> (some
@@ -860,7 +877,7 @@ function Settings({
   return (
     <div className="grid gap-6">
       <Card className="p-6 sm:p-8">
-        <p className="text-[14.5px] font-medium">Business</p>
+        <h2 className="text-[14.5px] font-medium">Business</h2>
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
           <Field
             label="Business name"
@@ -887,7 +904,7 @@ function Settings({
       </Card>
 
       <Card className="p-6 sm:p-8">
-        <p className="text-[14.5px] font-medium">Market</p>
+        <h2 className="text-[14.5px] font-medium">Market</h2>
         <p className="mt-1 text-[12.5px] text-muted">
           The agent builds keywords and the content queue from these. Comma separated.
         </p>
@@ -929,7 +946,7 @@ function Settings({
       </Card>
 
       <Card className="p-6 sm:p-8">
-        <p className="text-[14.5px] font-medium">Publishing</p>
+        <h2 className="text-[14.5px] font-medium">Publishing</h2>
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
           <label className="block">
             <span className="text-[13px] font-medium text-ink">Cadence</span>
@@ -968,10 +985,14 @@ function Settings({
         >
           Save changes
         </button>
+        {/* role=status announces the confirmation; opacity alone left screen
+            reader users with no feedback that the save happened. */}
         <span
+          role="status"
+          aria-live="polite"
           className={`text-[13px] text-muted transition-opacity ${saved ? "opacity-100" : "opacity-0"}`}
         >
-          Saved &mdash; changes apply everywhere
+          {saved ? "Saved — changes apply everywhere" : ""}
         </span>
       </div>
     </div>

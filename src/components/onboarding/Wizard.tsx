@@ -58,7 +58,7 @@ export function Wizard() {
       <aside className="hidden w-72 shrink-0 flex-col justify-between border-r border-line bg-white px-8 py-8 lg:flex">
         <div>
           <Wordmark />
-          <nav className="mt-14 flex flex-col gap-1">
+          <nav aria-label="Setup steps" className="mt-14 flex flex-col gap-1">
             {steps.map((s, i) => {
               const done = i < step;
               const active = i === step;
@@ -67,6 +67,8 @@ export function Wizard() {
                   key={s.key}
                   onClick={() => i < step && setStep(i)}
                   disabled={i > step}
+                  // Current step was signalled by background colour only.
+                  aria-current={active ? "step" : undefined}
                   className={`flex items-center gap-3.5 rounded-lg px-3 py-2.5 text-left transition-colors ${
                     active ? "bg-paper-warm" : done ? "hover:bg-paper-warm" : ""
                   } ${i > step ? "cursor-default" : ""}`}
@@ -81,9 +83,12 @@ export function Wizard() {
                     }`}
                   >
                     {done ? (
-                      <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                      <>
+                        <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span className="sr-only">Completed: </span>
+                      </>
                     ) : (
                       i + 1
                     )}

@@ -79,8 +79,9 @@ const jsonLd = {
 };
 
 export default function AiInformationPage() {
+  // header/Footer sit outside <main> so banner and contentinfo landmarks survive.
   return (
-    <main className="flex min-h-screen flex-col bg-paper-warm">
+    <div className="flex min-h-screen flex-col bg-paper-warm">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -94,7 +95,7 @@ export default function AiInformationPage() {
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-16">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-16">
         <span className="label-mono text-accent">AI information</span>
         <h1 className="font-display mt-4 text-4xl leading-[1.08] tracking-tight sm:text-5xl">
           Canonical facts about {site.name}.
@@ -127,9 +128,9 @@ export default function AiInformationPage() {
           For humans: this is the machine-readable version of our story. The
           nicer one lives on the <Link href="/" className="underline decoration-line underline-offset-2 hover:text-ink">homepage</Link>.
         </p>
-      </div>
+      </main>
 
       <Footer />
-    </main>
+    </div>
   );
 }

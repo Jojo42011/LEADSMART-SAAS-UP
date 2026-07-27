@@ -68,6 +68,7 @@ export function Nav() {
           className="flex h-9 w-9 flex-col items-center justify-center gap-1.5 md:hidden"
           onClick={() => setOpen(!open)}
           aria-label="Toggle menu"
+          aria-expanded={open}
         >
           <span
             className={`h-px w-5 bg-ink transition-transform ${open ? "translate-y-[3.5px] rotate-45" : ""}`}

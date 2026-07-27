@@ -79,16 +79,21 @@ export function Comparison() {
               className="grid gap-2 border-t border-line px-6 py-5 last:border-b sm:grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)] sm:items-center sm:gap-4"
             >
               <span className="text-[13.5px] font-medium text-ink">{r.label}</span>
+              {/* The column headers are hidden below sm, so each cell carries
+                  its own attribution — otherwise the stacked mobile layout
+                  reads as two unlabeled claims. */}
               <span className="flex items-center gap-2.5 text-[13.5px] text-muted">
-                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-muted/40" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-muted/40" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
                 </svg>
+                <span className="sr-only">Traditional agency: </span>
                 {r.agency}
               </span>
               <span className="flex items-center gap-2.5 text-[13.5px] font-medium text-ink">
-                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="m3 8.5 3.5 3.5L13 4" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
+                <span className="sr-only">Ascent: </span>
                 {r.ascent}
               </span>
             </StaggerItem>

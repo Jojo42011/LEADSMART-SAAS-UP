@@ -183,19 +183,22 @@ export function scoreGeoTactics(keyword: string, industry = ""): GeoScore {
  * dashboard shows a believable, stable spread without a real publish clock.
  */
 export type Freshness = {
-  ageDays: number;
-  status: "Fresh" | "Aging" | "Refresh due";
+  /** Days since last publish. Null until the page has actually been published. */
+  ageDays: number | null;
+  status: "New" | "Fresh" | "Aging" | "Refresh due";
 };
 
-export function scoreFreshness(keyword: string, queuePosition: number): Freshness {
-  const h = hash(`age:${keyword}`);
-  // The page being drafted now is always fresh; deeper queue positions span
-  // the full age range so Aging (>90d) and Refresh due (>150d) states are
-  // actually reachable and the refresh scheduler has something to act on.
-  const ageDays = queuePosition === 0 ? h % 20 : (h % 170) + queuePosition * 5;
+/**
+ * A page the agent has not written yet has no age. Reporting "142 days since
+ * last write" for a queued draft would be a measurement of something that
+ * does not exist, so unpublished pages report status "New" with a null age;
+ * the age-based thresholds below apply once a real publish date exists.
+ */
+export function scoreFreshness(keyword: string, publishedDaysAgo: number | null): Freshness {
+  if (publishedDaysAgo === null) return { ageDays: null, status: "New" };
   const status: Freshness["status"] =
-    ageDays <= 90 ? "Fresh" : ageDays <= 150 ? "Aging" : "Refresh due";
-  return { ageDays, status };
+    publishedDaysAgo <= 90 ? "Fresh" : publishedDaysAgo <= 150 ? "Aging" : "Refresh due";
+  return { ageDays: publishedDaysAgo, status };
 }
 
 export type CitationPlatform = {
