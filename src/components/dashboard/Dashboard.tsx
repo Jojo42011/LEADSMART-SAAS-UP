@@ -740,19 +740,21 @@ function Competitors({
             </div>
             <p className="mt-1.5 text-[12.5px] text-muted">{c.threat.reason}</p>
             <div className="mt-5">
-              <div className="flex items-center justify-between text-[12px] text-muted">
-                <span
-                  title="Estimated from your keyword set until Search Console data is connected."
-                >
-                  Keyword overlap <span className="text-muted/50">(est.)</span>
-                </span>
-                <span className="font-medium text-ink">{c.overlap}%</span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${c.overlap}%` }} />
-              </div>
+              {c.overlap !== null && (
+                <>
+                  <div className="flex items-center justify-between text-[12px] text-muted">
+                    <span title="Estimated from your keyword set until Search Console data is connected.">
+                      Keyword overlap <span className="text-muted/50">(est.)</span>
+                    </span>
+                    <span className="font-medium text-ink">{c.overlap}%</span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
+                    <div className="h-full rounded-full bg-accent" style={{ width: `${c.overlap}%` }} />
+                  </div>
+                </>
+              )}
               <p className="mt-2 text-[11.5px] text-muted/70">
-                {c.referringDomains} referring domains (est.) &middot; {c.note}
+                {c.referringDomains} referring domains (est.)
               </p>
             </div>
             <div className="mt-5 border-t border-line pt-4">

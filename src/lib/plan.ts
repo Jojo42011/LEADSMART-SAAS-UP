@@ -99,10 +99,17 @@ export type Threat = {
   reason: string;
 };
 
+/**
+ * Note: every field here must be either derived from the owner's own keyword
+ * set or clearly labeled an estimate. Qualitative claims about a named real
+ * business ("thin service coverage", "strong landing pages") are NOT
+ * generated — see docs/research/deep-competitive-analyst.md for why
+ * hash-derived assessments of identifiable third parties are off-limits.
+ */
 export type CompetitorRow = {
   name: string;
-  overlap: number;
-  keywords: number;
+  /** Estimated share of your keywords they also target. Null until keywords exist to compare. */
+  overlap: number | null;
   referringDomains: number;
   /** Keywords they cover that the site doesn't yet, classified by gap type. */
   gapItems: GapItem[];
@@ -112,7 +119,6 @@ export type CompetitorRow = {
   leadCount: number;
   /** Which competitor to worry about first, derived from overlap + gap severity + authority. */
   threat: Threat;
-  note: string;
 };
 
 export type RoadmapPeriod = {
@@ -297,7 +303,9 @@ export function buildPlan(data: OnboardingData): Plan {
     const coveredTerms = new Set(covered.map((k) => k.term));
     const leadTerms = keywords.filter((k) => !coveredTerms.has(k.term)).map((k) => k.term);
     const referringDomains = 40 + (h % 380);
-    const overlap = 42 + (h % 47);
+    // With no keywords mapped there is nothing to overlap against — showing a
+    // percentage would be a number with no basis behind it.
+    const overlap = keywords.length === 0 ? null : 42 + (h % 47);
     const coreGaps = gapItems.filter((g) => g.type === "Core").length;
 
     // Threat ranking so the owner knows which competitor to answer first,
@@ -305,9 +313,9 @@ export function buildPlan(data: OnboardingData): Plan {
     let threat: Threat;
     if (gapItems.length === 0) {
       threat = { level: "Low", reason: "No mapped keyword overlap yet — add services and locations to assess this competitor" };
-    } else if (coreGaps > 0 && overlap >= 70) {
+    } else if (coreGaps > 0 && overlap !== null && overlap >= 70) {
       threat = { level: "High", reason: `Competes on ${overlap}% of your keywords and holds ${coreGaps} Core gap${coreGaps > 1 ? "s" : ""} you don't cover` };
-    } else if (coreGaps > 0 || (overlap >= 70 && referringDomains >= 250)) {
+    } else if (coreGaps > 0 || (overlap !== null && overlap >= 70 && referringDomains >= 250)) {
       threat = { level: "Moderate", reason: coreGaps > 0 ? "Holds Core coverage you're missing, but overlaps less of your keyword set" : `High keyword overlap and ${referringDomains} referring domains, but no Core gaps` };
     } else {
       threat = { level: "Low", reason: "Limited overlap and no Core gaps — monitor, don't chase" };
@@ -316,7 +324,6 @@ export function buildPlan(data: OnboardingData): Plan {
     return {
       name,
       overlap,
-      keywords: 18 + (h % 60),
       referringDomains,
       gapItems,
       // No mapped keywords means no basis to claim gaps — an "N open gaps"
@@ -325,7 +332,6 @@ export function buildPlan(data: OnboardingData): Plan {
       leadItems: leadTerms.slice(0, 4),
       leadCount: leadTerms.length,
       threat,
-      note: h % 2 === 0 ? "Strong local landing pages" : "Thin service coverage, gap to exploit",
     };
   });
 
