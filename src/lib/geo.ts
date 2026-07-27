@@ -91,8 +91,6 @@ export const GEO_TACTICS: GeoTactic[] = [
   },
 ];
 
-const TOTAL_TACTIC_WEIGHT = GEO_TACTICS.reduce((s, t) => s + t.weight, 0);
-
 /**
  * Industries where accuracy and credentialed authority matter most to
  * searchers and to AI answer engines (health, legal, financial advice).
@@ -138,20 +136,24 @@ export function scoreGeoTactics(keyword: string, industry = ""): GeoScore {
   const ymyl = isYmyl(industry);
   const tactics = {} as Record<GeoTacticKey, boolean>;
   let earnedWeight = 0;
+  let totalWeight = 0;
 
   GEO_TACTICS.forEach((t, i) => {
+    // YMYL boost must apply to numerator AND denominator identically —
+    // boosting only earned weight let the pre-clamp score exceed 100, and
+    // the Math.min cap then silently swallowed negative-signal penalties
+    // (a page could render "100/100" beside a triggered penalty chip).
+    const weight =
+      ymyl && (t.key === "citeSources" || t.key === "quotationAddition" || t.key === "authoritative")
+        ? t.weight * 1.3
+        : t.weight;
+    totalWeight += weight;
     // Tactics are enforced by the generation prompt, not left to chance — the
     // highest-weight tactics (cite sources, statistics, quotations) clear
     // essentially every time; only lower-weight tactics ever miss.
     const satisfied = t.weight >= 12 ? true : (h >> i) % 5 !== 0;
     tactics[t.key] = satisfied;
-    if (satisfied) {
-      const weight =
-        ymyl && (t.key === "citeSources" || t.key === "quotationAddition" || t.key === "authoritative")
-          ? t.weight * 1.3
-          : t.weight;
-      earnedWeight += weight;
-    }
+    if (satisfied) earnedWeight += weight;
   });
 
   const count = Object.values(tactics).filter(Boolean).length;
@@ -169,7 +171,7 @@ export function scoreGeoTactics(keyword: string, industry = ""): GeoScore {
   ];
   const penalty = negativeSignals.filter((n) => n.triggered).length * 8;
 
-  const score = Math.max(0, Math.min(100, Math.round((earnedWeight / TOTAL_TACTIC_WEIGHT) * 100) - penalty));
+  const score = Math.max(0, Math.min(100, Math.round((earnedWeight / totalWeight) * 100) - penalty));
 
   return { tactics, count, negativeSignals, score };
 }

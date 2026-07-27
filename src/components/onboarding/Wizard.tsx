@@ -261,8 +261,8 @@ function WebsiteStep({ data, update }: StepProps) {
           value={w.url}
           onChange={(e) => set({ url: e.target.value })}
         />
-        <div className="grid gap-3">
-          <span className="text-[13px] font-medium text-ink">Platform</span>
+        <div role="group" aria-labelledby="platform-label" className="grid gap-3">
+          <span id="platform-label" className="text-[13px] font-medium text-ink">Platform</span>
           <ChoiceCard
             selected={w.platform === "wordpress"}
             onClick={() => set({ platform: "wordpress" })}
@@ -479,8 +479,8 @@ function LaunchStep({ data, update }: StepProps) {
         sub="Choose how the agent operates. You can change both settings whenever you like."
       />
       <div className="mt-8 grid gap-3">
-        <span className="text-[13px] font-medium text-ink">Publishing mode</span>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <span id="publish-mode-label" className="text-[13px] font-medium text-ink">Publishing mode</span>
+        <div role="group" aria-labelledby="publish-mode-label" className="grid gap-3 sm:grid-cols-2">
           <ChoiceCard
             selected={l.mode === "autopilot"}
             onClick={() => set({ mode: "autopilot" })}
@@ -494,8 +494,8 @@ function LaunchStep({ data, update }: StepProps) {
             text="Every page waits in your queue until you approve it."
           />
         </div>
-        <span className="mt-3 text-[13px] font-medium text-ink">Cadence</span>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <span id="cadence-label" className="mt-3 text-[13px] font-medium text-ink">Cadence</span>
+        <div role="group" aria-labelledby="cadence-label" className="grid gap-3 sm:grid-cols-3">
           {(
             [
               { key: "daily", title: "Daily", text: "One page every day." },

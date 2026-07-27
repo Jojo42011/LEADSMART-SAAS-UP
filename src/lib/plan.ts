@@ -311,8 +311,11 @@ export function buildPlan(data: OnboardingData): Plan {
     // Threat ranking so the owner knows which competitor to answer first,
     // with the reasoning stated rather than an opaque score.
     let threat: Threat;
-    if (gapItems.length === 0) {
-      threat = { level: "Low", reason: "No mapped keyword overlap yet — add services and locations to assess this competitor" };
+    if (keywords.length === 0) {
+      // Same condition that nulls overlap — the two claims must agree.
+      threat = { level: "Low", reason: "No keywords mapped yet — add services and locations to assess this competitor" };
+    } else if (gapItems.length === 0) {
+      threat = { level: "Low", reason: "No coverage gaps found against your keyword set — monitor only" };
     } else if (coreGaps > 0 && overlap !== null && overlap >= 70) {
       threat = { level: "High", reason: `Competes on ${overlap}% of your keywords and holds ${coreGaps} Core gap${coreGaps > 1 ? "s" : ""} you don't cover` };
     } else if (coreGaps > 0 || (overlap !== null && overlap >= 70 && referringDomains >= 250)) {
@@ -326,9 +329,10 @@ export function buildPlan(data: OnboardingData): Plan {
       overlap,
       referringDomains,
       gapItems,
-      // No mapped keywords means no basis to claim gaps — an "N open gaps"
-      // headline over an empty list would be incoherent.
-      gapCount: gapItems.length === 0 ? 0 : gapItems.length + 2 + (h % 14),
+      // The gap count IS the mapped set — no phantom hash-derived extras. A
+      // headline number the user can't enumerate below it is a fabricated
+      // figure, which this product does not do.
+      gapCount: covered.length,
       leadItems: leadTerms.slice(0, 4),
       leadCount: leadTerms.length,
       threat,
@@ -376,7 +380,16 @@ export function buildPlan(data: OnboardingData): Plan {
     const service =
       services.find((s) => k.term.includes(s.toLowerCase())) ??
       k.term.replace(/^best\s+/, "");
-    const location = k.intent === "Local" ? k.term.slice(service.length).trim() : "";
+    // Slicing by length is only valid when the service is genuinely a prefix
+    // ("pool builder scottsdale"). For location-first phrasings ("scottsdale
+    // pool builder") fall back to the known location token found in the term —
+    // a blind slice would emit garbage like "cy plumber phoenix" into JSON-LD.
+    const location =
+      k.intent === "Local"
+        ? k.term.startsWith(service.toLowerCase())
+          ? k.term.slice(service.length).trim()
+          : locations.find((l) => k.term.includes(l.toLowerCase())) ?? ""
+        : "";
     const geo = scoreGeoTactics(k.term, data.market.industry);
     const title =
       role === "hub"
@@ -514,7 +527,11 @@ export function buildPlan(data: OnboardingData): Plan {
   const spokeKeywords = keywords
     .filter((k) => k.intent === "Local" || k.intent === "Question" || k.wishlisted || k.gapType === "Core")
     .slice(0, 5);
-  const hubKeyword = keywords.find((k) => k.intent === "Service");
+  // A keyword already queued as a spoke must not also become the hub — that
+  // would publish two pages for one target, the exact cannibalization the
+  // signature dedup exists to prevent.
+  const spokeSet = new Set(spokeKeywords);
+  const hubKeyword = keywords.find((k) => k.intent === "Service" && !spokeSet.has(k));
 
   const pages: PageDraft[] = [
     ...spokeKeywords.map((k, i) => buildPage(k, i, "spoke")),
@@ -536,7 +553,9 @@ export function buildPlan(data: OnboardingData): Plan {
   const sampleTitles = (rows: KeywordRow[], n: number) =>
     rows.slice(0, n).map((k) => titleCase(k.term));
 
-  const roadmap: RoadmapPeriod[] = [
+  // No keywords means there is nothing to build a roadmap FROM — claiming
+  // "30 pages planned" with zero inputs would be a number with no basis.
+  const roadmap: RoadmapPeriod[] = keywords.length === 0 ? [] : [
     {
       period: "Days 1-30",
       focus: "Spoke pages: service and location coverage",
@@ -604,7 +623,11 @@ export function buildPlan(data: OnboardingData): Plan {
       Math.round(pillarsAvg * 0.6 + retrievability * 0.25 + Math.min(100, keywords.length * 4) * 0.15) -
         Math.min(9, Math.round(totalGaps / 4))
     ),
-    delta: pages.length > 0 ? 2 + (hash(data.market.services) % 4) : 0,
+    // A cycle-over-cycle trend needs a stored prior cycle to diff against.
+    // None exists (buildPlan is a pure function of the current inputs), so
+    // the honest value is 0 — the dashboard renders its "Pending" state.
+    // Never derive a fake trend from a hash of the inputs.
+    delta: 0,
   };
 
   const queued = keywords.filter((k) => k.status === "Queued").length;
@@ -627,7 +650,9 @@ export function buildPlan(data: OnboardingData): Plan {
       ...(pages.length > 0
         ? [`Started drafting "${focusPage.title}" targeting ${focusPage.keyword}`]
         : []),
-      `Prioritized ${queued} of ${keywords.length} tracked keywords for the queue`,
+      ...(keywords.length > 0
+        ? [`Prioritized ${queued} of ${keywords.length} tracked keywords for the queue`]
+        : []),
       ...(competitors.length > 0
         ? [`Mapped ${totalGaps} keyword gaps across ${competitors.length} competitor${competitors.length > 1 ? "s" : ""}`]
         : []),

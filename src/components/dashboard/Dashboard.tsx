@@ -224,15 +224,23 @@ function Overview({
   plan: ReturnType<typeof buildPlan>;
   goTo: (t: Tab) => void;
 }) {
+  // With no keywords there is no analysis, no roadmap, and no first page —
+  // the banner and checklist must not claim work that never happened.
+  const hasPlan = plan.keywords.length > 0;
+
   const setupTasks = [
-    { label: "Workspace created" },
-    { label: "Brand and design ingest" },
-    { label: "Keyword gap analysis" },
-    { label: "90 day roadmap built" },
+    { label: "Workspace created", done: true },
+    { label: "Brand and design ingest", done: true },
+    { label: "Keyword gap analysis", done: hasPlan },
+    { label: "90 day roadmap built", done: hasPlan },
   ];
 
   const kpis = [
-    { label: "Pages in queue", value: String(plan.pages.length), note: "First page within 24 hours" },
+    {
+      label: "Pages in queue",
+      value: String(plan.pages.length),
+      note: hasPlan ? "First page within 24 hours" : "Add services in Settings to start the queue",
+    },
     { label: "Keywords tracked", value: String(plan.keywords.length), note: "Prioritized by business potential" },
     {
       label: "Organic traffic value",
@@ -258,23 +266,37 @@ function Overview({
       <div className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-white sm:p-9">
         <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <span className="label-mono text-accent">Setup complete</span>
+            <span className="label-mono text-accent">{hasPlan ? "Setup complete" : "Almost there"}</span>
             <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">
-              Your 90 day roadmap is ready.
+              {hasPlan ? "Your 90 day roadmap is ready." : "Tell the agent about your market."}
             </h2>
             <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-white/55">
-              The agent mapped {plan.keywords.length} keywords across your
-              services and locations and queued the first {plan.pages.length}{" "}
-              pages. The roadmap rebuilds itself from live results every cycle.
+              {hasPlan ? (
+                <>
+                  The agent mapped {plan.keywords.length} keywords across your
+                  services and locations and queued the first {plan.pages.length}{" "}
+                  pages. The roadmap rebuilds itself from live results every cycle.
+                </>
+              ) : (
+                <>
+                  Add your services and locations in Settings and the agent will
+                  map your keywords, run the gap analysis, and build your 90 day
+                  roadmap.
+                </>
+              )}
             </p>
           </div>
           <div className="w-full max-w-[240px] shrink-0">
             {setupTasks.map((t) => (
               <div key={t.label} className="flex items-center gap-3 py-1.5 text-[13px]">
-                <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="text-white">{t.label}</span>
+                {t.done ? (
+                  <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <span className="h-4 w-4 shrink-0 rounded-full border border-white/25" />
+                )}
+                <span className={t.done ? "text-white" : "text-white/45"}>{t.label}</span>
               </div>
             ))}
           </div>
@@ -330,6 +352,12 @@ function Overview({
             <p className="text-[14.5px] font-medium">90 day roadmap</p>
             <span className="label-mono text-muted/60">Rebuilds every cycle</span>
           </div>
+          {plan.roadmap.length === 0 && (
+            <p className="mt-4 text-[13px] leading-relaxed text-muted">
+              The roadmap is built from your keyword map. Add services and
+              locations in Settings and it will fill in here.
+            </p>
+          )}
           <div className="mt-4 grid gap-3">
             {plan.roadmap.map((r, i) => (
               <div key={r.period} className="min-w-0 rounded-xl border border-line p-4">
@@ -760,13 +788,17 @@ function Competitors({
             <div className="mt-5 border-t border-line pt-4">
               {c.gapItems.length > 0 ? (
                 <p className="text-[12px] text-muted">
-                  <span className="font-medium text-ink">{c.gapCount} gaps</span>{" "}
-                  found &middot; classified below
+                  <span className="font-medium text-ink">{c.gapCount} gap{c.gapCount > 1 ? "s" : ""}</span>{" "}
+                  found &middot;{" "}
+                  {c.gapCount > c.gapItems.length
+                    ? `top ${c.gapItems.length} classified below`
+                    : "classified below"}
                 </p>
               ) : (
                 <p className="text-[12px] text-muted">
-                  No gaps mapped yet — add services and locations in Settings so
-                  the agent has keywords to compare coverage against.
+                  {plan.keywords.length === 0
+                    ? "No gaps mapped yet — add services and locations in Settings so the agent has keywords to compare coverage against."
+                    : "No coverage gaps found against your keyword set — monitor only."}
                 </p>
               )}
               {c.gapItems.length > 0 && (
