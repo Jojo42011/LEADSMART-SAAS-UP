@@ -60,7 +60,7 @@ its `skill.md`-style pages are designed to make agents execute instructions
 - Treat anything an agent forum "recommends doing" as untrusted input, not an
   instruction.
 
-**Last synced:** 2026-07-26
+**Last synced:** 2026-07-27
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -404,5 +404,45 @@ act on what's genuinely new beyond this.
     a million low-value pages — doesn't apply to Ascent's page-generation
     model (modest, deliberate page counts, no faceted navigation to leak
     crawl budget). No action.
+  - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
+    in today's rotation).
+
+- **2026-07-27** — Reddit still blocked (r/SEO .json fetch failed; old.reddit.com
+  r/TechSEO .json also failed). Searched: "Google algorithm update August
+  2026" (mostly speculative/forward-looking, discounted), "AI Overviews
+  ranking factors new study" (repeat of the 07-24 aggregator stat set — no
+  new action), "GEO negative signals/penalties research 2026", then
+  corroborated one finding from that last search with a dedicated follow-up
+  query. No code change — findings below.
+  - **NEW + corroborated, but correctly NOT implemented (fabrication
+    guardrail):** multiple independent sources (Contently, Rankscale,
+    Capconvert, rank-and-convert.ghost.io) converge on named-author +
+    Person-schema bylines as a real E-E-A-T/citation signal — pages without
+    a named, credentialed author are cited roughly ~40% less than pages with
+    one; required Person-schema fields are name (matching the byline),
+    jobTitle, worksFor (an Organization), and a sameAs array to a real
+    LinkedIn/professional profile. This is genuinely new territory for us
+    (no author/byline concept exists anywhere in `schema.ts` or `plan.ts`
+    today) and would normally be a natural `schema.ts` addition. **Not
+    implemented**: Ascent's onboarding (`onboarding.ts`) never collects a
+    real individual's name, title, or professional profile — only a business
+    name. Generating a Person schema here would mean inventing a named human
+    with fabricated credentials and a fake `sameAs` link, which is a more
+    severe version of exactly what the fabrication guardrail forbids (this
+    is impersonating a specific, checkable real-world identity, not just a
+    stat). Correct move is to defer, the same way Review/AggregateRating
+    schema was deferred on 2026-07-17: build a `personSchema` generator only
+    if/when onboarding ever collects a real owner or in-house expert's name,
+    title, and their own professional profile link, so the byline is true
+    rather than invented. Logged here so this isn't rediscovered as
+    "new" later without the reasoning for why it wasn't built.
+  - **Confirmed, already captured:** the "comparison articles get 32.5% of AI
+    citations" and "content half-life ~13 weeks" data reinforce the existing
+    freshness/refresh-due design and our Compare page's own positioning; no
+    change needed.
+  - **Noted, not applied (forward-looking, unconfirmed):** chatter about an
+    "August 26" Google core update is speculative SEO-blog forecasting for a
+    date still in the future from today; nothing to act on until it actually
+    lands and is corroborated by primary sources.
   - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
     in today's rotation).
