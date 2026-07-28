@@ -233,6 +233,150 @@ export async function markKeywordCovered(keywordId: string, pageId: string): Pro
   await db().query(`update keywords set covered_by = $2 where id = $1`, [keywordId, pageId]);
 }
 
+/* ------------------------- Tenant provisioning ------------------------- */
+
+export type ProvisionInput = {
+  email: string;
+  name?: string;
+  site: {
+    url: string;
+    platform: "wordpress" | "github";
+    cadence: "daily" | "every3days" | "weekly";
+    publishMode: "autopilot" | "review";
+    businessName: string;
+    phone: string;
+    address: string;
+    city: string;
+    region: string;
+    serviceArea: string;
+    industry: string;
+    services: string;
+    targetLocations: string;
+    seedCompetitors: string;
+    avgSaleValue: number | null;
+    brand: Record<string, unknown>;
+  };
+  connection: {
+    wpUser?: string;
+    wpAppPassword?: string;
+    githubRepo?: string;
+    githubToken?: string;
+    githubBranch?: string;
+  };
+};
+
+/**
+ * Turns a completed onboarding into real tenant rows: upsert the tenant by
+ * email, upsert the site by (tenant, url) so re-running onboarding updates
+ * instead of duplicating, and store publishing credentials. This is the
+ * bridge between the wizard and the autonomous cycle — a site the cron can
+ * pick up exists only after this runs.
+ */
+export async function provisionSite(
+  input: ProvisionInput
+): Promise<{ tenantId: string; siteId: string } | null> {
+  if (!storeConfigured()) return null;
+
+  const tenantRes = await db().query(
+    `insert into tenants (email, name) values ($1, $2)
+     on conflict (email) do update set name = coalesce(nullif(excluded.name, ''), tenants.name)
+     returning id`,
+    [input.email.toLowerCase(), input.name ?? ""]
+  );
+  const tenantId = tenantRes.rows[0].id as string;
+
+  const s = input.site;
+  const existing = await db().query(`select id from sites where tenant_id = $1 and url = $2`, [
+    tenantId,
+    s.url,
+  ]);
+
+  let siteId: string;
+  if (existing.rows[0]) {
+    siteId = existing.rows[0].id as string;
+    await db().query(
+      `update sites set platform=$2, cadence=$3, publish_mode=$4, business_name=$5, phone=$6,
+         address=$7, city=$8, region=$9, service_area=$10, industry=$11, services=$12,
+         target_locations=$13, seed_competitors=$14, avg_sale_value=$15, brand=$16
+       where id = $1`,
+      [
+        siteId, s.platform, s.cadence, s.publishMode, s.businessName, s.phone,
+        s.address, s.city, s.region, s.serviceArea, s.industry, s.services,
+        s.targetLocations, s.seedCompetitors, s.avgSaleValue, JSON.stringify(s.brand),
+      ]
+    );
+  } else {
+    const siteRes = await db().query(
+      `insert into sites (tenant_id, url, platform, cadence, publish_mode, business_name, phone,
+         address, city, region, service_area, industry, services, target_locations,
+         seed_competitors, avg_sale_value, brand)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       returning id`,
+      [
+        tenantId, s.url, s.platform, s.cadence, s.publishMode, s.businessName, s.phone,
+        s.address, s.city, s.region, s.serviceArea, s.industry, s.services,
+        s.targetLocations, s.seedCompetitors, s.avgSaleValue, JSON.stringify(s.brand),
+      ]
+    );
+    siteId = siteRes.rows[0].id as string;
+  }
+
+  const c = input.connection;
+  await db().query(
+    `insert into connections (site_id, wp_user, wp_app_password, github_repo, github_token, github_branch, updated_at)
+     values ($1,$2,$3,$4,$5,$6, now())
+     on conflict (site_id) do update set
+       wp_user = coalesce(nullif(excluded.wp_user, ''), connections.wp_user),
+       wp_app_password = coalesce(nullif(excluded.wp_app_password, ''), connections.wp_app_password),
+       github_repo = coalesce(nullif(excluded.github_repo, ''), connections.github_repo),
+       github_token = coalesce(nullif(excluded.github_token, ''), connections.github_token),
+       github_branch = coalesce(nullif(excluded.github_branch, ''), connections.github_branch),
+       updated_at = now()`,
+    [
+      siteId,
+      c.wpUser ?? null,
+      c.wpAppPassword ?? null,
+      c.githubRepo ?? null,
+      c.githubToken ?? null,
+      c.githubBranch ?? null,
+    ]
+  );
+
+  return { tenantId, siteId };
+}
+
+/**
+ * Billing activation, called by the Stripe webhook. Upserts by email so
+ * activation works even if payment lands before onboarding created the
+ * tenant row.
+ */
+export async function setTenantPlanByEmail(
+  email: string,
+  status: "active" | "past_due" | "canceled",
+  stripeCustomerId?: string
+): Promise<void> {
+  if (!storeConfigured()) return;
+  await db().query(
+    `insert into tenants (email, plan_status, stripe_customer_id) values ($1, $2, $3)
+     on conflict (email) do update set
+       plan_status = excluded.plan_status,
+       stripe_customer_id = coalesce(excluded.stripe_customer_id, tenants.stripe_customer_id)`,
+    [email.toLowerCase(), status, stripeCustomerId ?? null]
+  );
+}
+
+/** Plan changes keyed by Stripe customer (subscription updated/canceled events). */
+export async function setTenantPlanByCustomer(
+  stripeCustomerId: string,
+  status: "active" | "past_due" | "canceled"
+): Promise<void> {
+  if (!storeConfigured()) return;
+  await db().query(`update tenants set plan_status = $2 where stripe_customer_id = $1`, [
+    stripeCustomerId,
+    status,
+  ]);
+}
+
 export async function markPagePublished(
   pageId: string,
   patch: { liveUrl?: string; liveStatus?: string; wpPageId?: number; githubSha?: string }

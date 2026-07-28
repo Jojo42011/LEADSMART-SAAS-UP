@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
@@ -37,15 +37,68 @@ export function Checkout() {
   const [cvc, setCvc] = useState("");
   const [paying, setPaying] = useState(false);
   const [done, setDone] = useState(false);
+  /** null = probing, true = real Stripe Checkout, false = demo mode. */
+  const [stripeReady, setStripeReady] = useState<boolean | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Which mode this deployment runs in, plus the Stripe return legs.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("paid") === "1") {
+      // Payment confirmed by Stripe redirect; the webhook activates the
+      // tenant server side. Unlock onboarding locally and move on.
+      saveBilling({ active: true, sites: 1, activatedAt: new Date().toISOString() });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount browser read
+      setDone(true);
+      const t = setTimeout(() => router.push("/onboarding"), 1400);
+      return () => clearTimeout(t);
+    }
+    if (params.get("canceled") === "1") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount browser read
+      setNotice("Checkout was canceled. No charge was made.");
+    }
+    fetch("/api/billing/checkout")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { configured?: boolean } | null) => setStripeReady(Boolean(j?.configured)))
+      .catch(() => setStripeReady(false));
+  }, [router]);
 
   const total = sites * PRICE;
   const ready = name.trim() !== "" && card.replace(/\D/g, "").length >= 15 && expiry.length === 5 && cvc.length >= 3;
 
+  /** Real checkout: create a Stripe session and hand the browser to Stripe. */
+  const payStripe = async () => {
+    if (paying) return;
+    setPaying(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sites }),
+      });
+      const json = (await res.json()) as { url?: string; error?: string };
+      if (json.url) {
+        window.location.href = json.url;
+        return;
+      }
+      setNotice(json.error || "Could not start checkout. Please try again.");
+    } catch {
+      setNotice("Could not reach checkout. Please try again.");
+    }
+    setPaying(false);
+  };
+
   const pay = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ready || paying) return;
+    if (paying) return;
+    if (stripeReady) {
+      void payStripe();
+      return;
+    }
+    if (!ready) return;
     setPaying(true);
-    // Stripe attaches here. Demo mode activates after a short beat.
+    // Demo mode (no STRIPE_SECRET_KEY): activates after a short beat.
     setTimeout(() => {
       saveBilling({ active: true, sites, activatedAt: new Date().toISOString() });
       setDone(true);
@@ -151,7 +204,20 @@ export function Checkout() {
                     you cancel.
                   </p>
 
+                  {notice && (
+                    <div className="mt-4 rounded-xl border border-accent/30 bg-accent-dim px-4 py-3 text-[12.5px] leading-relaxed text-ink">
+                      {notice}
+                    </div>
+                  )}
+
                   <div className="mt-6 grid gap-4">
+                    {stripeReady && (
+                      <p className="rounded-xl border border-line bg-paper-warm px-4 py-3 text-[12.5px] leading-relaxed text-muted">
+                        You&apos;ll enter card details on Stripe&apos;s secure
+                        checkout page in the next step.
+                      </p>
+                    )}
+                    {!stripeReady && (<>
                     <label className="block">
                       <span className="text-[13px] font-medium text-ink">Name on card</span>
                       <input
@@ -203,16 +269,17 @@ export function Checkout() {
                         />
                       </label>
                     </div>
+                    </>)}
 
                     <button
                       type="submit"
-                      disabled={!ready || paying}
+                      disabled={paying || stripeReady === null || (!stripeReady && !ready)}
                       className="mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-ink px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       {paying ? (
                         <>
                           <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                          Processing
+                          {stripeReady ? "Opening Stripe" : "Processing"}
                         </>
                       ) : (
                         <>Subscribe for ${total}/month</>
@@ -224,8 +291,9 @@ export function Checkout() {
                         <rect x="5" y="10" width="14" height="10" rx="2" />
                         <path d="M8 10V7a4 4 0 1 1 8 0v3" />
                       </svg>
-                      Payments secured by Stripe. Demo mode until launch, no
-                      card is charged.
+                      {stripeReady
+                        ? "Payments secured by Stripe."
+                        : "Payments secured by Stripe. Demo mode until launch, no card is charged."}
                     </p>
                   </div>
                 </form>

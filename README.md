@@ -27,6 +27,8 @@ Add keys to unlock live behavior, see .env.example:
 - AUTH_SECRET: signs the login session cookie, required in production
   (`openssl rand -base64 32`)
 - DATABASE_URL: activates multi tenant storage and the autonomous cycle
+- STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET: real subscription checkout
+  and per tenant activation (webhook endpoint: /api/billing/webhook)
 - GEMINI_API_KEY: live competitor research with Google Search grounding and LLM written pages
 - CRON_SECRET: protects the daily cron endpoint
 
