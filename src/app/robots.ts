@@ -31,7 +31,7 @@ const CITATION_CRAWLERS = [
   "claude-web", // legacy Anthropic retrieval token, kept for compatibility
   "PerplexityBot",
   "Perplexity-User", // on-demand fetch when a user clicks a Perplexity citation
-  "Bingbot", // Microsoft Copilot has no separate crawler; it reads the Bing index
+  "Bingbot", // Microsoft Copilot has no separate crawler; Bing index membership is a precondition for a Copilot citation
   "Amazonbot",
   "Applebot", // Siri / Spotlight Search
 ];
