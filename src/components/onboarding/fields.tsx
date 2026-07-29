@@ -65,6 +65,9 @@ export function ChoiceCard({
     <button
       type="button"
       onClick={onClick}
+      // aria-pressed exposes the selection to assistive tech — visually the
+      // state is only a color swap, which a screen reader can't perceive.
+      aria-pressed={selected}
       className={`flex w-full items-start gap-4 rounded-xl border p-5 text-left transition-all ${
         selected
           ? "border-ink bg-ink text-white shadow-lg shadow-black/10"
@@ -83,7 +86,7 @@ export function ChoiceCard({
       <span>
         <span className="flex items-center gap-2 text-[15px] font-medium">
           {title}
-          {selected && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+          {selected && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent" />}
         </span>
         <span
           className={`mt-1 block text-[13px] leading-relaxed ${

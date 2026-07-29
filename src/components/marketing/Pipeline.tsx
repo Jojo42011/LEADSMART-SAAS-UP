@@ -26,7 +26,7 @@ const phases = [
   {
     num: "05",
     title: "Score",
-    text: "Audits the page across nine ranking dimensions before it ships. Anything below the bar gets rewritten, not published.",
+    text: "Audits the page across ten ranking dimensions before it ships. Anything below the bar gets rewritten, not published.",
   },
   {
     num: "06",

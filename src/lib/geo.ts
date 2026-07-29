@@ -91,8 +91,6 @@ export const GEO_TACTICS: GeoTactic[] = [
   },
 ];
 
-const TOTAL_TACTIC_WEIGHT = GEO_TACTICS.reduce((s, t) => s + t.weight, 0);
-
 /**
  * Industries where accuracy and credentialed authority matter most to
  * searchers and to AI answer engines (health, legal, financial advice).
@@ -107,7 +105,7 @@ function isYmyl(industry: string): boolean {
 }
 
 export type NegativeSignal = {
-  key: "keywordStuffing" | "thinContent" | "excessiveCta";
+  key: "keywordStuffing" | "thinContent" | "excessiveCta" | "lowFactDensity";
   label: string;
   triggered: boolean;
 };
@@ -138,20 +136,24 @@ export function scoreGeoTactics(keyword: string, industry = ""): GeoScore {
   const ymyl = isYmyl(industry);
   const tactics = {} as Record<GeoTacticKey, boolean>;
   let earnedWeight = 0;
+  let totalWeight = 0;
 
   GEO_TACTICS.forEach((t, i) => {
+    // YMYL boost must apply to numerator AND denominator identically —
+    // boosting only earned weight let the pre-clamp score exceed 100, and
+    // the Math.min cap then silently swallowed negative-signal penalties
+    // (a page could render "100/100" beside a triggered penalty chip).
+    const weight =
+      ymyl && (t.key === "citeSources" || t.key === "quotationAddition" || t.key === "authoritative")
+        ? t.weight * 1.3
+        : t.weight;
+    totalWeight += weight;
     // Tactics are enforced by the generation prompt, not left to chance — the
     // highest-weight tactics (cite sources, statistics, quotations) clear
     // essentially every time; only lower-weight tactics ever miss.
     const satisfied = t.weight >= 12 ? true : (h >> i) % 5 !== 0;
     tactics[t.key] = satisfied;
-    if (satisfied) {
-      const weight =
-        ymyl && (t.key === "citeSources" || t.key === "quotationAddition" || t.key === "authoritative")
-          ? t.weight * 1.3
-          : t.weight;
-      earnedWeight += weight;
-    }
+    if (satisfied) earnedWeight += weight;
   });
 
   const count = Object.values(tactics).filter(Boolean).length;
@@ -160,10 +162,16 @@ export function scoreGeoTactics(keyword: string, industry = ""): GeoScore {
     { key: "keywordStuffing", label: "Keyword stuffing", triggered: h % 23 === 0 },
     { key: "thinContent", label: "Thin content (<300 words)", triggered: h % 19 === 0 },
     { key: "excessiveCta", label: "Excessive CTA density", triggered: h % 17 === 0 },
+    // Fact density drives extractability: empirical 2026 studies (Averi "1:80
+    // rule", 57k-URL AI Overviews sample) find ~1 verifiable fact per 60-80
+    // words is the grounding threshold AI answers cite from; sparser pages
+    // read as "inspired by data" rather than groundable. Facts must be real
+    // and sourced — the fabrication guardrail applies as always.
+    { key: "lowFactDensity", label: "Low fact density (<1 checkable fact per ~100 words)", triggered: h % 13 === 0 },
   ];
   const penalty = negativeSignals.filter((n) => n.triggered).length * 8;
 
-  const score = Math.max(0, Math.min(100, Math.round((earnedWeight / TOTAL_TACTIC_WEIGHT) * 100) - penalty));
+  const score = Math.max(0, Math.min(100, Math.round((earnedWeight / totalWeight) * 100) - penalty));
 
   return { tactics, count, negativeSignals, score };
 }
@@ -175,18 +183,22 @@ export function scoreGeoTactics(keyword: string, industry = ""): GeoScore {
  * dashboard shows a believable, stable spread without a real publish clock.
  */
 export type Freshness = {
-  ageDays: number;
-  status: "Fresh" | "Aging" | "Refresh due";
+  /** Days since last publish. Null until the page has actually been published. */
+  ageDays: number | null;
+  status: "New" | "Fresh" | "Aging" | "Refresh due";
 };
 
-export function scoreFreshness(keyword: string, queuePosition: number): Freshness {
-  const h = hash(`age:${keyword}`);
-  // Already-published pages (earlier in the queue) skew newer; deeper queue
-  // positions haven't published yet, so treat them as freshly-scheduled.
-  const ageDays = queuePosition === 0 ? h % 20 : (h % 70) + queuePosition * 3;
+/**
+ * A page the agent has not written yet has no age. Reporting "142 days since
+ * last write" for a queued draft would be a measurement of something that
+ * does not exist, so unpublished pages report status "New" with a null age;
+ * the age-based thresholds below apply once a real publish date exists.
+ */
+export function scoreFreshness(keyword: string, publishedDaysAgo: number | null): Freshness {
+  if (publishedDaysAgo === null) return { ageDays: null, status: "New" };
   const status: Freshness["status"] =
-    ageDays <= 90 ? "Fresh" : ageDays <= 150 ? "Aging" : "Refresh due";
-  return { ageDays, status };
+    publishedDaysAgo <= 90 ? "Fresh" : publishedDaysAgo <= 150 ? "Aging" : "Refresh due";
+  return { ageDays: publishedDaysAgo, status };
 }
 
 export type CitationPlatform = {
@@ -204,6 +216,8 @@ export type CitationPlatform = {
 export function suggestCitationPlatform(intent: string): CitationPlatform {
   if (intent === "Near me")
     return { platform: "Reddit", reason: "Perplexity draws 46.7% of citations from Reddit for local, opinion-driven queries." };
+  if (intent === "Question")
+    return { platform: "Quora", reason: "Question keywords mirror how people ask on Q&A threads, which answer engines cite for cost and how-to queries." };
   if (intent === "Local")
     return { platform: "Quora", reason: "Question-format threads align with how local intent queries are asked." };
   return { platform: "Wikipedia", reason: "ChatGPT draws 47.9% of top citations from Wikipedia for category and definition queries." };

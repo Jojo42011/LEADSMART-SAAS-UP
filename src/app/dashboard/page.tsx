@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Dashboard } from "@/components/dashboard/Dashboard";
-import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: `Command center | ${site.name}`,
+  title: "Command center",
 };
 
 export default function DashboardPage() {

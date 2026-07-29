@@ -70,7 +70,15 @@ const statusStyles: Record<string, string> = {
   Drafting: "bg-accent/10 text-accent",
   Queued: "bg-ink/[0.06] text-ink/70",
   Researching: "bg-ink/[0.04] text-muted",
+  Rewriting: "bg-ink text-white",
+  Held: "bg-ink text-white",
   Tracking: "bg-ink/[0.06] text-ink/70",
+};
+
+const threatStyles: Record<string, string> = {
+  High: "bg-ink text-white",
+  Moderate: "bg-accent/10 text-accent",
+  Low: "bg-ink/[0.06] text-muted",
 };
 
 const gapTypeStyles: Record<string, string> = {
@@ -130,18 +138,21 @@ export function Dashboard() {
         <div className="px-2">
           <Wordmark href="/dashboard" />
         </div>
-        <nav className="mt-10 flex flex-col gap-1">
+        <nav aria-label="Dashboard sections" className="mt-10 flex flex-col gap-1">
           {navItems.map((item) => (
             <button
               key={item.label}
               onClick={() => setTab(item.label)}
+              // Without this the current section is conveyed by background
+              // colour alone, which assistive tech cannot perceive.
+              aria-current={tab === item.label ? "page" : undefined}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] transition-colors ${
                 tab === item.label
                   ? "bg-paper-warm font-medium text-ink"
                   : "text-muted hover:bg-paper-warm hover:text-ink"
               }`}
             >
-              <span className="h-4.5 w-4.5 [&>svg]:h-full [&>svg]:w-full">{item.icon}</span>
+              <span aria-hidden="true" className="h-4.5 w-4.5 [&>svg]:h-full [&>svg]:w-full">{item.icon}</span>
               {item.label}
             </button>
           ))}
@@ -164,6 +175,7 @@ export function Dashboard() {
             {/* Mobile tab switcher */}
             <select
               value={tab}
+              aria-label="Dashboard section"
               onChange={(e) => setTab(e.target.value as Tab)}
               className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[13px] md:hidden"
             >
@@ -233,26 +245,34 @@ function Overview({
   plan: ReturnType<typeof buildPlan>;
   goTo: (t: Tab) => void;
 }) {
+  // With no keywords there is no analysis, no roadmap, and no first page —
+  // the banner and checklist must not claim work that never happened.
+  const hasPlan = plan.keywords.length > 0;
+
   const setupTasks = [
-    { label: "Workspace created" },
-    { label: "Brand and design ingest" },
-    { label: "Keyword gap analysis" },
-    { label: "90 day roadmap built" },
+    { label: "Workspace created", done: true },
+    { label: "Brand and design ingest", done: true },
+    { label: "Keyword gap analysis", done: hasPlan },
+    { label: "90 day roadmap built", done: hasPlan },
   ];
 
   const kpis = [
-    { label: "Pages in queue", value: String(plan.pages.length), note: "First page within 24 hours" },
+    {
+      label: "Pages in queue",
+      value: String(plan.pages.length),
+      note: hasPlan ? "First page within 24 hours" : "Add services in Settings to start the queue",
+    },
     { label: "Keywords tracked", value: String(plan.keywords.length), note: "Prioritized by business potential" },
     {
-      label: "Organic traffic value",
+      label: "Traffic value (est.)",
       value: plan.trafficValue > 0 ? `$${plan.trafficValue.toLocaleString()}/mo` : "—",
-      note: "What the same clicks would cost in ads",
+      note: "What these clicks would cost in ads, at month-6 pace",
     },
     plan.projection
       ? {
-          label: "Projected monthly value",
+          label: "Projected monthly revenue",
           value: `$${plan.projection.monthlyValue.toLocaleString()}`,
-          note: `~${plan.projection.leads} leads/mo at $${plan.projection.avgSaleValue.toLocaleString()} each, month 6 pace`,
+          note: `~${plan.projection.leads} leads/mo, ${Math.round(plan.projection.closeRate * 100)}% closing at $${plan.projection.avgSaleValue.toLocaleString()} each, month 6 pace`,
         }
       : {
           label: "Projected monthly value",
@@ -267,23 +287,37 @@ function Overview({
       <div className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-white sm:p-9">
         <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <span className="label-mono text-accent">Setup complete</span>
+            <span className="label-mono text-accent">{hasPlan ? "Setup complete" : "Almost there"}</span>
             <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">
-              Your 90 day roadmap is ready.
+              {hasPlan ? "Your 90 day roadmap is ready." : "Tell the agent about your market."}
             </h2>
             <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-white/55">
-              The agent mapped {plan.keywords.length} keywords across your
-              services and locations and queued the first {plan.pages.length}{" "}
-              pages. The roadmap rebuilds itself from live results every cycle.
+              {hasPlan ? (
+                <>
+                  The agent mapped {plan.keywords.length} keywords across your
+                  services and locations and queued the first {plan.pages.length}{" "}
+                  pages. The roadmap rebuilds itself from live results every cycle.
+                </>
+              ) : (
+                <>
+                  Add your services and locations in Settings and the agent will
+                  map your keywords, run the gap analysis, and build your 90 day
+                  roadmap.
+                </>
+              )}
             </p>
           </div>
           <div className="w-full max-w-[240px] shrink-0">
             {setupTasks.map((t) => (
               <div key={t.label} className="flex items-center gap-3 py-1.5 text-[13px]">
-                <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="text-white">{t.label}</span>
+                {t.done ? (
+                  <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <span className="h-4 w-4 shrink-0 rounded-full border border-white/25" />
+                )}
+                <span className={t.done ? "text-white" : "text-white/45"}>{t.label}</span>
               </div>
             ))}
           </div>
@@ -306,7 +340,7 @@ function Overview({
         <Card className="p-6">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-[14.5px] font-medium">Ascent Score</p>
+              <h2 className="text-[14.5px] font-medium">Ascent Score</h2>
               <p className="mt-1 text-[12.5px] text-muted">
                 Site health across pillars, coverage and AI readiness
               </p>
@@ -336,9 +370,15 @@ function Overview({
 
         <Card className="p-6">
           <div className="flex items-center justify-between">
-            <p className="text-[14.5px] font-medium">90 day roadmap</p>
+            <h2 className="text-[14.5px] font-medium">90 day roadmap</h2>
             <span className="label-mono text-muted/60">Rebuilds every cycle</span>
           </div>
+          {plan.roadmap.length === 0 && (
+            <p className="mt-4 text-[13px] leading-relaxed text-muted">
+              The roadmap is built from your keyword map. Add services and
+              locations in Settings and it will fill in here.
+            </p>
+          )}
           <div className="mt-4 grid gap-3">
             {plan.roadmap.map((r, i) => (
               <div key={r.period} className="min-w-0 rounded-xl border border-line p-4">
@@ -363,7 +403,7 @@ function Overview({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card className="p-6">
           <div className="flex items-center justify-between">
-            <p className="text-[14.5px] font-medium">This cycle</p>
+            <h2 className="text-[14.5px] font-medium">This cycle</h2>
             <span className="label-mono text-muted/60">Written by your agent</span>
           </div>
           <p className="mt-3 text-[13.5px] leading-relaxed text-ink/80">{plan.digest.summary}</p>
@@ -381,7 +421,7 @@ function Overview({
 
         <Card className="p-6">
           <div className="flex items-center justify-between">
-            <p className="text-[14.5px] font-medium">AI visibility</p>
+            <h2 className="text-[14.5px] font-medium">AI visibility</h2>
             <span className="label-mono text-muted/60">Retrievability {plan.retrievability || "—"}/100</span>
           </div>
           <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
@@ -390,7 +430,9 @@ function Overview({
             Citations are tracked here once your first pages are live.
           </p>
           <div className="mt-4 grid gap-2 border-t border-line pt-4">
-            {["Google AI Overviews", "ChatGPT", "Perplexity", "Gemini"].map((engine) => (
+            {/* Copilot belongs here: robots.ts already allows Bingbot
+                specifically because Copilot cites from the Bing index. */}
+            {["Google AI Mode", "Google AI Overviews", "ChatGPT", "Perplexity", "Gemini", "Microsoft Copilot"].map((engine) => (
               <div key={engine} className="flex items-center justify-between text-[13px]">
                 <span className="text-ink/80">{engine}</span>
                 <span className="inline-flex items-center gap-2 text-[11.5px] text-muted">
@@ -406,7 +448,7 @@ function Overview({
       {/* Queue preview */}
       <Card className="mt-6 p-6">
         <div className="flex items-center justify-between">
-          <p className="text-[14.5px] font-medium">Content queue</p>
+          <h2 className="text-[14.5px] font-medium">Content queue</h2>
           <button onClick={() => goTo("Content")} className="label-mono text-muted/60 transition-colors hover:text-ink">
             View all &rarr;
           </button>
@@ -432,8 +474,9 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
     <div className="min-w-0 rounded-xl border border-line p-4">
       <div className="flex items-center gap-4">
         <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-paper-warm">
-          <span className="text-[13px] font-medium leading-none">{page.grade}</span>
-          <span className="mt-0.5 font-mono text-[9.5px] leading-none text-muted">{page.audit}</span>
+          <span className="sr-only">Grade {page.grade}, audit score {page.audit} of 100.</span>
+          <span aria-hidden="true" className="text-[13px] font-medium leading-none">{page.grade}</span>
+          <span aria-hidden="true" className="mt-0.5 font-mono text-[9.5px] leading-none text-muted">{page.audit}</span>
         </div>
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 truncate text-[13.5px] font-medium">
@@ -442,11 +485,10 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
               {page.role}
             </span>
             {page.veto.triggered && (
-              <span
-                className="shrink-0 rounded-full bg-ink px-2 py-0.5 text-[10px] font-normal text-white"
-                title={page.veto.reason ?? undefined}
-              >
+              <span className="shrink-0 rounded-full bg-ink px-2 py-0.5 text-[10px] font-normal text-white">
                 Held: critical check
+                {/* The reason was previously title-only, unreachable by keyboard. */}
+                {page.veto.reason && <span className="sr-only">. {page.veto.reason}</span>}
               </span>
             )}
           </p>
@@ -455,14 +497,19 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
           </p>
         </div>
         <span
-          className="hidden shrink-0 rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted sm:inline-flex"
+          className={`hidden shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] sm:inline-flex ${
+            page.infoGain < 0.5 ? "bg-ink text-white" : "bg-ink/[0.04] text-muted"
+          }`}
           title="Information gain vs. current top-ranking pages. Must clear 0.50 to publish."
         >
-          IG {page.infoGain.toFixed(2)}
+          <span className="sr-only">Information gain </span>
+          <span aria-hidden="true">IG </span>
+          {page.infoGain.toFixed(2)}
+          <span className="sr-only"> of a required 0.50 minimum</span>
         </span>
         <span
           className="hidden shrink-0 rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted sm:inline-flex"
-          title="Weighted GEO score: tactics weighted by their real measured impact on AI-answer visibility, minus penalties for keyword stuffing, thin content, or excessive CTAs."
+          title="Weighted GEO score: tactics weighted by their real measured impact on AI-answer visibility, minus penalties for keyword stuffing, thin content, excessive CTAs, or low fact density."
         >
           GEO {page.geo.score}/100
         </span>
@@ -491,24 +538,31 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
           <div className="mt-3.5 flex flex-wrap items-center gap-1.5 border-t border-line pt-3.5">
             <span
               className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                page.freshness.status === "Fresh"
+                page.freshness.status === "Fresh" || page.freshness.status === "New"
                   ? "bg-accent/10 text-accent"
                   : page.freshness.status === "Aging"
                     ? "bg-ink/[0.06] text-ink/70"
                     : "bg-ink/[0.06] text-muted"
               }`}
-              title={`${page.freshness.ageDays} days since last write. Content under 90 days is roughly 3x more likely to be cited by AI answer engines.`}
+              title={
+                page.freshness.ageDays === null
+                  ? "Not published yet, so it has no age. Once live, the agent refreshes it at 90 days — content under 90 days is roughly 3x more likely to be cited by AI answer engines."
+                  : `${page.freshness.ageDays} days since last write. Content under 90 days is roughly 3x more likely to be cited by AI answer engines.`
+              }
             >
-              {page.freshness.status} &middot; {page.freshness.ageDays}d
+              {page.freshness.ageDays === null
+                ? "New · refresh at 90d"
+                : `${page.freshness.status} · ${page.freshness.ageDays}d`}
             </span>
             {GEO_TACTICS.map((t) => (
               <span
                 key={t.key}
-                title={t.description}
+                title={`${t.description} ${page.geo.tactics[t.key] ? "(satisfied)" : "(not satisfied)"}`}
                 className={`rounded-full px-2.5 py-1 text-[11px] ${
                   page.geo.tactics[t.key] ? "bg-ink/[0.06] text-ink/70" : "bg-ink/[0.03] text-muted/40 line-through"
                 }`}
               >
+                <span className="sr-only">{page.geo.tactics[t.key] ? "Satisfied: " : "Not satisfied: "}</span>
                 {t.label}
               </span>
             ))}
@@ -531,11 +585,13 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
                   key={s}
                   type="button"
                   onClick={() => setOpenSchema(openSchema === s ? null : s)}
+                  aria-expanded={openSchema === s}
                   className={`rounded-full px-2.5 py-1 font-mono text-[10.5px] transition-colors ${
                     openSchema === s ? "bg-ink text-white" : "bg-ink/[0.04] text-muted hover:bg-ink/[0.08]"
                   }`}
                 >
                   {s}
+                  <span className="sr-only"> schema, show generated JSON-LD</span>
                 </button>
               ))}
             </span>
@@ -567,7 +623,7 @@ function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between">
-        <p className="text-[14.5px] font-medium">Content queue</p>
+        <h2 className="text-[14.5px] font-medium">Content queue</h2>
         <span className="label-mono text-muted/60">{plan.pages.length} pages this cycle</span>
       </div>
       <p className="mt-1 text-[12.5px] text-muted">
@@ -600,7 +656,7 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between px-6 pt-6">
-        <p className="text-[14.5px] font-medium">Tracked keywords</p>
+        <h2 className="text-[14.5px] font-medium">Tracked keywords</h2>
         <span className="label-mono text-muted/60">{plan.keywords.length} keywords</span>
       </div>
       <p className="mt-1 px-6 text-[12.5px] text-muted">
@@ -635,6 +691,14 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
                         title="You asked for this keyword. The agent prioritizes it."
                       >
                         Wishlist
+                      </span>
+                    )}
+                    {k.gapType && k.gapType !== "Commodity" && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${gapTypeStyles[k.gapType]}`}
+                        title="Flagged by competitor gap analysis — the gap finding raised this keyword's queue priority."
+                      >
+                        {k.gapType} gap
                       </span>
                     )}
                   </span>
@@ -704,13 +768,19 @@ function Competitors({
       <Card className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-[14.5px] font-medium">Keyword gap analysis</p>
+            <h2 className="text-[14.5px] font-medium">Keyword gap analysis</h2>
             <p className="mt-1 text-[12.5px] text-muted">
               Every gap is classified: <span className="font-medium text-ink/80">Core</span> (all
               top competitors cover it, add now), <span className="font-medium text-ink/80">Differentiator</span> (some
               do, and outrank you), <span className="font-medium text-ink/80">Commodity</span> (everyone
-              covers it shallowly, a sentence is enough), or <span className="font-medium text-ink/80">Opportunity</span> (nobody
-              owns this angle yet, a real chance to lead).
+              covers it shallowly — a sentence is enough), or <span className="font-medium text-ink/80">Opportunity</span> (nobody
+              owns this angle yet — a real chance to lead). Gap findings feed
+              the queue automatically: Core and Opportunity keywords get a
+              priority boost on the Keywords tab, and Core gaps jump straight
+              into the page queue. Competitors are ranked by threat so you know
+              which to answer first. Overlap and referring-domain figures are
+              estimates derived from your keyword set — connect Search Console
+              for measured data.
             </p>
           </div>
           <div className="text-right">
@@ -723,26 +793,49 @@ function Competitors({
         {plan.competitors.map((c) => (
           <Card key={c.name} className="p-6">
             <div className="flex items-start justify-between gap-4">
-              <p className="text-[14.5px] font-medium">{c.name}</p>
-              <span className="label-mono shrink-0 text-muted/60">
-                {c.referringDomains} ref. domains
+              <p className="min-w-0 truncate text-[14.5px] font-medium">{c.name}</p>
+              <span
+                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${threatStyles[c.threat.level]}`}
+                title={c.threat.reason}
+              >
+                {c.threat.level} threat
               </span>
             </div>
-            <p className="mt-1 text-[12.5px] text-muted">{c.note}</p>
+            <p className="mt-1.5 text-[12.5px] text-muted">{c.threat.reason}</p>
             <div className="mt-5">
-              <div className="flex items-center justify-between text-[12px] text-muted">
-                <span>Keyword overlap</span>
-                <span className="font-medium text-ink">{c.overlap}%</span>
-              </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${c.overlap}%` }} />
-              </div>
+              {c.overlap !== null && (
+                <>
+                  <div className="flex items-center justify-between text-[12px] text-muted">
+                    <span title="Estimated from your keyword set until Search Console data is connected.">
+                      Keyword overlap <span className="text-muted/50">(est.)</span>
+                    </span>
+                    <span className="font-medium text-ink">{c.overlap}%</span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/[0.06]">
+                    <div className="h-full rounded-full bg-accent" style={{ width: `${c.overlap}%` }} />
+                  </div>
+                </>
+              )}
+              <p className="mt-2 text-[11.5px] text-muted/70">
+                {c.referringDomains} referring domains (est.)
+              </p>
             </div>
             <div className="mt-5 border-t border-line pt-4">
-              <p className="text-[12px] text-muted">
-                <span className="font-medium text-ink">{c.gapCount} gaps</span>{" "}
-                found &middot; classified below
-              </p>
+              {c.gapItems.length > 0 ? (
+                <p className="text-[12px] text-muted">
+                  <span className="font-medium text-ink">{c.gapCount} gap{c.gapCount > 1 ? "s" : ""}</span>{" "}
+                  found &middot;{" "}
+                  {c.gapCount > c.gapItems.length
+                    ? `top ${c.gapItems.length} classified below`
+                    : "classified below"}
+                </p>
+              ) : (
+                <p className="text-[12px] text-muted">
+                  {plan.keywords.length === 0
+                    ? "No gaps mapped yet — add services and locations in Settings so the agent has keywords to compare coverage against."
+                    : "No coverage gaps found against your keyword set — monitor only."}
+                </p>
+              )}
               {c.gapItems.length > 0 && (
                 <div className="mt-2.5 grid gap-2">
                   {c.gapItems.map((g) => (
@@ -756,6 +849,24 @@ function Competitors({
                       <span className="text-[12px] text-ink/70">{g.keyword}</span>
                     </div>
                   ))}
+                </div>
+              )}
+              {c.leadCount > 0 && (
+                <div className="mt-4 border-t border-line pt-3.5">
+                  <p className="text-[12px] text-muted">
+                    <span className="font-medium text-ink">{c.leadCount} keyword{c.leadCount > 1 ? "s" : ""}</span>{" "}
+                    where you lead &middot; they have no mapped coverage
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {c.leadItems.map((term) => (
+                      <span
+                        key={term}
+                        className="rounded-full bg-ink/[0.04] px-2 py-0.5 text-[11px] text-muted"
+                      >
+                        {term}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -784,7 +895,7 @@ function Settings({
   return (
     <div className="grid gap-6">
       <Card className="p-6 sm:p-8">
-        <p className="text-[14.5px] font-medium">Business</p>
+        <h2 className="text-[14.5px] font-medium">Business</h2>
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
           <Field
             label="Business name"
@@ -811,7 +922,7 @@ function Settings({
       </Card>
 
       <Card className="p-6 sm:p-8">
-        <p className="text-[14.5px] font-medium">Market</p>
+        <h2 className="text-[14.5px] font-medium">Market</h2>
         <p className="mt-1 text-[12.5px] text-muted">
           The agent builds keywords and the content queue from these. Comma separated.
         </p>
@@ -853,7 +964,7 @@ function Settings({
       </Card>
 
       <Card className="p-6 sm:p-8">
-        <p className="text-[14.5px] font-medium">Publishing</p>
+        <h2 className="text-[14.5px] font-medium">Publishing</h2>
         <div className="mt-5 grid gap-5 sm:grid-cols-2">
           <label className="block">
             <span className="text-[13px] font-medium text-ink">Cadence</span>
@@ -892,10 +1003,14 @@ function Settings({
         >
           Save changes
         </button>
+        {/* role=status announces the confirmation; opacity alone left screen
+            reader users with no feedback that the save happened. */}
         <span
+          role="status"
+          aria-live="polite"
           className={`text-[13px] text-muted transition-opacity ${saved ? "opacity-100" : "opacity-0"}`}
         >
-          Saved &mdash; changes apply everywhere
+          {saved ? "Saved — changes apply everywhere" : ""}
         </span>
       </div>
     </div>

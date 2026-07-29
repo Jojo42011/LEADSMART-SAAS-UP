@@ -7,6 +7,7 @@ import { Wordmark } from "@/components/ui/Wordmark";
 import { type OnboardingData, useOnboarding, loadOnboarding, saveOnboarding } from "@/lib/onboarding";
 import { loadBilling } from "@/lib/billing";
 import { loadIntel, saveIntel, type SiteIngest } from "@/lib/intel";
+import { buildPlan } from "@/lib/plan";
 import { site } from "@/lib/site";
 import { ChoiceCard, Field, StepHeading } from "./fields";
 
@@ -115,7 +116,7 @@ export function Wizard() {
       <aside className="hidden w-72 shrink-0 flex-col justify-between border-r border-line bg-white px-8 py-8 lg:flex">
         <div>
           <Wordmark />
-          <nav className="mt-14 flex flex-col gap-1">
+          <nav aria-label="Setup steps" className="mt-14 flex flex-col gap-1">
             {steps.map((s, i) => {
               const done = i < step;
               const active = i === step;
@@ -124,6 +125,8 @@ export function Wizard() {
                   key={s.key}
                   onClick={() => i < step && setStep(i)}
                   disabled={i > step}
+                  // Current step was signalled by background colour only.
+                  aria-current={active ? "step" : undefined}
                   className={`flex items-center gap-3.5 rounded-lg px-3 py-2.5 text-left transition-colors ${
                     active ? "bg-paper-warm" : done ? "hover:bg-paper-warm" : ""
                   } ${i > step ? "cursor-default" : ""}`}
@@ -138,9 +141,12 @@ export function Wizard() {
                     }`}
                   >
                     {done ? (
-                      <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                      <>
+                        <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span className="sr-only">Completed: </span>
+                      </>
                     ) : (
                       i + 1
                     )}
@@ -391,8 +397,8 @@ function WebsiteStep({ data, update }: StepProps) {
           </div>
         )}
 
-        <div className="grid gap-3">
-          <span className="text-[13px] font-medium text-ink">Platform</span>
+        <div role="group" aria-labelledby="platform-label" className="grid gap-3">
+          <span id="platform-label" className="text-[13px] font-medium text-ink">Platform</span>
           <ChoiceCard
             selected={w.platform === "wordpress"}
             onClick={() => set({ platform: "wordpress" })}
@@ -749,8 +755,8 @@ function MarketStep({ data, update }: StepProps) {
         <Field
           label="Keyword wishlist"
           optional
-          hint="Keywords you already know you want to win. The agent seeds its queue with these first."
-          placeholder="pool remodeling scottsdale, best pool builder phoenix"
+          hint="Keywords you already know you want to win. The agent seeds its queue with these first — question phrasing works too, and gets built as an answer-first page for AI search."
+          placeholder="pool remodeling scottsdale, how much does a pool remodel cost"
           value={m.wishlist}
           onChange={(e) => set({ wishlist: e.target.value })}
         />
@@ -762,6 +768,12 @@ function MarketStep({ data, update }: StepProps) {
 function LaunchStep({ data, update }: StepProps) {
   const l = data.launch;
   const set = (patch: Partial<typeof l>) => update({ launch: { ...l, ...patch } });
+  // The same plan builder the dashboard runs — the preview below IS the
+  // first cycle, not marketing copy about it.
+  const plan = useMemo(() => buildPlan(data), [data]);
+  const firstPage = plan.pages.find((p) => p.status !== "Rewriting") ?? plan.pages[0];
+  const queuedCount = plan.keywords.filter((k) => k.status === "Queued").length;
+  const totalGaps = plan.competitors.reduce((s, c) => s + c.gapCount, 0);
   const summary = [
     { label: "Business", value: data.business.name || "Not set" },
     { label: "Website", value: data.website.url || "Not set" },
@@ -784,8 +796,8 @@ function LaunchStep({ data, update }: StepProps) {
         sub="Choose how the agent operates. You can change both settings whenever you like."
       />
       <div className="mt-8 grid gap-3">
-        <span className="text-[13px] font-medium text-ink">Publishing mode</span>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <span id="publish-mode-label" className="text-[13px] font-medium text-ink">Publishing mode</span>
+        <div role="group" aria-labelledby="publish-mode-label" className="grid gap-3 sm:grid-cols-2">
           <ChoiceCard
             selected={l.mode === "autopilot"}
             onClick={() => set({ mode: "autopilot" })}
@@ -799,8 +811,8 @@ function LaunchStep({ data, update }: StepProps) {
             text="Every page waits in your queue until you approve it."
           />
         </div>
-        <span className="mt-3 text-[13px] font-medium text-ink">Cadence</span>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <span id="cadence-label" className="mt-3 text-[13px] font-medium text-ink">Cadence</span>
+        <div role="group" aria-labelledby="cadence-label" className="grid gap-3 sm:grid-cols-3">
           {(
             [
               { key: "daily", title: "Daily", text: "One page every day." },
@@ -818,7 +830,48 @@ function LaunchStep({ data, update }: StepProps) {
           ))}
         </div>
 
-        <div className="mt-4 rounded-xl border border-line bg-white p-5">
+        <div className="mt-4 rounded-xl border border-line-dark bg-ink p-5 text-white">
+          <p className="label-mono text-white/50">First cycle preview</p>
+          {firstPage ? (
+            <dl className="mt-3 grid gap-2">
+              <div className="flex justify-between gap-6 text-[13px]">
+                <dt className="text-white/50">First page</dt>
+                <dd className="truncate font-medium">{firstPage.title}</dd>
+              </div>
+              <div className="flex justify-between gap-6 text-[13px]">
+                <dt className="text-white/50">Keyword queue</dt>
+                <dd className="font-medium">
+                  {queuedCount} queued of {plan.keywords.length} tracked
+                </dd>
+              </div>
+              <div className="flex justify-between gap-6 text-[13px]">
+                <dt className="text-white/50">First 30 days</dt>
+                <dd className="font-medium">{plan.roadmap[0]?.pages ?? 0} pages planned</dd>
+              </div>
+              {totalGaps > 0 && (
+                <div className="flex justify-between gap-6 text-[13px]">
+                  <dt className="text-white/50">Competitor gaps</dt>
+                  <dd className="font-medium">{totalGaps} mapped, feeding the queue</dd>
+                </div>
+              )}
+              {plan.projection && (
+                <div className="flex justify-between gap-6 text-[13px]">
+                  <dt className="text-white/50">Projected value</dt>
+                  <dd className="font-medium text-accent">
+                    ${plan.projection.monthlyValue.toLocaleString()}/mo at month 6
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (
+            <p className="mt-3 text-[13px] text-white/60">
+              Add services and locations in the Market step and the agent will
+              draft its first-cycle plan here.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-1 rounded-xl border border-line bg-white p-5">
           <p className="label-mono text-muted/70">Configuration</p>
           <dl className="mt-3 grid gap-2">
             {summary.map((s) => (
@@ -836,18 +889,26 @@ function LaunchStep({ data, update }: StepProps) {
 
 /* ---------- Launch animation ---------- */
 
-const launchLines = [
-  "Creating your workspace",
-  "Ingesting your brand and design tokens",
-  "Mapping competitors in your market",
-  "Building your first keyword gap analysis",
-  "Scheduling the first page",
-];
-
 function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => void }) {
   const [count, setCount] = useState(0);
   const [researchDone, setResearchDone] = useState(false);
   const started = useRef(false);
+
+  // Built from the real plan so the launch narration matches what the
+  // dashboard shows two seconds later.
+  const launchLines = useMemo(() => {
+    const plan = buildPlan(data);
+    const firstPage = plan.pages.find((p) => p.status !== "Rewriting") ?? plan.pages[0];
+    return [
+      "Creating your workspace",
+      "Ingesting your brand and design tokens",
+      plan.competitors.length > 0
+        ? `Mapping ${plan.competitors.length} competitor${plan.competitors.length > 1 ? "s" : ""} in your market`
+        : "Mapping your market",
+      `Prioritizing ${plan.keywords.length} keywords into a queue`,
+      firstPage ? `Scheduling "${firstPage.title}" as your first page` : "Scheduling the first page",
+    ];
+  }, [data]);
 
   // The launch sequence is real: it provisions the tenant site in the
   // database (so the daily cron picks it up) and runs the agent's first
@@ -904,7 +965,7 @@ function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => 
     }
     const t = setTimeout(onDone, 1100);
     return () => clearTimeout(t);
-  }, [count, onDone, researchDone]);
+  }, [count, onDone, researchDone, launchLines.length]);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-ink px-6 text-white">

@@ -1,9 +1,13 @@
 import { Counter } from "@/components/ui/Counter";
 import { Reveal } from "@/components/ui/Reveal";
 
+// Each of these is a property of the system's design, not a measured
+// outcome from a customer base that does not exist yet. The audit figure
+// states the enforced publish threshold rather than an "average at
+// publish", which would be a performance claim with nothing behind it.
 const stats = [
-  { value: 365, suffix: "", label: "Pages published per site per year" },
-  { value: 96, suffix: "/100", label: "Average audit score at publish" },
+  { value: 365, suffix: "", label: "Pages published per site per year, at daily cadence" },
+  { value: 75, suffix: "/100", label: "Minimum audit score to publish — below it, pages are rewritten" },
   { value: 24, suffix: "h", label: "Full cycle, research to live page" },
   { value: 0, suffix: "", label: "Hours of your time required", literal: "Zero" },
 ];
