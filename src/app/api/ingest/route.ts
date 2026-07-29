@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertPublicUrl, BlockedUrlError, safeFetch } from "@/lib/safe-fetch";
 
 /**
  * Studies a website the way the agent does before its first cycle:
@@ -49,9 +50,14 @@ export async function POST(req: NextRequest) {
 
   let origin: string;
   try {
-    origin = new URL(url).origin;
-  } catch {
-    return NextResponse.json({ ok: false, error: "invalid url" }, { status: 400 });
+    // Rejects non-http(s) schemes and any host that resolves into a private
+    // or reserved range before a single request leaves the server.
+    origin = (await assertPublicUrl(url)).origin;
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof BlockedUrlError ? e.message : "invalid url" },
+      { status: 400 }
+    );
   }
 
   const result: Ingest = {
@@ -69,10 +75,11 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    const res = await fetch(origin, {
+    // safeFetch re-validates every redirect hop; "follow" would let a
+    // public URL bounce the request to an internal address.
+    const res = await safeFetch(origin, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; AscentAgent/1.0)" },
       signal: AbortSignal.timeout(10000),
-      redirect: "follow",
     });
     if (!res.ok) throw new Error(`status ${res.status}`);
     const html = (await res.text()).slice(0, 500_000);
@@ -93,7 +100,7 @@ export async function POST(req: NextRequest) {
       result.platform = "wordpress";
     } else {
       try {
-        const probe = await fetch(`${origin}/wp-json/`, {
+        const probe = await safeFetch(`${origin}/wp-json/`, {
           signal: AbortSignal.timeout(4000),
           headers: { "User-Agent": "Mozilla/5.0 (compatible; AscentAgent/1.0)" },
         });
@@ -120,7 +127,8 @@ export async function POST(req: NextRequest) {
     if (sheet) {
       try {
         const sheetUrl = new URL(sheet, origin).href;
-        const cssRes = await fetch(sheetUrl, { signal: AbortSignal.timeout(6000) });
+        // The stylesheet href comes from attacker-controllable HTML.
+        const cssRes = await safeFetch(sheetUrl, { signal: AbortSignal.timeout(6000) });
         if (cssRes.ok) css += (await cssRes.text()).slice(0, 300_000);
       } catch {
         // stylesheet unreachable; inline styles still give us signal
@@ -150,7 +158,7 @@ export async function POST(req: NextRequest) {
 
     // Rough indexed page count from the sitemap when it is reachable.
     try {
-      const sm = await fetch(`${origin}/sitemap.xml`, { signal: AbortSignal.timeout(5000) });
+      const sm = await safeFetch(`${origin}/sitemap.xml`, { signal: AbortSignal.timeout(5000) });
       if (sm.ok) {
         const xml = (await sm.text()).slice(0, 400_000);
         const locs = xml.match(/<loc>/g);
