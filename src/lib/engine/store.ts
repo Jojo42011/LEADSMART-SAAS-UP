@@ -19,7 +19,12 @@ function db(): Pool {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       max: 3,
-      ssl: process.env.DATABASE_URL?.includes("localhost") ? undefined : { rejectUnauthorized: false },
+      // Local Postgres usually has no TLS. Matching only the literal
+      // "localhost" made a 127.0.0.1 URL fail with the unhelpful "server
+      // does not support SSL connections".
+      ssl: /@(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(process.env.DATABASE_URL || "")
+        ? undefined
+        : { rejectUnauthorized: false },
     });
   }
   return pool;
@@ -375,6 +380,49 @@ export async function setTenantPlanByEmail(
        stripe_customer_id = coalesce(excluded.stripe_customer_id, tenants.stripe_customer_id)`,
     [email.toLowerCase(), status, stripeCustomerId ?? null]
   );
+}
+
+/* ------------------------- Email account records ------------------------ */
+
+export type TenantAccount = {
+  id: string;
+  email: string;
+  name: string | null;
+  password_hash: string | null;
+};
+
+/** Looks up an email account. Returns null when the store is unconfigured. */
+export async function findTenantByEmail(email: string): Promise<TenantAccount | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(
+    `select id, email, name, password_hash from tenants where email = $1`,
+    [email.toLowerCase()]
+  );
+  return (res.rows[0] as TenantAccount) ?? null;
+}
+
+/**
+ * Creates an email account, or attaches a password to a tenant that already
+ * exists without one (a Stripe webhook can create the row before signup).
+ * Returns null when a password is already set, so the caller can tell the
+ * visitor to sign in instead of silently overwriting a live credential.
+ */
+export async function createPasswordTenant(
+  email: string,
+  passwordHash: string,
+  name: string | null
+): Promise<TenantAccount | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(
+    `insert into tenants (email, name, password_hash) values ($1, $2, $3)
+     on conflict (email) do update set
+       password_hash = excluded.password_hash,
+       name = coalesce(tenants.name, excluded.name)
+     where tenants.password_hash is null
+     returning id, email, name, password_hash`,
+    [email.toLowerCase(), name, passwordHash]
+  );
+  return (res.rows[0] as TenantAccount) ?? null;
 }
 
 /** Plan changes keyed by Stripe customer (subscription updated/canceled events). */

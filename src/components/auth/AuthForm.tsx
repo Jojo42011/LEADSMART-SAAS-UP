@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { Field } from "@/components/onboarding/fields";
 
-type Providers = { google: boolean; github: boolean };
+type Providers = { google: boolean; github: boolean; password: boolean };
 type Profile = { email: string; name: string; picture: string; provider: string };
 
 /** Human-friendly copy for the error codes the OAuth routes redirect with. */
@@ -71,7 +71,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
     fetch("/api/auth/providers")
       .then((r) => (r.ok ? r.json() : null))
       .then((p: Providers | null) => p && setProviders(p))
-      .catch(() => setProviders({ google: false, github: false }));
+      .catch(() => setProviders({ google: false, github: false, password: false }));
 
     // Browser-only reads (window.location, document.cookie) that must run
     // after mount, mirroring the app's client-only hydration pattern.
@@ -82,13 +82,32 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
     setExisting(profile);
   }, []);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
-    // Email/password wiring lands with the tenant backend; route into the
-    // product for now. New accounts go through checkout, which unlocks
-    // onboarding. SSO (below) is fully live once provider keys are set.
-    setTimeout(() => router.push(isSignup ? "/checkout" : "/dashboard"), 500);
+    setError(null);
+    try {
+      // Real authentication: the server verifies the password against a
+      // stored scrypt hash and sets an httpOnly session cookie. It decides
+      // where to go next, so the client cannot route itself into the
+      // product without one.
+      const res = await fetch(`/api/auth/password/${isSignup ? "signup" : "signin"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const json = (await res.json()) as { ok?: boolean; next?: string; error?: string };
+      if (!res.ok || !json.ok) {
+        setError(json.error || "Sign-in failed. Please try again.");
+        setBusy(false);
+        return;
+      }
+      router.push(json.next || (isSignup ? "/checkout" : "/dashboard"));
+    } catch {
+      setError("Could not reach the server. Please try again.");
+      setBusy(false);
+    }
   };
 
   const ssoHref = (provider: "google" | "github") =>
@@ -97,6 +116,9 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
       : `/api/connect/github/start?flow=${mode}`;
 
   const anyProvider = providers === null || providers.google || providers.github;
+  // Email accounts need the database; without it the server refuses these
+  // requests, so don't present a form that cannot succeed.
+  const passwordDisabled = providers !== null && !providers.password;
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-paper-warm px-6">
@@ -203,11 +225,18 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
             />
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || passwordDisabled}
               className="mt-1 inline-flex items-center justify-center rounded-full bg-ink px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
             >
               {busy ? "One moment" : isSignup ? "Create account" : "Sign in"}
             </button>
+            {passwordDisabled && (
+              <p className="text-center text-[11.5px] leading-relaxed text-muted">
+                Email accounts need the database. Set{" "}
+                <code className="rounded bg-paper-warm px-1 py-0.5 text-[11px]">DATABASE_URL</code>, or
+                use Google or GitHub above.
+              </p>
+            )}
           </form>
 
           <div className="mt-6 border-t border-line pt-5 text-center text-[13px] text-muted">

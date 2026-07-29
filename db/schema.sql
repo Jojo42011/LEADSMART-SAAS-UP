@@ -6,10 +6,15 @@ create table if not exists tenants (
   id            uuid primary key default gen_random_uuid(),
   email         text unique not null,
   name          text,
+  -- scrypt$salt$hash for email accounts; null for SSO-only tenants.
+  password_hash text,
   plan_status   text not null default 'inactive',   -- inactive | active | past_due | canceled
   stripe_customer_id text,
   created_at    timestamptz not null default now()
 );
+
+-- Existing deployments: add the column without recreating the table.
+alter table tenants add column if not exists password_hash text;
 
 create table if not exists sites (
   id            uuid primary key default gen_random_uuid(),
