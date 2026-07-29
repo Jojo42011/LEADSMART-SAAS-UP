@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { type OnboardingData, useOnboarding, loadOnboarding, saveOnboarding } from "@/lib/onboarding";
 import { loadBilling } from "@/lib/billing";
-import { saveIntel, type SiteIngest } from "@/lib/intel";
+import { loadIntel, saveIntel, type SiteIngest } from "@/lib/intel";
 import { site } from "@/lib/site";
 import { ChoiceCard, Field, StepHeading } from "./fields";
 
@@ -849,11 +849,33 @@ function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => 
   const [researchDone, setResearchDone] = useState(false);
   const started = useRef(false);
 
-  // The launch sequence is real: it runs the agent's first research cycle
-  // while the checklist animates, and stores the findings for the dashboard.
+  // The launch sequence is real: it provisions the tenant site in the
+  // database (so the daily cron picks it up) and runs the agent's first
+  // research cycle while the checklist animates. Provisioning is
+  // fire-and-forget: keyless deployments keep working from localStorage.
   useEffect(() => {
     if (started.current) return;
     started.current = true;
+
+    const ingest = loadIntel().ingest;
+    fetch("/api/sites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        onboarding: data,
+        brand: ingest
+          ? {
+              colors: ingest.colors,
+              fonts: ingest.fonts,
+              description: ingest.description || ingest.title || "",
+            }
+          : {},
+      }),
+      signal: AbortSignal.timeout(20_000),
+    }).catch(() => {
+      // Store offline or not signed in; the local demo path still works.
+    });
+
     const finish = () => setResearchDone(true);
     fetch("/api/research", {
       method: "POST",
