@@ -64,7 +64,6 @@ export function Checkout() {
   }, [router]);
 
   const total = sites * PRICE;
-  const ready = name.trim() !== "" && card.replace(/\D/g, "").length >= 15 && expiry.length === 5 && cvc.length >= 3;
 
   /** Real checkout: create a Stripe session and hand the browser to Stripe. */
   const payStripe = async () => {
@@ -96,9 +95,9 @@ export function Checkout() {
       void payStripe();
       return;
     }
-    if (!ready) return;
     setPaying(true);
-    // Demo mode (no STRIPE_SECRET_KEY): activates after a short beat.
+    // Demo mode (no STRIPE_SECRET_KEY): no card needed, activates after a
+    // short beat so testers can click straight through the paywall.
     setTimeout(() => {
       saveBilling({ active: true, sites, activatedAt: new Date().toISOString() });
       setDone(true);
@@ -273,7 +272,7 @@ export function Checkout() {
 
                     <button
                       type="submit"
-                      disabled={paying || stripeReady === null || (!stripeReady && !ready)}
+                      disabled={paying || stripeReady === null}
                       className="mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-ink px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       {paying ? (
@@ -293,7 +292,7 @@ export function Checkout() {
                       </svg>
                       {stripeReady
                         ? "Payments secured by Stripe."
-                        : "Payments secured by Stripe. Demo mode until launch, no card is charged."}
+                        : "Test mode: card fields are optional and nothing is charged. Click subscribe to continue."}
                     </p>
                   </div>
                 </form>
