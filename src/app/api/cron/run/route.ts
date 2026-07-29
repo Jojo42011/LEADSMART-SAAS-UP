@@ -15,7 +15,16 @@ export const maxDuration = 300;
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   const secret = process.env.CRON_SECRET;
-  if (secret && authHeader !== `Bearer ${secret}`) {
+  // Fail closed. Previously the check was skipped entirely when CRON_SECRET
+  // was unset, so a deployment that forgot the variable exposed a public
+  // endpoint that runs cycles — and spends Gemini quota — for every tenant.
+  if (!secret) {
+    return NextResponse.json(
+      { ok: false, error: "CRON_SECRET is not configured; refusing to run" },
+      { status: 503 }
+    );
+  }
+  if (authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

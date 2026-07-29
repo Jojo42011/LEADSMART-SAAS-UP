@@ -54,7 +54,6 @@ export function Checkout() {
       return () => clearTimeout(t);
     }
     if (params.get("canceled") === "1") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount browser read
       setNotice("Checkout was canceled. No charge was made.");
     }
     fetch("/api/billing/checkout")

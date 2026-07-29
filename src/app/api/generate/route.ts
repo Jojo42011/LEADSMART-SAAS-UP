@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePage, type GenerateInput } from "@/lib/engine/generate";
+import { requireSession } from "@/lib/api-auth";
 
-/** Thin HTTP wrapper; the engine core lives in src/lib/engine/generate.ts. */
+/**
+ * Thin HTTP wrapper; the engine core lives in src/lib/engine/generate.ts.
+ * Sign-in required: every call spends Gemini quota on our key.
+ */
 export async function POST(req: NextRequest) {
+  const auth = requireSession(req);
+  if (auth.response) return auth.response;
+
   let input: GenerateInput;
   try {
     input = (await req.json()) as GenerateInput;

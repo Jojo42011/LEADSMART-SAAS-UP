@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publishGithub, publishWordpress } from "@/lib/engine/publish";
+import { requireSession } from "@/lib/api-auth";
 
 /**
  * Manual publish endpoint. The engine core lives in
  * src/lib/engine/publish.ts; this wrapper adds the OAuth cookie token
  * fallback for GitHub so browser sessions can publish without ever
  * seeing the token.
+ *
+ * Sign-in required. Without it, the gh_token cookie fallback below made
+ * this a cross-site request forgery target: any page a signed-in customer
+ * visited could have published content into their repository.
  */
 
 type PublishRequest = {
@@ -21,6 +26,9 @@ type PublishRequest = {
 };
 
 export async function POST(req: NextRequest) {
+  const auth = requireSession(req);
+  if (auth.response) return auth.response;
+
   let input: PublishRequest;
   try {
     input = (await req.json()) as PublishRequest;

@@ -79,7 +79,6 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
     const profile = readProfileCookie();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount browser read
     if (code) setError(ERROR_COPY[code] ?? "Sign-in failed. Please try again.");
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount browser read
     setExisting(profile);
   }, []);
 

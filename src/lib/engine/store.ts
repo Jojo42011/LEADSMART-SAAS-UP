@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { decryptSecret, encryptSecret } from "../secrets";
 
 /**
  * Multi tenant data access. Activates when DATABASE_URL is set (Neon,
@@ -138,7 +139,15 @@ export async function recoverStuckRuns(): Promise<number> {
 
 export async function getConnection(siteId: string): Promise<ConnectionRow | null> {
   const res = await db().query(`select * from connections where site_id = $1`, [siteId]);
-  return (res.rows[0] as ConnectionRow) ?? null;
+  const row = (res.rows[0] as ConnectionRow) ?? null;
+  if (!row) return null;
+  // Decrypt at the point of use. Rows written before encryption existed are
+  // passed through unchanged and re-encrypted on the next connection save.
+  return {
+    ...row,
+    wp_app_password: decryptSecret(row.wp_app_password),
+    github_token: decryptSecret(row.github_token),
+  };
 }
 
 export async function upsertKeywords(
@@ -335,9 +344,12 @@ export async function provisionSite(
     [
       siteId,
       c.wpUser ?? null,
-      c.wpAppPassword ?? null,
+      // Publishing credentials grant write access to the customer's own
+      // website; they are encrypted before they touch the database and
+      // decrypted only in getConnection, at the point of use.
+      encryptSecret(c.wpAppPassword),
       c.githubRepo ?? null,
-      c.githubToken ?? null,
+      encryptSecret(c.githubToken),
       c.githubBranch ?? null,
     ]
   );
