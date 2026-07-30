@@ -51,6 +51,7 @@ export function Wizard() {
     const wpLogin = params.get("user_login");
     const wpPassword = params.get("password");
     const github = params.get("github");
+    const gsc = params.get("gsc");
     const saved = Number(window.sessionStorage.getItem(STEP_KEY) || "0");
 
     if (wpLogin && wpPassword) {
@@ -67,11 +68,18 @@ export function Wizard() {
       const current = loadOnboarding();
       update({ publishing: { ...current.publishing, githubOauth: true } });
       setStep(2);
+    } else if (gsc === "connected") {
+      const current = loadOnboarding();
+      update({ searchConsole: { ...current.searchConsole, connected: true, skipped: false } });
+      setStep(3);
+    } else if (gsc) {
+      // Connect failed or was cancelled; return to the step to choose again.
+      setStep(3);
     } else if (!Number.isNaN(saved) && saved > 0 && saved < steps.length) {
       setStep(saved);
     }
 
-    if (wpLogin || github) {
+    if (wpLogin || github || gsc) {
       window.history.replaceState({}, "", "/onboarding");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount by design
@@ -741,9 +749,19 @@ function SearchConsoleStep({ data, update }: StepProps) {
       <div className="mt-8 grid gap-3">
         <ChoiceCard
           selected={sc.connected}
-          onClick={() => set({ connected: true, skipped: false })}
-          title="Connect Google Search Console"
-          text="Recommended. One click of Google sign in when your workspace goes live."
+          onClick={() => {
+            if (sc.connected) return;
+            // Real OAuth: Google asks for read-only Search Console access
+            // and returns here with ?gsc=connected. If Google keys are not
+            // configured the flow bounces back with ?gsc=error instead.
+            window.location.href = "/api/connect/gsc/start?flow=onboarding";
+          }}
+          title={sc.connected ? "Google Search Console connected" : "Connect Google Search Console"}
+          text={
+            sc.connected
+              ? "Ranking data flows into your Analytics tab. You can revoke access from your Google account at any time."
+              : "Recommended. Approve read-only access with your Google account and real impressions, clicks and rankings appear in your dashboard."
+          }
           icon={
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="m4 17 5-5 3 3 8-8" strokeLinecap="round" strokeLinejoin="round" />
