@@ -31,6 +31,10 @@ import { publishGithub, publishWordpress } from "./publish";
 export type CycleResult = {
   siteId: string;
   ok: boolean;
+  /** "live" when the model wrote the page, "template" when it fell back. */
+  source?: "live" | "template";
+  /** Why it fell back, when it did. */
+  sourceReason?: string;
   skipped?: string;
   keyword?: string;
   slug?: string;
@@ -122,7 +126,18 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
       auditGrade: page.audit.grade,
       auditReport: page.audit,
       status,
-      heldReason: page.audit.veto ?? (gatePassed ? undefined : `Audit score ${page.audit.score}, below 75`),
+      // When generation fell back to the template the score is low for a
+      // reason the owner can fix, so say which it was instead of leaving
+      // "below 75" to look like a content-quality verdict.
+      heldReason:
+        page.audit.veto ??
+        (gatePassed
+          ? undefined
+          : `Audit score ${page.audit.score}, below 75${
+              page.source === "template" && page.sourceReason
+                ? ` — written from the built-in template because ${page.sourceReason}`
+                : ""
+            }`),
     });
     await markKeywordCovered(target.id, pageId);
 
@@ -172,7 +187,7 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
 
     const summary = `${target.term}: score ${page.audit.score} (${page.audit.grade}), ${
       published ? `published, ${liveStatus ?? "unverified"}` : `status ${status}`
-    }`;
+    }${page.source === "template" ? ` [template: ${page.sourceReason ?? "model unavailable"}]` : ""}`;
     await finishRun(runId, "done", summary);
     await touchSiteRun(site.id);
 
@@ -185,6 +200,8 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
       status: published ? "published" : status,
       published,
       liveStatus,
+      source: page.source,
+      sourceReason: page.sourceReason,
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : "cycle failed";

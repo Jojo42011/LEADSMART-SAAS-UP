@@ -18,9 +18,20 @@ export function geminiConfigured(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
 }
 
-export async function gemini(prompt: string, opts: GeminiOptions = {}): Promise<string | null> {
+export type GeminiResult = {
+  text: string | null;
+  /**
+   * Why the call produced nothing, in words a human can act on. Null on
+   * success. Every failure used to collapse to a bare null, so a wrong
+   * model name, a rejected key and an exhausted quota were impossible to
+   * tell apart — the agent quietly shipped template content instead.
+   */
+  error: string | null;
+};
+
+export async function geminiCall(prompt: string, opts: GeminiOptions = {}): Promise<GeminiResult> {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
+  if (!key) return { text: null, error: "GEMINI_API_KEY is not set" };
 
   const body: Record<string, unknown> = {
     contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -46,15 +57,44 @@ export async function gemini(prompt: string, opts: GeminiOptions = {}): Promise<
         signal: AbortSignal.timeout(90_000),
       }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Google puts a usable reason in the body; surface it verbatim rather
+      // than reducing every failure to "it did not work".
+      let detail = "";
+      try {
+        const body = (await res.json()) as { error?: { message?: string; status?: string } };
+        detail = body.error?.message || body.error?.status || "";
+      } catch {
+        detail = await res.text().catch(() => "");
+      }
+      return {
+        text: null,
+        error: `Gemini returned ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""} (model ${MODEL})`,
+      };
+    }
     const json = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
+      candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
     };
     const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
-    return text || null;
-  } catch {
-    return null;
+    if (!text) {
+      const finish = json.candidates?.[0]?.finishReason;
+      return { text: null, error: `Gemini returned no text${finish ? ` (finishReason ${finish})` : ""}` };
+    }
+    return { text, error: null };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "unknown error";
+    return { text: null, error: `Gemini request failed: ${message} (model ${MODEL})` };
   }
+}
+
+/** Text-only wrapper for callers that do not need the failure reason. */
+export async function gemini(prompt: string, opts: GeminiOptions = {}): Promise<string | null> {
+  return (await geminiCall(prompt, opts)).text;
+}
+
+/** The model this deployment will call, for diagnostics. */
+export function geminiModel(): string {
+  return MODEL;
 }
 
 /** Pulls the first JSON object or array out of a model response. */

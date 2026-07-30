@@ -1,4 +1,4 @@
-import { gemini, geminiConfigured, parseJson } from "@/lib/gemini";
+import { geminiCall, geminiConfigured, parseJson } from "@/lib/gemini";
 import { auditPage, type AuditReport } from "./audit";
 import {
   localBusinessSchema,
@@ -38,6 +38,13 @@ export type GenerateOutput = {
   html: string;
   wordCount: number;
   source: "live" | "template";
+  /**
+   * Set when generation fell back to the template. Without it a failed
+   * model call was indistinguishable from a successful one: the page just
+   * came out thin, scored below the publish gate and was held, with
+   * nothing anywhere explaining why.
+   */
+  sourceReason?: string;
   audit: AuditReport;
 };
 
@@ -105,7 +112,9 @@ function fallbackContent(input: GenerateInput): PageContent {
   };
 }
 
-async function llmContent(input: GenerateInput): Promise<PageContent | null> {
+async function llmContent(
+  input: GenerateInput
+): Promise<{ content: PageContent | null; error: string | null }> {
   const existing = (input.siblings || []).map((s) => s.slug).slice(0, 20).join(", ") || "none yet";
   const prompt = `Write the content for one SEO and AEO optimized page.
 
@@ -133,10 +142,13 @@ Respond with ONLY JSON:
  "faq": [{"question","answer"}, exactly 4, distinct from the sections],
  "cta": "one sentence call to action"}`;
 
-  const text = await gemini(prompt, { temperature: 0.6, maxOutputTokens: 8192 });
+  const { text, error } = await geminiCall(prompt, { temperature: 0.6, maxOutputTokens: 8192 });
+  if (error) return { content: null, error };
   const parsed = parseJson<PageContent>(text);
-  if (!parsed || !parsed.h1 || !Array.isArray(parsed.sections) || parsed.sections.length === 0) return null;
-  return parsed;
+  if (!parsed || !parsed.h1 || !Array.isArray(parsed.sections) || parsed.sections.length === 0) {
+    return { content: null, error: "Gemini replied but the content could not be parsed into a page" };
+  }
+  return { content: parsed, error: null };
 }
 
 function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: string): string {
@@ -240,7 +252,20 @@ ${
 }
 
 export async function generatePage(input: GenerateInput): Promise<GenerateOutput> {
-  const content = (geminiConfigured() ? await llmContent(input) : null) || fallbackContent(input);
+  // The old code reported source "live" whenever a key was present, even
+  // when the call had failed and this template was used instead — so a
+  // broken key looked identical to a working one.
+  let sourceReason: string | undefined;
+  let content: PageContent | null = null;
+  if (geminiConfigured()) {
+    const attempt = await llmContent(input);
+    content = attempt.content;
+    if (!content) sourceReason = attempt.error ?? "Gemini produced no usable content";
+  } else {
+    sourceReason = "GEMINI_API_KEY is not set";
+  }
+  const usedLlm = content !== null;
+  if (!content) content = fallbackContent(input);
   const slug = slugify(input.title || input.keyword);
   const folder =
     input.pageType === "location" ? "locations" : input.pageType === "service" ? "services" : "insights";
@@ -265,7 +290,8 @@ export async function generatePage(input: GenerateInput): Promise<GenerateOutput
     metaDescription: content.metaDescription,
     html,
     wordCount: audit.wordCount,
-    source: geminiConfigured() ? "live" : "template",
+    source: usedLlm ? "live" : "template",
+    sourceReason,
     audit,
   };
 }
