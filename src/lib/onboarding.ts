@@ -78,15 +78,28 @@ const KEY = "onboarding.v1";
  * in the plan builder and throw on every render, with no way to recover
  * short of clearing site data by hand.
  */
+const PRIMITIVES = ["string", "number", "boolean"];
+
 function mergeSection<T extends object>(fallback: T, stored: unknown): T {
   if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return fallback;
   const out = { ...fallback };
   for (const [key, value] of Object.entries(stored)) {
     if (!(key in fallback)) continue;
     const expected = fallback[key as keyof T];
-    // null is a legitimate stored value for the nullable platform field.
-    if (value === null && expected === null) continue;
-    if (typeof value === typeof expected && (expected !== null || value === null)) {
+
+    // A null default (website.platform) says nothing about the field's type,
+    // and `typeof null` is "object", so comparing types against it dropped
+    // every stored string — platform silently reverted to null on reload,
+    // which left the publishing step's Continue button permanently disabled.
+    // Accept null or any primitive here; structures are still rejected.
+    if (expected === null) {
+      if (value === null || PRIMITIVES.includes(typeof value)) {
+        out[key as keyof T] = value as T[keyof T];
+      }
+      continue;
+    }
+
+    if (typeof value === typeof expected) {
       out[key as keyof T] = value as T[keyof T];
     }
   }

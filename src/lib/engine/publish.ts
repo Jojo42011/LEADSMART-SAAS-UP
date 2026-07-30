@@ -1,3 +1,4 @@
+import { normalizeGithubRepo } from "../github-repo";
 /**
  * Phase 5: publishing to the connected destination, plus post publish
  * live URL verification so a repo path that does not map to a public URL
@@ -32,7 +33,10 @@ export async function publishGithub(input: {
   siteUrl?: string;
 }): Promise<PublishResult> {
   const path = `${input.folder}/${input.slug}/index.html`;
-  const apiUrl = `https://api.github.com/repos/${input.repo}/contents/${path}`;
+  // Defensive: stored connections predating input normalization may hold a
+  // full URL, and the cron path never passes through the wizard.
+  const repo = normalizeGithubRepo(input.repo);
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
   const headers = {
     Authorization: `Bearer ${input.token}`,
     Accept: "application/vnd.github+json",

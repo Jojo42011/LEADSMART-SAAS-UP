@@ -8,6 +8,7 @@ import { type OnboardingData, useOnboarding, loadOnboarding, saveOnboarding } fr
 import { loadBilling } from "@/lib/billing";
 import { loadIntel, saveIntel, type SiteIngest } from "@/lib/intel";
 import { buildPlan } from "@/lib/plan";
+import { normalizeGithubRepo } from "@/lib/github-repo";
 import { site } from "@/lib/site";
 import { ChoiceCard, Field, StepHeading } from "./fields";
 
@@ -598,8 +599,11 @@ function PublishingStep({ data, update }: StepProps) {
                 <Field
                   label="Repository"
                   placeholder="yourname/your-site"
+                  hint="Paste the repository URL or type owner/repo."
                   value={p.githubRepo}
-                  onChange={(e) => set({ githubRepo: e.target.value })}
+                  // Normalized on the way in so a pasted browser URL becomes
+                  // owner/repo, which is what the publish API needs.
+                  onChange={(e) => set({ githubRepo: normalizeGithubRepo(e.target.value) })}
                 />
                 <Field
                   label="Access token"
