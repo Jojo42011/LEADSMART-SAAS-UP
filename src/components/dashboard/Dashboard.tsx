@@ -15,8 +15,9 @@ import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
 import { useAgentPages, allPages, type AgentPage } from "@/lib/agent-pages";
+import { Analytics } from "./Analytics";
 
-type Tab = "Overview" | "Content" | "Keywords" | "Competitors" | "Settings";
+type Tab = "Overview" | "Content" | "Analytics" | "Keywords" | "Competitors" | "Settings";
 
 const navItems: { label: Tab; icon: React.ReactNode }[] = [
   {
@@ -36,6 +37,14 @@ const navItems: { label: Tab; icon: React.ReactNode }[] = [
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
         <rect x="5" y="3" width="14" height="18" rx="2" />
         <path d="M9 8h6M9 12h6M9 16h4" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    label: "Analytics",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
@@ -132,6 +141,13 @@ export function Dashboard() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from localStorage, same pattern as useOnboarding
     setIntel(loadIntel());
+    // Returning from the Search Console connect flow lands on the tab the
+    // user was connecting for, with the callback params tidied away.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("gsc")) {
+      setTab("Analytics");
+      window.history.replaceState({}, "", "/dashboard");
+    }
   }, []);
 
   const plan = useMemo(() => buildPlan(data), [data]);
@@ -207,6 +223,7 @@ export function Dashboard() {
           >
             {tab === "Overview" && <Overview plan={plan} goTo={setTab} />}
             {tab === "Content" && <Content plan={plan} />}
+            {tab === "Analytics" && <Analytics />}
             {tab === "Keywords" && (
               <div className="grid gap-5">
                 <LiveResearch intel={intel} mode="keywords" />
@@ -714,8 +731,20 @@ function AgentPageRow({ page }: { page: AgentPage & { siteUrl: string } }) {
         </span>
         <StatusPill status={page.status} />
       </div>
-      {isLive && (
-        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
+        <a
+          href={`/api/pages/preview?id=${page.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[12.5px] font-medium text-ink transition-colors hover:border-ink/40 hover:bg-paper-warm"
+        >
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z" />
+            <circle cx="12" cy="12" r="2.8" />
+          </svg>
+          Preview page
+        </a>
+        {isLive && (
           <a
             href={page.live_url ?? undefined}
             target="_blank"
@@ -725,6 +754,11 @@ function AgentPageRow({ page }: { page: AgentPage & { siteUrl: string } }) {
             View the live page
             <span aria-hidden="true">&rarr;</span>
           </a>
+        )}
+      </div>
+      {isLive && (
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <span className="sr-only">Live page details.</span>
           <span className="truncate font-mono text-[11.5px] text-muted">{page.live_url}</span>
           {page.live_status && (
             <span

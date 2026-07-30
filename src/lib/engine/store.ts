@@ -58,6 +58,7 @@ export type ConnectionRow = {
   github_repo: string | null;
   github_token: string | null;
   github_branch: string | null;
+  gsc_refresh_token: string | null;
 };
 
 export type PageSummary = {
@@ -162,7 +163,59 @@ export async function getConnection(siteId: string): Promise<ConnectionRow | nul
     ...row,
     wp_app_password: decryptSecret(row.wp_app_password),
     github_token: decryptSecret(row.github_token),
+    gsc_refresh_token: decryptSecret(row.gsc_refresh_token),
   };
+}
+
+/**
+ * Ensures a tenant row exists for a signed-in account. Called from the
+ * OAuth callbacks so signing in with Google or GitHub is visible in the
+ * tenants table immediately, not only after onboarding or payment.
+ */
+export async function upsertTenant(email: string, name?: string): Promise<string | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(
+    `insert into tenants (email, name) values ($1, $2)
+     on conflict (email) do update set name = coalesce(nullif(excluded.name, ''), tenants.name)
+     returning id`,
+    [email.toLowerCase(), name ?? ""]
+  );
+  return (res.rows[0]?.id as string) ?? null;
+}
+
+/** One page with its stored HTML, only if it belongs to this email's tenant. */
+export async function getPageForEmail(
+  pageId: string,
+  email: string
+): Promise<{ id: string; title: string; html: string | null; live_url: string | null; status: string } | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(
+    `select p.id, p.title, p.html, p.live_url, p.status
+     from pages p
+     join sites s on s.id = p.site_id
+     join tenants t on t.id = s.tenant_id
+     where p.id = $1 and t.email = $2`,
+    [pageId, email.toLowerCase()]
+  );
+  return res.rows[0] ?? null;
+}
+
+/**
+ * Stores a Search Console refresh token (already encrypted by the caller)
+ * on the tenant's most recent site. Returns false when the tenant has no
+ * site yet — the onboarding cookie path covers that case instead.
+ */
+export async function saveGscTokenForEmail(email: string, encryptedToken: string): Promise<boolean> {
+  if (!storeConfigured()) return false;
+  const sites = await listSitesForEmail(email);
+  const site = sites[0];
+  if (!site) return false;
+  await db().query(
+    `insert into connections (site_id, gsc_refresh_token, updated_at) values ($1, $2, now())
+     on conflict (site_id) do update set gsc_refresh_token = excluded.gsc_refresh_token, updated_at = now()`,
+    [site.id, encryptedToken]
+  );
+  return true;
 }
 
 export async function upsertKeywords(
@@ -289,6 +342,7 @@ export type ProvisionInput = {
     githubRepo?: string;
     githubToken?: string;
     githubBranch?: string;
+    gscRefreshToken?: string;
   };
 };
 
@@ -350,14 +404,15 @@ export async function provisionSite(
 
   const c = input.connection;
   await db().query(
-    `insert into connections (site_id, wp_user, wp_app_password, github_repo, github_token, github_branch, updated_at)
-     values ($1,$2,$3,$4,$5,$6, now())
+    `insert into connections (site_id, wp_user, wp_app_password, github_repo, github_token, github_branch, gsc_refresh_token, updated_at)
+     values ($1,$2,$3,$4,$5,$6,$7, now())
      on conflict (site_id) do update set
        wp_user = coalesce(nullif(excluded.wp_user, ''), connections.wp_user),
        wp_app_password = coalesce(nullif(excluded.wp_app_password, ''), connections.wp_app_password),
        github_repo = coalesce(nullif(excluded.github_repo, ''), connections.github_repo),
        github_token = coalesce(nullif(excluded.github_token, ''), connections.github_token),
        github_branch = coalesce(nullif(excluded.github_branch, ''), connections.github_branch),
+       gsc_refresh_token = coalesce(nullif(excluded.gsc_refresh_token, ''), connections.gsc_refresh_token),
        updated_at = now()`,
     [
       siteId,
@@ -369,6 +424,7 @@ export async function provisionSite(
       c.githubRepo ?? null,
       encryptSecret(c.githubToken),
       c.githubBranch ?? null,
+      encryptSecret(c.gscRefreshToken),
     ]
   );
 

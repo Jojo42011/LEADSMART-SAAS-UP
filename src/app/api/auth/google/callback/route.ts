@@ -8,6 +8,7 @@ import {
   profileCookieOptions,
   type SessionUser,
 } from "@/lib/session";
+import { upsertTenant } from "@/lib/engine/store";
 
 /**
  * Google sign-in, step 2. Exchanges the authorization code for tokens,
@@ -98,6 +99,14 @@ export async function GET(req: NextRequest) {
       provider: "google",
       iat: Date.now(),
     };
+
+    // Make the account visible in the tenants table immediately. Best
+    // effort: a database hiccup must never block sign-in itself.
+    try {
+      await upsertTenant(user.email, user.name);
+    } catch {
+      // sign-in proceeds; provisioning upserts the tenant again at launch
+    }
 
     const res = NextResponse.redirect(`${origin}/${flow === "signup" ? "checkout" : "dashboard"}`);
     res.cookies.set(SESSION_COOKIE, signSession(user), sessionCookieOptions);

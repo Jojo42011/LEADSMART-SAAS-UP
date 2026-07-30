@@ -8,6 +8,7 @@ import {
   profileCookieOptions,
   type SessionUser,
 } from "@/lib/session";
+import { upsertTenant } from "@/lib/engine/store";
 
 /**
  * GitHub OAuth, step 2. Exchanges the code for an access token and stores it
@@ -94,6 +95,16 @@ export async function GET(req: NextRequest) {
     // Establish the login session from the connected account.
     const identity = await fetchIdentity(tokenJson.access_token);
     if (flow !== "connect" && !identity) return fail("no_identity");
+
+    // Make the account visible in the tenants table immediately. Best
+    // effort: a database hiccup must never block sign-in itself.
+    if (identity) {
+      try {
+        await upsertTenant(identity.email, identity.name);
+      } catch {
+        // sign-in proceeds; provisioning upserts the tenant again at launch
+      }
+    }
 
     const dest =
       flow === "signup"

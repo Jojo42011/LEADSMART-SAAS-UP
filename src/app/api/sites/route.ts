@@ -91,6 +91,10 @@ export async function POST(req: NextRequest) {
         githubRepo: data.publishing.githubRepo || undefined,
         githubToken: githubToken || undefined,
         githubBranch: data.publishing.githubBranch || undefined,
+        // Set when Search Console was connected during onboarding, before
+        // this site row existed. Already encrypted by the GSC callback;
+        // encryptSecret's already-encrypted guard prevents double-wrapping.
+        gscRefreshToken: req.cookies.get("gsc_token")?.value || undefined,
       },
     });
     if (!result) {
