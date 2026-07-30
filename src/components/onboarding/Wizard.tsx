@@ -423,7 +423,8 @@ function PublishingStep({ data, update }: StepProps) {
   const set = (patch: Partial<typeof p>) => update({ publishing: { ...p, ...patch } });
   const isWp = data.website.platform === "wordpress";
   const [manual, setManual] = useState(false);
-  const [repos, setRepos] = useState<{ fullName: string }[]>([]);
+  const [repos, setRepos] = useState<{ fullName: string; defaultBranch: string }[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
   const [ghLogin, setGhLogin] = useState("");
   const [connecting, setConnecting] = useState(false);
 
@@ -435,7 +436,7 @@ function PublishingStep({ data, update }: StepProps) {
     if (!isWp && p.githubOauth && repos.length === 0) {
       fetch("/api/github/repos")
         .then((r) => r.json())
-        .then((j: { connected: boolean; login?: string; repos?: { fullName: string }[] }) => {
+        .then((j: { connected: boolean; login?: string; repos?: { fullName: string; defaultBranch: string }[] }) => {
           if (j.connected) {
             setRepos(j.repos || []);
             setGhLogin(j.login || "");
@@ -444,6 +445,23 @@ function PublishingStep({ data, update }: StepProps) {
         .catch(() => {});
     }
   }, [isWp, p.githubOauth, repos.length]);
+
+  // Once a repository is chosen, load its branches so the owner can point
+  // the agent at the branch their live site actually deploys from.
+  useEffect(() => {
+    if (isWp || !p.githubOauth || !p.githubRepo) return;
+    let cancelled = false;
+    fetch(`/api/github/branches?repo=${encodeURIComponent(p.githubRepo)}`)
+      .then((r) => r.json())
+      .then((j: { branches?: string[]; defaultBranch?: string }) => {
+        if (cancelled) return;
+        setBranches(j.branches || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isWp, p.githubOauth, p.githubRepo]);
 
   const connectWordpress = () => {
     const raw = data.website.url.trim();
@@ -544,15 +562,23 @@ function PublishingStep({ data, update }: StepProps) {
               title="GitHub connected"
               detail={ghLogin ? `Signed in as ${ghLogin}. Pick the repository your site lives in.` : "Signed in. Pick the repository your site lives in."}
               onDisconnect={() => {
-                set({ githubOauth: false, githubRepo: "" });
+                set({ githubOauth: false, githubRepo: "", githubBranch: "" });
                 setRepos([]);
+                setBranches([]);
               }}
             />
             <label className="block">
               <span className="text-[13px] font-medium text-ink">Repository</span>
               <select
                 value={p.githubRepo}
-                onChange={(e) => set({ githubRepo: e.target.value })}
+                onChange={(e) => {
+                  const fullName = e.target.value;
+                  // Preselect the repo's default branch; the picker below
+                  // lets the owner change it if the site deploys elsewhere.
+                  const chosen = repos.find((r) => r.fullName === fullName);
+                  setBranches([]);
+                  set({ githubRepo: fullName, githubBranch: chosen?.defaultBranch || "" });
+                }}
                 className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
               >
                 <option value="">Choose the repository</option>
@@ -562,7 +588,32 @@ function PublishingStep({ data, update }: StepProps) {
                   </option>
                 ))}
               </select>
+              <span className="mt-1.5 block text-[12px] text-muted">
+                The repository your live site is built and hosted from.
+              </span>
             </label>
+            {p.githubRepo && (
+              <label className="block">
+                <span className="text-[13px] font-medium text-ink">Branch</span>
+                <select
+                  value={p.githubBranch}
+                  onChange={(e) => set({ githubBranch: e.target.value })}
+                  className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+                >
+                  {branches.length === 0 && (
+                    <option value={p.githubBranch}>{p.githubBranch || "default branch"}</option>
+                  )}
+                  {branches.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1.5 block text-[12px] text-muted">
+                  The branch your host deploys — pages the agent publishes here go live.
+                </span>
+              </label>
+            )}
           </>
         ) : (
           <>
@@ -604,6 +655,14 @@ function PublishingStep({ data, update }: StepProps) {
                   // Normalized on the way in so a pasted browser URL becomes
                   // owner/repo, which is what the publish API needs.
                   onChange={(e) => set({ githubRepo: normalizeGithubRepo(e.target.value) })}
+                />
+                <Field
+                  label="Branch"
+                  optional
+                  placeholder="main"
+                  hint="The branch your host deploys. Leave blank to use the repository's default branch."
+                  value={p.githubBranch}
+                  onChange={(e) => set({ githubBranch: e.target.value.trim() })}
                 />
                 <Field
                   label="Access token"

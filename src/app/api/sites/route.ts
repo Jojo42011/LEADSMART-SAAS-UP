@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
         wpAppPassword: data.publishing.wpAppPassword || undefined,
         githubRepo: data.publishing.githubRepo || undefined,
         githubToken: githubToken || undefined,
+        githubBranch: data.publishing.githubBranch || undefined,
       },
     });
     if (!result) {
