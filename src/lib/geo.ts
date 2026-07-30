@@ -202,7 +202,14 @@ export function scoreFreshness(keyword: string, publishedDaysAgo: number | null)
 }
 
 export type CitationPlatform = {
-  platform: "Reddit" | "Quora" | "Hacker News" | "Stack Overflow" | "Wikipedia";
+  platform:
+    | "Best-of lists"
+    | "Local directories"
+    | "Reddit"
+    | "Quora"
+    | "Hacker News"
+    | "Stack Overflow"
+    | "Wikipedia";
   reason: string;
 };
 
@@ -214,11 +221,49 @@ export type CitationPlatform = {
  * suggestion, not an automated action.
  */
 export function suggestCitationPlatform(intent: string): CitationPlatform {
-  if (intent === "Near me")
-    return { platform: "Reddit", reason: "Perplexity draws 46.7% of citations from Reddit for local, opinion-driven queries." };
-  if (intent === "Question")
-    return { platform: "Quora", reason: "Question keywords mirror how people ask on Q&A threads, which answer engines cite for cost and how-to queries." };
+  // Local intent used to point at Quora, which came from generic
+  // cross-engine citation-share data rather than from how answer engines
+  // pick a local business. Whitespark's 2026 local ranking factors and the
+  // 2026 local AI-search guidance agree: for "best <service> in <city>",
+  // engines quote the expert-curated roundups that already rank for that
+  // phrase, plus high-authority local citations. Telling a local service
+  // business to seed a Quora thread was weak advice for the customer we
+  // actually serve.
   if (intent === "Local")
-    return { platform: "Quora", reason: "Question-format threads align with how local intent queries are asked." };
-  return { platform: "Wikipedia", reason: "ChatGPT draws 47.9% of top citations from Wikipedia for category and definition queries." };
+    return {
+      platform: "Best-of lists",
+      reason:
+        "Answer engines quote the curated \"best <service> in <city>\" roundups that already rank for this phrase. Getting listed on those, and on high-authority local citations (chamber of commerce, local press), moves local AI recommendations more than generic directories.",
+    };
+  if (intent === "Near me")
+    return {
+      platform: "Reddit",
+      reason: "Perplexity draws 46.7% of citations from Reddit for local, opinion-driven queries.",
+    };
+  if (intent === "Question")
+    return {
+      platform: "Quora",
+      reason:
+        "Question keywords mirror how people ask on Q&A threads, which answer engines cite for cost and how-to queries.",
+    };
+  return {
+    platform: "Wikipedia",
+    reason: "ChatGPT draws 47.9% of top citations from Wikipedia for category and definition queries.",
+  };
 }
+
+/**
+ * The off-site profiles that feed local AI recommendations regardless of
+ * keyword. A one-time setup task rather than a per-keyword suggestion, so
+ * it is surfaced separately from the intent mapping above. Consistently
+ * reported as the short list that matters: being complete and accurate on
+ * these beats presence on dozens of obscure directories.
+ */
+export const CORE_LOCAL_CITATIONS = [
+  "Google Business Profile",
+  "Yelp",
+  "Bing Places",
+  "Apple Business Connect",
+  "Better Business Bureau",
+  "Nextdoor",
+] as const;

@@ -11,7 +11,7 @@ import {
   type PublishMode,
 } from "@/lib/onboarding";
 import { buildPlan, type PageDraft } from "@/lib/plan";
-import { GEO_TACTICS } from "@/lib/geo";
+import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
 import { useAgentPages, allPages, type AgentPage } from "@/lib/agent-pages";
@@ -796,9 +796,18 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
       <p className="mt-1 px-6 text-[12.5px] text-muted">
         Ordered by business potential: how likely a searcher is to become a
         customer, not just how many people search. Off site opportunity flags
-        where a Reddit, Quora, or Wikipedia presence would help this keyword
-        get cited by AI answer engines, based on where each engine draws its
-        citations from.
+        which off-site surface would help this keyword get cited by AI answer
+        engines. For local intent that is the curated &quot;best of&quot; roundups
+        already ranking for the phrase, since those are what engines quote when
+        recommending a local business; elsewhere it follows where each engine
+        actually draws its citations from.
+      </p>
+      <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+        Independent of any keyword, being complete and accurate on{" "}
+        <span className="text-ink/80">{CORE_LOCAL_CITATIONS.join(", ")}</span> feeds
+        local AI recommendations more than presence on many small directories. That
+        is a one-time setup task on your own profiles, not something the agent
+        publishes.
       </p>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-left text-[13px]">
