@@ -216,9 +216,14 @@ export function Checkout() {
                       </p>
                     )}
                     {!stripeReady && (<>
-                    <label className="block">
+                    {/* id + name on every field: autoComplete alone does not
+                        make browsers fill a card form, and the id is what
+                        links each label to its input for assistive tech. */}
+                    <label className="block" htmlFor="cc-name">
                       <span className="text-[13px] font-medium text-ink">Name on card</span>
                       <input
+                        id="cc-name"
+                        name="cc-name"
                         className={inputClass}
                         placeholder="Jordan Smith"
                         value={name}
@@ -226,10 +231,12 @@ export function Checkout() {
                         autoComplete="cc-name"
                       />
                     </label>
-                    <label className="block">
+                    <label className="block" htmlFor="cc-number">
                       <span className="text-[13px] font-medium text-ink">Card number</span>
                       <div className="relative">
                         <input
+                          id="cc-number"
+                          name="cc-number"
                           className={inputClass}
                           placeholder="4242 4242 4242 4242"
                           inputMode="numeric"
@@ -244,9 +251,11 @@ export function Checkout() {
                       </div>
                     </label>
                     <div className="grid grid-cols-2 gap-4">
-                      <label className="block">
+                      <label className="block" htmlFor="cc-exp">
                         <span className="text-[13px] font-medium text-ink">Expiry</span>
                         <input
+                          id="cc-exp"
+                          name="cc-exp"
                           className={inputClass}
                           placeholder="MM/YY"
                           inputMode="numeric"
@@ -255,9 +264,11 @@ export function Checkout() {
                           autoComplete="cc-exp"
                         />
                       </label>
-                      <label className="block">
+                      <label className="block" htmlFor="cc-csc">
                         <span className="text-[13px] font-medium text-ink">CVC</span>
                         <input
+                          id="cc-csc"
+                          name="cc-csc"
                           className={inputClass}
                           placeholder="123"
                           inputMode="numeric"

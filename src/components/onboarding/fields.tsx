@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import type { InputHTMLAttributes, ReactNode } from "react";
 
 type FieldProps = {
@@ -8,9 +9,18 @@ type FieldProps = {
   optional?: boolean;
 } & InputHTMLAttributes<HTMLInputElement>;
 
-export function Field({ label, hint, optional, ...props }: FieldProps) {
+export function Field({ label, hint, optional, id, name, ...props }: FieldProps) {
+  // Every input needs a stable id and name. The wrapping <label> already
+  // associates the two visually and for most screen readers, but without a
+  // name browsers refuse to autofill the field, and without an id the
+  // hint text below cannot be attached as a description.
+  const generated = useId();
+  const fieldId = id ?? generated;
+  const fieldName = name ?? id ?? label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const hintId = hint ? `${fieldId}-hint` : undefined;
+
   return (
-    <label className="block">
+    <label className="block" htmlFor={fieldId}>
       <span className="flex items-baseline justify-between">
         <span className="text-[13px] font-medium text-ink">{label}</span>
         {optional && (
@@ -19,9 +29,16 @@ export function Field({ label, hint, optional, ...props }: FieldProps) {
       </span>
       <input
         {...props}
+        id={fieldId}
+        name={fieldName}
+        aria-describedby={hintId}
         className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all placeholder:text-muted/50 focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
       />
-      {hint && <span className="mt-1.5 block text-[12px] text-muted">{hint}</span>}
+      {hint && (
+        <span id={hintId} className="mt-1.5 block text-[12px] text-muted">
+          {hint}
+        </span>
+      )}
     </label>
   );
 }

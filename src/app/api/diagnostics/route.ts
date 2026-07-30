@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/api-auth";
-import { geminiCall, geminiConfigured, geminiModel } from "@/lib/gemini";
+import { geminiCall, geminiConfigured, geminiModel, listGeminiModels } from "@/lib/gemini";
 import { storeConfigured, listSitesForEmail, getConnection } from "@/lib/engine/store";
 
 /**
@@ -45,10 +45,18 @@ export async function GET(req: NextRequest) {
     });
     checks.gemini = {
       ok: probe.error === null,
+      // geminiModel() reports the model actually in use, which may differ
+      // from the configured one after an automatic deprecation fallback.
       model: geminiModel(),
       reply: probe.text?.trim().slice(0, 60) ?? null,
       error: probe.error,
     };
+    // When generation fails, the single most useful next fact is which
+    // models this key may call — that turns "404" into a name to set.
+    if (probe.error) {
+      const available = await listGeminiModels();
+      checks.geminiAvailableModels = available.error ?? available.models;
+    }
   }
 
   checks.database = { ok: storeConfigured(), error: storeConfigured() ? null : "DATABASE_URL is not set" };

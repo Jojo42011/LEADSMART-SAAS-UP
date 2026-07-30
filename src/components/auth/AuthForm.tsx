@@ -211,6 +211,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
               label="Email"
               type="email"
               required
+              autoComplete="email"
               placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -219,6 +220,11 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
               label="Password"
               type="password"
               required
+              // new-password tells a password manager to offer to generate
+              // and save one; current-password tells it to fill the saved
+              // one. Sharing a single value here made signup prompt for an
+              // existing password and signin offer to invent a new one.
+              autoComplete={isSignup ? "new-password" : "current-password"}
               placeholder={isSignup ? "At least 8 characters" : "Your password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
