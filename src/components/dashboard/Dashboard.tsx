@@ -14,6 +14,7 @@ import { buildPlan, type PageDraft } from "@/lib/plan";
 import { GEO_TACTICS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
+import { useAgentPages, allPages, type AgentPage } from "@/lib/agent-pages";
 
 type Tab = "Overview" | "Content" | "Keywords" | "Competitors" | "Settings";
 
@@ -74,6 +75,12 @@ const statusStyles: Record<string, string> = {
   Rewriting: "bg-ink text-white",
   Held: "bg-ink text-white",
   Tracking: "bg-ink/[0.06] text-ink/70",
+  // Engine-side statuses from the pages table.
+  published: "bg-accent/10 text-accent",
+  approved: "bg-ink/[0.06] text-ink/70",
+  pending: "bg-ink/[0.04] text-muted",
+  held: "bg-ink text-white",
+  failed: "bg-ink text-white",
 };
 
 const threatStyles: Record<string, string> = {
@@ -614,27 +621,151 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
 
 /* -------------------------------- Content ------------------------------- */
 
-function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
-  if (plan.pages.length === 0)
+/** Real pages the engine wrote, with a link to each published one. */
+function AgentPages() {
+  const { loading, engine, sites, error, refresh } = useAgentPages();
+  if (loading) {
     return (
-      <EmptyState
-        title="No pages queued yet"
-        sub="Add your services and locations in Settings and the agent will build a page queue from them."
-      />
+      <Card className="p-6">
+        <p className="text-[13px] text-muted">Checking what the agent has written…</p>
+      </Card>
     );
+  }
+  if (error) {
+    return (
+      <Card className="p-6">
+        <h2 className="text-[14.5px] font-medium">Published pages</h2>
+        <p className="mt-2 text-[13px] text-muted">Could not read the agent&apos;s pages: {error}</p>
+      </Card>
+    );
+  }
+  if (!engine) {
+    // Being explicit beats a queue that looks live but is a simulation.
+    return (
+      <Card className="p-6">
+        <h2 className="text-[14.5px] font-medium">Agent not connected</h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted">
+          The autonomous engine needs a database. Until{" "}
+          <code className="rounded bg-paper-warm px-1 py-0.5 text-[12px]">DATABASE_URL</code> is set,
+          nothing below is being written to your site — the queue underneath is a preview of the plan
+          the agent would work through, not work in progress.
+        </p>
+      </Card>
+    );
+  }
+
+  const pages = allPages(sites);
+  const published = pages.filter((p) => p.status === "published");
+  const lastRun = sites.flatMap((s) => s.runs)[0];
 
   return (
     <Card className="p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[14.5px] font-medium">Pages the agent has written</h2>
+        <button
+          onClick={refresh}
+          className="rounded-full border border-line px-3 py-1 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
+        >
+          Refresh
+        </button>
+      </div>
+      {pages.length === 0 ? (
+        <p className="mt-2 text-[13px] leading-relaxed text-muted">
+          The agent hasn&apos;t written a page yet.{" "}
+          {lastRun
+            ? `Last cycle: ${lastRun.status}${lastRun.summary ? ` — ${lastRun.summary}` : ""}.`
+            : "No cycle has run yet — it runs on your cadence, or you can trigger one manually."}
+        </p>
+      ) : (
+        <>
+          <p className="mt-1 text-[12.5px] text-muted">
+            {published.length} published, {pages.length - published.length} held or in progress.
+            Published pages link straight to where they went live.
+          </p>
+          <div className="mt-5 grid gap-2.5">
+            {pages.map((page) => (
+              <AgentPageRow key={page.id} page={page} />
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function AgentPageRow({ page }: { page: AgentPage & { siteUrl: string } }) {
+  const isLive = page.status === "published" && Boolean(page.live_url);
+  const reachable = page.live_status?.startsWith("live:");
+  return (
+    <div className="min-w-0 rounded-xl border border-line p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-lg bg-paper-warm">
+          <span className="sr-only">Audit score {page.audit_score} of 100.</span>
+          <span aria-hidden="true" className="text-[12px] font-medium leading-none">{page.audit_grade || "—"}</span>
+          <span aria-hidden="true" className="mt-0.5 font-mono text-[9px] leading-none text-muted">{page.audit_score}</span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13.5px] font-medium">{page.title}</span>
+          <span className="block truncate text-[12px] text-muted">
+            {page.keyword}
+            {page.word_count > 0 ? ` · ${page.word_count} words` : ""}
+            {page.held_reason ? ` · ${page.held_reason}` : ""}
+          </span>
+        </span>
+        <StatusPill status={page.status} />
+      </div>
+      {isLive && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
+          <a
+            href={page.live_url ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink underline decoration-line underline-offset-2 hover:text-accent"
+          >
+            View the live page
+            <span aria-hidden="true">&rarr;</span>
+          </a>
+          <span className="truncate font-mono text-[11.5px] text-muted">{page.live_url}</span>
+          {page.live_status && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                reachable ? "bg-accent/10 text-accent" : "bg-ink text-white"
+              }`}
+              title="Result of fetching the published URL to confirm it is really there."
+            >
+              {reachable ? "verified live" : page.live_status}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
+  return (
+    <div className="grid gap-4">
+      <AgentPages />
+      {plan.pages.length > 0 && <PlannedQueue plan={plan} />}
+    </div>
+  );
+}
+
+function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
+  return (
+    <Card className="p-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-[14.5px] font-medium">Content queue</h2>
+        <h2 className="text-[14.5px] font-medium">Planned queue</h2>
         <span className="label-mono text-muted/60">{plan.pages.length} pages this cycle</span>
       </div>
-      <p className="mt-1 text-[12.5px] text-muted">
-        Every page carries its Ascent Method pillar scores, an information
-        gain check, a weighted GEO score for AI answer engines, real schema
-        markup, and a freshness clock. Under 75 overall, 0.50 IG, or a failed
-        critical check, it never publishes. Spoke pages (location-specific)
-        always go out before the hub page they link back to.
+      <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+        <span className="font-medium text-ink">This is the plan, not live progress.</span>{" "}
+        It shows the order the agent intends to work in and how each page
+        would be judged: Ascent Method pillar scores, an information gain
+        check, a weighted GEO score for AI answer engines, real schema markup
+        and a freshness clock. Under 75 overall, 0.50 IG, or a failed critical
+        check, a page never publishes. Spoke pages go out before the hub they
+        link back to. Pages the agent has actually written appear above.
       </p>
       <div className="mt-5 grid gap-3">
         {plan.pages.map((page) => (

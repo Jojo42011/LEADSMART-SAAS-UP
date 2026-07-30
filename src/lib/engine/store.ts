@@ -68,6 +68,16 @@ export type PageSummary = {
   title: string;
   html: string | null;
   status: string;
+  /** Where the page went live, once published. Null until then. */
+  live_url: string | null;
+  /** Verification of that URL: live:200, error:404, unreachable. */
+  live_status: string | null;
+  audit_score: number;
+  audit_grade: string;
+  held_reason: string | null;
+  word_count: number;
+  published_at: string | null;
+  created_at: string;
 };
 
 const CADENCE_HOURS: Record<string, number> = { daily: 24, every3days: 72, weekly: 168 };
@@ -202,7 +212,10 @@ export async function nextTarget(
 
 export async function listPages(siteId: string, withHtml = false): Promise<PageSummary[]> {
   const res = await db().query(
-    `select id, keyword, slug, folder, title, status, ${withHtml ? "html" : "null as html"}
+    `select id, keyword, slug, folder, title, status,
+            live_url, live_status, audit_score, audit_grade, held_reason,
+            word_count, published_at, created_at,
+            ${withHtml ? "html" : "null as html"}
      from pages where site_id = $1 order by created_at desc limit 60`,
     [siteId]
   );
@@ -417,6 +430,36 @@ export async function resetSitePlanning(
     competitors: competitors.rowCount ?? 0,
     drafts: drafts.rowCount ?? 0,
   };
+}
+
+/**
+ * The sites belonging to a signed-in owner, newest first. Scoped by email
+ * through the tenant so one account can never read another's sites.
+ */
+export async function listSitesForEmail(email: string): Promise<SiteRow[]> {
+  if (!storeConfigured()) return [];
+  const res = await db().query(
+    `select s.* from sites s
+     join tenants t on t.id = s.tenant_id
+     where t.email = $1
+     order by s.created_at desc`,
+    [email.toLowerCase()]
+  );
+  return res.rows as SiteRow[];
+}
+
+/** The most recent runs for a site, so the dashboard can show real progress. */
+export async function listRuns(siteId: string, limit = 5): Promise<{
+  id: string; phase: string; status: string; summary: string | null;
+  started_at: string; finished_at: string | null;
+}[]> {
+  if (!storeConfigured()) return [];
+  const res = await db().query(
+    `select id, phase, status, summary, started_at, finished_at
+     from runs where site_id = $1 order by started_at desc limit $2`,
+    [siteId, limit]
+  );
+  return res.rows;
 }
 
 /* ------------------------- Email account records ------------------------ */
