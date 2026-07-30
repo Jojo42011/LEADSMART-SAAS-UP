@@ -382,6 +382,43 @@ export async function setTenantPlanByEmail(
   );
 }
 
+/**
+ * Clears the planning state so the next cycle re-researches from a changed
+ * market profile.
+ *
+ * The cycle only researches when the keyword pool is thin (fewer than 10
+ * terms), so a site that was onboarded with one set of services would keep
+ * working from that original pool forever, no matter what the owner later
+ * changed in Settings. Emptying the pool is what makes the agent think
+ * again.
+ *
+ * Published pages are deliberately left alone: they are live on the
+ * customer's own website, and editing a settings field must never delete
+ * something the agent already shipped. Only unpublished drafts — work that
+ * was planned from the stale profile and has not gone anywhere — are
+ * removed, along with the keyword and competitor pools.
+ */
+export async function resetSitePlanning(
+  siteId: string
+): Promise<{ keywords: number; competitors: number; drafts: number }> {
+  if (!storeConfigured()) return { keywords: 0, competitors: 0, drafts: 0 };
+
+  const drafts = await db().query(
+    `delete from pages where site_id = $1 and status <> 'published'`,
+    [siteId]
+  );
+  const keywords = await db().query(`delete from keywords where site_id = $1`, [siteId]);
+  const competitors = await db().query(`delete from competitors where site_id = $1`, [siteId]);
+  // Null last_run_at so the cadence check treats the site as due immediately.
+  await db().query(`update sites set last_run_at = null where id = $1`, [siteId]);
+
+  return {
+    keywords: keywords.rowCount ?? 0,
+    competitors: competitors.rowCount ?? 0,
+    drafts: drafts.rowCount ?? 0,
+  };
+}
+
 /* ------------------------- Email account records ------------------------ */
 
 export type TenantAccount = {

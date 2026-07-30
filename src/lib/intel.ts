@@ -59,6 +59,23 @@ export function loadIntel(): Intel {
   }
 }
 
+/**
+ * Drops the research snapshot when the answers it was derived from change.
+ * Keeping it would leave the dashboard showing keyword targets and
+ * competitor findings from a market profile the owner has already replaced.
+ */
+export function clearIntel() {
+  if (typeof window === "undefined") return;
+  try {
+    const { ingest } = loadIntel();
+    // The site ingest describes the website itself (brand, platform), not
+    // the market answers, so it survives a market-profile change.
+    window.localStorage.setItem(KEY, JSON.stringify(ingest ? { ingest } : {}));
+  } catch {
+    // storage unavailable; intel is a cache, never required
+  }
+}
+
 export function saveIntel(patch: Partial<Intel>) {
   if (typeof window === "undefined") return;
   try {

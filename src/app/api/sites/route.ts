@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "@/lib/session";
-import { storeConfigured, provisionSite } from "@/lib/engine/store";
+import { storeConfigured, provisionSite, resetSitePlanning } from "@/lib/engine/store";
 import type { OnboardingData } from "@/lib/onboarding";
 
 /**
@@ -18,6 +18,12 @@ import type { OnboardingData } from "@/lib/onboarding";
 type Body = {
   onboarding?: OnboardingData;
   brand?: Record<string, unknown>;
+  /**
+   * Set when the owner changed the market profile in Settings. Clears the
+   * keyword pool and unpublished drafts so the next cycle re-researches
+   * from the new answers instead of continuing on the old ones.
+   */
+  replan?: boolean;
 };
 
 export async function POST(req: NextRequest) {
@@ -89,7 +95,18 @@ export async function POST(req: NextRequest) {
     if (!result) {
       return NextResponse.json({ ok: true, stored: false, note: "store unconfigured" });
     }
-    return NextResponse.json({ ok: true, stored: true, siteId: result.siteId });
+    // A profile change makes the existing plan obsolete: the cycle only
+    // researches when the keyword pool is thin, so without this the agent
+    // would keep working from the answers given at onboarding.
+    const reset = body.replan ? await resetSitePlanning(result.siteId) : null;
+
+    return NextResponse.json({
+      ok: true,
+      stored: true,
+      siteId: result.siteId,
+      replanned: Boolean(body.replan),
+      cleared: reset,
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, stored: false, error: e instanceof Error ? e.message : "provisioning failed" },

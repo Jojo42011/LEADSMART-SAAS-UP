@@ -13,6 +13,7 @@ import {
 import { buildPlan, type PageDraft } from "@/lib/plan";
 import { GEO_TACTICS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
+import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
 
 type Tab = "Overview" | "Content" | "Keywords" | "Competitors" | "Settings";
 
@@ -211,7 +212,9 @@ export function Dashboard() {
                 <Competitors plan={plan} goTo={setTab} />
               </div>
             )}
-            {tab === "Settings" && <Settings data={data} update={update} />}
+            {tab === "Settings" && (
+              <Settings data={data} update={update} onApplied={() => setIntel(loadIntel())} />
+            )}
           </motion.div>
         </main>
       </div>
@@ -882,14 +885,46 @@ function Competitors({
 function Settings({
   data,
   update,
+  onApplied,
 }: {
   data: OnboardingData;
   update: (patch: Partial<OnboardingData>) => void;
+  onApplied: () => void;
 }) {
-  const [saved, setSaved] = useState(false);
-  const flash = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1600);
+  const [stage, setStage] = useState<ApplyStage | null>(null);
+  const [result, setResult] = useState<ApplyResult | null>(null);
+
+  // Saving is no longer a confirmation message over nothing: it refreshes
+  // the research snapshot and tells the engine to re-plan, so the answers
+  // on this screen are the answers the agent works from.
+  const save = async () => {
+    if (stage && stage !== "done" && stage !== "error") return;
+    setResult(null);
+    try {
+      const applied = await applySettings(data, setStage);
+      setResult(applied);
+      onApplied();
+    } catch {
+      setStage("error");
+      setResult({
+        ok: false,
+        replanned: false,
+        stored: null,
+        researchRefreshed: false,
+        message: "Could not apply the changes. Please try again.",
+      });
+    }
+    setTimeout(() => setStage(null), 4000);
+  };
+
+  const busy = stage !== null && stage !== "done" && stage !== "error";
+  const stageLabel: Record<ApplyStage, string> = {
+    saving: "Saving",
+    clearing: "Clearing the old plan",
+    researching: "Researching your market",
+    syncing: "Updating the agent",
+    done: "Done",
+    error: "Failed",
   };
 
   return (
@@ -996,22 +1031,40 @@ function Settings({
         </div>
       </Card>
 
-      <div className="flex items-center gap-4">
-        <button
-          onClick={flash}
-          className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-[14px] font-medium text-white transition-colors hover:bg-accent"
-        >
-          Save changes
-        </button>
-        {/* role=status announces the confirmation; opacity alone left screen
-            reader users with no feedback that the save happened. */}
-        <span
-          role="status"
-          aria-live="polite"
-          className={`text-[13px] text-muted transition-opacity ${saved ? "opacity-100" : "opacity-0"}`}
-        >
-          {saved ? "Saved — changes apply everywhere" : ""}
-        </span>
+      <div className="grid gap-3">
+        <div className="flex flex-wrap items-center gap-4">
+          <button
+            onClick={save}
+            disabled={busy}
+            className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-[14px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+          >
+            {busy && (
+              <span
+                aria-hidden="true"
+                className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white"
+              />
+            )}
+            {busy ? stageLabel[stage] : "Save changes"}
+          </button>
+          {/* role=status announces progress and the outcome; a colour or
+              opacity change alone tells assistive tech nothing. */}
+          <span role="status" aria-live="polite" className="text-[13px] text-muted">
+            {busy ? `${stageLabel[stage]}…` : result ? result.message : ""}
+          </span>
+        </div>
+        {result?.replanned && (
+          <p className="text-[12.5px] leading-relaxed text-muted">
+            Changing your market answers resets the plan: the keyword pool and
+            any unpublished drafts were cleared so the agent researches your
+            new profile from scratch. Pages already published to your site are
+            never removed.
+            {result.cleared
+              ? ` Cleared ${result.cleared.keywords} keywords and ${result.cleared.drafts} draft${
+                  result.cleared.drafts === 1 ? "" : "s"
+                }.`
+              : ""}
+          </p>
+        )}
       </div>
     </div>
   );
