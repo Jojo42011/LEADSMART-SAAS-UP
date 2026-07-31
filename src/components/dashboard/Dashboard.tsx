@@ -84,6 +84,11 @@ const statusStyles: Record<string, string> = {
   Rewriting: "bg-ink text-white",
   Held: "bg-ink text-white",
   Tracking: "bg-ink/[0.06] text-ink/70",
+  // Reconciled statuses when the engine is connected: real page states
+  // replace the simulated preview labels.
+  Published: "bg-accent/10 text-accent",
+  Planned: "bg-ink/[0.06] text-ink/70",
+  "In review": "bg-ink/[0.04] text-muted",
   // Engine-side statuses from the pages table.
   published: "bg-accent/10 text-accent",
   approved: "bg-ink/[0.06] text-ink/70",
@@ -495,8 +500,19 @@ function Overview({
   );
 }
 
-function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: boolean }) {
+function QueueRow({
+  page,
+  detailed = false,
+  override,
+}: {
+  page: PageDraft;
+  detailed?: boolean;
+  /** Real engine state for this keyword, replacing the simulated status. */
+  override?: { status: string; note: string; suppressVeto?: boolean };
+}) {
   const [openSchema, setOpenSchema] = useState<string | null>(null);
+  const status = override?.status ?? page.status;
+  const note = override?.note ?? page.note;
   return (
     <div className="min-w-0 rounded-xl border border-line p-4">
       <div className="flex items-center gap-4">
@@ -511,7 +527,7 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
             <span className="shrink-0 rounded-full bg-ink/[0.04] px-2 py-0.5 text-[10px] font-normal uppercase tracking-wide text-muted">
               {page.role}
             </span>
-            {page.veto.triggered && (
+            {page.veto.triggered && !override?.suppressVeto && (
               <span className="shrink-0 rounded-full bg-ink px-2 py-0.5 text-[10px] font-normal text-white">
                 Held: critical check
                 {/* The reason was previously title-only, unreachable by keyboard. */}
@@ -520,7 +536,7 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
             )}
           </p>
           <p className="truncate text-[12px] text-muted">
-            {page.keyword} &middot; {page.note}
+            {page.keyword} &middot; {note}
           </p>
         </div>
         <span
@@ -540,7 +556,7 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
         >
           GEO {page.geo.score}/100
         </span>
-        <StatusPill status={page.status} />
+        <StatusPill status={status} />
       </div>
       {detailed && (
         <>
@@ -835,7 +851,41 @@ function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
   );
 }
 
+/**
+ * The simulated preview statuses ("Drafting", "Rewriting", "Writing now")
+ * are computed from a hash and never change — beside real engine output
+ * they read as work that is stuck. When the engine is connected, each
+ * planned row is reconciled against what the agent actually wrote: a
+ * keyword with a real page shows that page's real status, everything else
+ * says "Planned", which is the truth.
+ */
 function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
+  const { engine, sites } = useAgentPages();
+  const real = new Map(
+    allPages(sites).map((p) => [p.keyword.trim().toLowerCase(), p])
+  );
+
+  const overrideFor = (keyword: string) => {
+    if (!engine) return undefined;
+    const match = real.get(keyword.trim().toLowerCase());
+    if (match) {
+      return {
+        status:
+          match.status === "published" ? "Published" : match.status === "pending" ? "In review" : "Held",
+        note:
+          match.status === "published"
+            ? `Written and published by the agent (scored ${match.audit_score}) — the live link is in the card above.`
+            : match.held_reason || "Written by the agent, waiting on review.",
+        suppressVeto: true,
+      };
+    }
+    return {
+      status: "Planned",
+      note: "Queued for a future cycle — press Generate a page now above, or let the schedule pick it up.",
+      suppressVeto: true,
+    };
+  };
+
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between">
@@ -843,17 +893,31 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
         <span className="label-mono text-muted/60">{plan.pages.length} pages this cycle</span>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
-        <span className="font-medium text-ink">This is the plan, not live progress.</span>{" "}
-        It shows the order the agent intends to work in and how each page
-        would be judged: Ascent Method pillar scores, an information gain
-        check, a weighted GEO score for AI answer engines, real schema markup
-        and a freshness clock. Under 75 overall, 0.50 IG, or a failed critical
-        check, a page never publishes. Spoke pages go out before the hub they
-        link back to. Pages the agent has actually written appear above.
+        {engine ? (
+          <>
+            <span className="font-medium text-ink">The agent&apos;s working plan.</span>{" "}
+            Keywords the agent has already written show their real status;
+            the rest are planned and will be picked up cycle by cycle. Each
+            card shows how the page will be judged: Ascent Method pillar
+            scores, an information gain check, a weighted GEO score, schema
+            markup and a freshness clock. Under 75 overall, 0.50 IG, or a
+            failed critical check, a page never publishes.
+          </>
+        ) : (
+          <>
+            <span className="font-medium text-ink">This is the plan, not live progress.</span>{" "}
+            It shows the order the agent intends to work in and how each page
+            would be judged: Ascent Method pillar scores, an information gain
+            check, a weighted GEO score for AI answer engines, real schema markup
+            and a freshness clock. Under 75 overall, 0.50 IG, or a failed critical
+            check, a page never publishes. Spoke pages go out before the hub they
+            link back to. Pages the agent has actually written appear above.
+          </>
+        )}
       </p>
       <div className="mt-5 grid gap-3">
         {plan.pages.map((page) => (
-          <QueueRow key={page.keyword} page={page} detailed />
+          <QueueRow key={page.keyword} page={page} detailed override={overrideFor(page.keyword)} />
         ))}
       </div>
     </Card>
