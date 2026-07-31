@@ -15,7 +15,7 @@ import {
   markPagePublished,
   updateSiteBrand,
 } from "./store";
-import { ingestSite } from "../site-ingest";
+import { ingestSite, isBrandColor, pickAccent } from "../site-ingest";
 import { runResearch } from "./research";
 import { generatePage } from "./generate";
 import { publishGithub, publishGithubSupportFiles, pingIndexNow, publishWordpress } from "./publish";
@@ -86,17 +86,21 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
       .filter((p) => p.html)
       .map((p) => ({ slug: p.slug, html: p.html as string }));
     let brand = site.brand as { colors?: string[]; fonts?: string[]; description?: string };
-    // Self-heal a missing brand snapshot. Pages are styled from it, so an
-    // empty one (wiped by a re-provision, or an onboarding that skipped
-    // site analysis) ships every page in default black-and-white on a site
-    // that has its own colors. Re-read the live site once and keep the
-    // result; failures fall through to the defaults rather than blocking
-    // the cycle.
-    if (!brand?.colors?.length) {
+    // Self-heal a missing OR unusable brand snapshot. Pages are styled
+    // from it, so an empty one ships black-and-white — and so does one
+    // whose colors are all neutrals, which is exactly what the old
+    // frequency-ranked extractor stored (it crowned the site's text ink
+    // as the brand). Re-read the live site once and keep the result;
+    // failures fall through to the defaults rather than blocking the
+    // cycle.
+    if (!brand?.colors?.some(isBrandColor)) {
       try {
         const ingest = await ingestSite(site.url);
-        if (ingest.ok && (ingest.colors.length || ingest.fonts.length)) {
-          brand = { ...brand, colors: ingest.colors, fonts: ingest.fonts };
+        // Only store an ingest that improves on what we have: replacing a
+        // neutral-only snapshot with another neutral-only snapshot would
+        // re-run this fetch every cycle for nothing.
+        if (ingest.ok && (ingest.colors.some(isBrandColor) || !brand?.colors?.length)) {
+          brand = { ...brand, colors: ingest.colors, fonts: ingest.fonts.length ? ingest.fonts : brand?.fonts };
           await updateSiteBrand(site.id, brand);
         }
       } catch {
@@ -251,7 +255,7 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
               siteId: site.id,
               siteUrl: site.url,
               businessName: site.business_name,
-              accent: brand?.colors?.[0] || "#111111",
+              accent: pickAccent(brand?.colors),
               // The page's committed path tells us whether this repo is a
               // framework app (public/) or a plain static site.
               pathPrefix: res.path.startsWith("public/") ? "public/" : "",

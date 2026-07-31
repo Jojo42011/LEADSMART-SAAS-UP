@@ -25,6 +25,35 @@ export type SiteIngest = {
   pageCount: number | null;
 };
 
+/**
+ * Whether a hex color can plausibly be a brand accent.
+ *
+ * The extractor originally ranked colors purely by frequency, and in
+ * nearly every stylesheet the most frequent hexes are the neutrals — text
+ * inks, borders, backgrounds. On the first real customer site it crowned
+ * #17181a (the text color) as the brand while the actual golds sat three
+ * entries down, and every generated page rendered black-and-white. A
+ * brand accent has chroma: meaningful spread between its RGB channels,
+ * and neither blinding lightness nor near-black darkness.
+ */
+export function isBrandColor(hex: string): boolean {
+  const m = hex.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!m) return false;
+  const h = m[1].length === 3 ? m[1].split("").map((c) => c + c).join("") : m[1];
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+  const lum = (r + g + b) / 3;
+  return chroma >= 24 && lum >= 24 && lum <= 232;
+}
+
+/** First color that can carry a brand, else the first color, else ink. */
+export function pickAccent(colors: string[] | undefined, fallback = "#111111"): string {
+  if (!colors || colors.length === 0) return fallback;
+  return colors.find(isBrandColor) ?? colors[0] ?? fallback;
+}
+
 function extract(re: RegExp, html: string): string {
   const m = html.match(re);
   return m ? m[1].replace(/\s+/g, " ").trim() : "";
@@ -128,10 +157,10 @@ export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
       if (["#fff", "#ffffff", "#000", "#000000"].includes(c)) continue;
       colorCounts.set(c, (colorCounts.get(c) || 0) + 1);
     }
-    result.colors = [...colorCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([c]) => c);
+    // Brand-capable colors first (each group still ordered by frequency),
+    // neutrals after — so colors[0] is the site's accent, not its text ink.
+    const byFreq = [...colorCounts.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+    result.colors = [...byFreq.filter(isBrandColor), ...byFreq.filter((c) => !isBrandColor(c))].slice(0, 6);
 
     const fontCounts = new Map<string, number>();
     for (const m of css.matchAll(/font-family\s*:\s*([^;}{]+)[;}]/gi)) {

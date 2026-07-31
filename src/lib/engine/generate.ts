@@ -1,4 +1,5 @@
 import { geminiCall, geminiConfigured, parseJson } from "@/lib/gemini";
+import { pickAccent } from "@/lib/site-ingest";
 import { auditPage, type AuditReport } from "./audit";
 import {
   localBusinessSchema,
@@ -188,7 +189,10 @@ Respond with ONLY the complete corrected JSON in exactly the same shape.`;
 function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: string): string {
   const origin = input.websiteUrl.replace(/\/$/, "");
   const canonical = `${origin}/${folder}/${slug}/`;
-  const accent = input.brand?.colors?.[0] || "#111111";
+  // pickAccent, not colors[0]: a stored snapshot can lead with a neutral
+  // (the extractor once crowned the site's text ink as the brand), and a
+  // near-black accent renders the whole page black-and-white.
+  const accent = pickAccent(input.brand?.colors);
   const font = input.brand?.fonts?.[0] || "system-ui";
   const today = new Date().toISOString().slice(0, 10);
 
