@@ -640,7 +640,42 @@ function QueueRow({ page, detailed = false }: { page: PageDraft; detailed?: bool
 
 /** Real pages the engine wrote, with a link to each published one. */
 function AgentPages() {
-  const { loading, engine, sites, error, refresh } = useAgentPages();
+  const { loading, refreshing, engine, sites, error, refresh } = useAgentPages();
+  const [generating, setGenerating] = useState(false);
+  const [genNote, setGenNote] = useState<string | null>(null);
+
+  // Generate-on-demand: one full cycle (research → write → audit →
+  // publish), started by the owner instead of the schedule. Runs for
+  // 1–3 minutes; the button holds its busy state the whole time because
+  // a silent long request reads as a dead button.
+  const generateNow = async () => {
+    if (generating) return;
+    setGenerating(true);
+    setGenNote(null);
+    try {
+      const res = await fetch("/api/agent/run", { method: "POST" });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        result?: { keyword?: string; auditScore?: number; status?: string; skipped?: string; error?: string };
+      };
+      if (!res.ok || !json.ok) {
+        setGenNote(json.error || "The cycle could not start. Try again in a moment.");
+      } else if (json.result?.skipped) {
+        setGenNote(`Nothing to do: ${json.result.skipped}.`);
+      } else if (json.result?.keyword) {
+        setGenNote(
+          `Wrote "${json.result.keyword}" — scored ${json.result.auditScore}, ${json.result.status}.`
+        );
+      } else {
+        setGenNote(json.result?.error || "The cycle finished without producing a page.");
+      }
+    } catch {
+      setGenNote("Lost the connection while the agent was working — hit Refresh in a minute to see the result.");
+    }
+    setGenerating(false);
+    refresh();
+  };
   if (loading) {
     return (
       <Card className="p-6">
@@ -679,13 +714,28 @@ function AgentPages() {
     <Card className="p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[14.5px] font-medium">Pages the agent has written</h2>
-        <button
-          onClick={refresh}
-          className="rounded-full border border-line px-3 py-1 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={refresh}
+            disabled={refreshing}
+            className="rounded-full border border-line px-3 py-1 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink disabled:opacity-60"
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+          <button
+            onClick={generateNow}
+            disabled={generating}
+            className="rounded-full bg-ink px-3.5 py-1 text-[12px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+          >
+            {generating ? "Writing… (1–3 min)" : "Generate a page now"}
+          </button>
+        </div>
       </div>
+      {genNote && (
+        <p role="status" className="mt-2 rounded-lg bg-paper-warm px-3 py-2 text-[12.5px] text-ink">
+          {genNote}
+        </p>
+      )}
       {pages.length === 0 ? (
         <p className="mt-2 text-[13px] leading-relaxed text-muted">
           The agent hasn&apos;t written a page yet.{" "}

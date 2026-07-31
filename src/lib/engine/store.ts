@@ -607,6 +607,16 @@ export async function setTenantPlanByCustomer(
   ]);
 }
 
+/**
+ * Refreshes the stored reachability verdict for a published page. The
+ * verdict is first written seconds after the publish commit — before the
+ * target site has rebuilt — so a page's badge could read error:404 forever
+ * while the page was actually live a minute later.
+ */
+export async function updateLiveStatus(pageId: string, liveStatus: string): Promise<void> {
+  await db().query(`update pages set live_status = $2 where id = $1`, [pageId, liveStatus]);
+}
+
 export async function markPagePublished(
   pageId: string,
   patch: { liveUrl?: string; liveStatus?: string; wpPageId?: number; githubSha?: string }

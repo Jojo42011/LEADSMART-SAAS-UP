@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/api-auth";
-import { storeConfigured, listSitesForEmail, listPages, listRuns } from "@/lib/engine/store";
+import { storeConfigured, listSitesForEmail, listPages, listRuns, updateLiveStatus } from "@/lib/engine/store";
+import { verifyLive } from "@/lib/engine/publish";
 
 /**
  * What the agent has actually written, for the signed-in owner.
@@ -36,16 +37,37 @@ export async function GET(req: NextRequest) {
   try {
     const sites = await listSitesForEmail(auth.user.email);
     const detailed = await Promise.all(
-      sites.map(async (site) => ({
-        siteId: site.id,
-        url: site.url,
-        platform: site.platform,
-        cadence: site.cadence,
-        publishMode: site.publish_mode,
-        lastRunAt: site.last_run_at,
-        pages: await listPages(site.id),
-        runs: await listRuns(site.id, 5),
-      }))
+      sites.map(async (site) => {
+        const pages = await listPages(site.id);
+        // Re-verify unreachable verdicts on read. The stored status is
+        // written seconds after the publish commit, before the target
+        // site has rebuilt, so a healthy page could wear an error:404
+        // badge forever and Refresh would truthfully change nothing.
+        // Bounded so one dashboard load can't fan out into dozens of
+        // external fetches.
+        const stale = pages
+          .filter((p) => p.status === "published" && p.live_url && !p.live_status?.startsWith("live:"))
+          .slice(0, 5);
+        await Promise.all(
+          stale.map(async (p) => {
+            const fresh = await verifyLive(p.live_url as string);
+            if (fresh !== p.live_status) {
+              await updateLiveStatus(p.id, fresh);
+              p.live_status = fresh;
+            }
+          })
+        );
+        return {
+          siteId: site.id,
+          url: site.url,
+          platform: site.platform,
+          cadence: site.cadence,
+          publishMode: site.publish_mode,
+          lastRunAt: site.last_run_at,
+          pages,
+          runs: await listRuns(site.id, 5),
+        };
+      })
     );
     return NextResponse.json({ ok: true, engine: true, sites: detailed });
   } catch (e) {

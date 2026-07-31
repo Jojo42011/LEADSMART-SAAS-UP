@@ -51,6 +51,9 @@ export type AgentSite = {
 
 export type AgentState = {
   loading: boolean;
+  /** True during a manual refresh, so the button can say so — a refetch
+   * with no visible acknowledgement reads as a broken button. */
+  refreshing: boolean;
   /** False when DATABASE_URL is unset: no engine, so the preview is all there is. */
   engine: boolean;
   sites: AgentSite[];
@@ -60,6 +63,7 @@ export type AgentState = {
 export function useAgentPages(): AgentState & { refresh: () => void } {
   const [state, setState] = useState<AgentState>({
     loading: true,
+    refreshing: false,
     engine: false,
     sites: [],
     error: null,
@@ -68,12 +72,16 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
 
   useEffect(() => {
     let cancelled = false;
+    if (tick > 0) {
+      setState((s) => ({ ...s, refreshing: true }));
+    }
     fetch("/api/pages")
       .then((r) => r.json())
       .then((j: { ok?: boolean; engine?: boolean; sites?: AgentSite[]; error?: string }) => {
         if (cancelled) return;
         setState({
           loading: false,
+          refreshing: false,
           engine: Boolean(j.engine),
           sites: j.sites ?? [],
           error: j.ok === false ? j.error ?? "Could not read pages" : null,
@@ -81,7 +89,7 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
       })
       .catch(() => {
         if (!cancelled) {
-          setState({ loading: false, engine: false, sites: [], error: null });
+          setState({ loading: false, refreshing: false, engine: false, sites: [], error: null });
         }
       });
     return () => {
