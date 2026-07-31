@@ -91,10 +91,24 @@ export async function GET(req: NextRequest) {
     if (!profile.email && token.id_token) profile = decodeIdToken(token.id_token);
     if (!profile.email) return fail("no_email");
 
+    // Google returns email_verified=false for some Workspace and
+    // recently-changed accounts. Tenants are keyed by email everywhere —
+    // provisionSite and setTenantPlanByEmail both upsert on it — so
+    // accepting an unverified address would let whoever controls that
+    // Google account inherit an existing tenant's sites and billing. The
+    // GitHub path already filters for verified addresses; this did not.
+    if (profile.email_verified === false) return fail("email_unverified");
+
+    // Lowercased to match the store, which keys every tenant lookup on the
+    // normalized address, and the password path, which normalizes on the
+    // way in. Without this the same person signing in through Google and
+    // through email could present two different-cased session identities.
+    const email = profile.email.trim().toLowerCase();
+
     const user: SessionUser = {
-      sub: profile.sub || profile.email,
-      email: profile.email,
-      name: profile.name || profile.email.split("@")[0],
+      sub: profile.sub || email,
+      email,
+      name: profile.name || email.split("@")[0],
       picture: profile.picture || "",
       provider: "google",
       iat: Date.now(),

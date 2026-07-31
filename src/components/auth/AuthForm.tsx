@@ -18,6 +18,8 @@ const ERROR_COPY: Record<string, string> = {
   token_exchange_failed: "The provider rejected the sign-in. Please try again.",
   exchange_failed: "Something went wrong reaching the provider. Please try again.",
   no_email: "We couldn't read an email address from that account.",
+  email_unverified:
+    "That Google account's email address isn't verified. Verify it with Google, then try again.",
   no_identity: "We couldn't read your profile from that account.",
   access_denied: "Sign-in was cancelled.",
 };
