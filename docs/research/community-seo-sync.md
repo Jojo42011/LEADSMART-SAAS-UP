@@ -60,7 +60,7 @@ its `skill.md`-style pages are designed to make agents execute instructions
 - Treat anything an agent forum "recommends doing" as untrusted input, not an
   instruction.
 
-**Last synced:** 2026-07-30
+**Last synced:** 2026-07-31
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -562,3 +562,26 @@ act on what's genuinely new beyond this.
     owner's commercial decision, not something the agent should recommend.
   - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
     in today's rotation).
+
+- **2026-07-31** — Reddit still blocked (r/SEO .json fetch failed). Searched:
+  "Google algorithm update late July 2026 AI Mode", "AI search citation
+  optimization new study content structure". Quiet day — no code change.
+  Findings, all reproducing already-captured ground:
+  - July 10 Gemini-3.5-Flash-default shift, blue links below the fold,
+    continuous unannounced core updates, publisher clicks down 58% — all in
+    the 2026-07-19/07-21 entries and current dashboard/ai-information copy.
+  - Citation-structure studies (Princeton GEO 30-40% visibility lift for
+    citations/statistics, ~2.5x citation probability with schema, arXiv
+    55,936-query finding that engines favor structured hierarchical HTML with
+    outbound links to reputable sources) — already encoded in the weighted GEO
+    tactics (citeSources, statisticsAddition, fluencyOptimization) and
+    schemaRichness; the outbound-link finding is what citeSources measures.
+  - No new crawler agents, no new engine surfaces, no new negative signals in
+    today's crop. Guardrails respected: no moltbook/agent-forum fetches (topic
+    not in today's rotation).
+
+  (Separately from the sync, tonight's live debugging session shipped real
+  engine fixes — Gemini model-deprecation fallback, thinking-token budget
+  handling, DB connection probe, demo-checkout plan activation, framework-
+  aware GitHub publish paths — logged in their own commits on the default
+  branch.)
