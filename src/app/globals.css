@@ -123,6 +123,32 @@ body {
   animation: shimmer 1.6s ease-in-out infinite;
 }
 
+/**
+ * Entrance reveal for above-the-fold copy.
+ *
+ * Deliberately CSS, not framer-motion: motion's initial={{opacity:0}}
+ * serializes an inline opacity:0 into the server-rendered HTML, so the
+ * headline and product description were invisible to anything that does
+ * not execute JavaScript. Google's OAuth branding review read the
+ * homepage as neither naming the app nor explaining its purpose for
+ * exactly that reason. Here the element's resting state is visible and
+ * the animation only plays on top, so no-JS readers get the content.
+ */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise-in {
+  animation: rise-in 0.8s cubic-bezier(0.21, 0.47, 0.32, 0.98) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -131,5 +157,10 @@ body {
   .animate-livepulse,
   .animate-shimmer {
     animation: none;
+  }
+  .rise-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }

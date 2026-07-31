@@ -1,21 +1,19 @@
-"use client";
-
 import Link from "next/link";
-import { motion, useReducedMotion } from "framer-motion";
 import { HeroDashboard } from "./HeroDashboard";
 import { site } from "@/lib/site";
 
-const ease = [0.21, 0.47, 0.32, 0.98] as const;
-
+/**
+ * The hero animates entirely in CSS (.rise-in) rather than framer-motion.
+ * Motion serializes initial={{opacity:0}} into the server-rendered HTML,
+ * which left the headline, the product name and the description invisible
+ * to any reader that does not execute JavaScript — including Google's
+ * OAuth branding review, which reported the homepage as neither naming
+ * the app nor explaining its purpose. CSS keeps the resting state visible
+ * and honours prefers-reduced-motion in globals.css.
+ *
+ * No "use client" needed now: this is a static server component.
+ */
 export function Hero() {
-  const reduced = useReducedMotion();
-
-  const fade = (delay: number) => ({
-    initial: reduced ? false : { opacity: 0, y: 24 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.8, delay, ease },
-  });
-
   return (
     <section className="relative overflow-hidden pt-36 pb-20 sm:pt-44 sm:pb-28">
       {/* Faint grid backdrop */}
@@ -26,32 +24,39 @@ export function Hero() {
 
       <div className="relative mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-3xl text-center">
-          <motion.h1
-            {...fade(0.1)}
-            className="font-display text-[44px] leading-[1.04] tracking-tight sm:text-[68px] md:text-[78px]"
+          {/* The name and purpose ride CSS, not framer-motion: motion
+              writes opacity:0 into the server-rendered HTML, which hid
+              both from any reader that does not run JavaScript. */}
+          <p className="rise-in label-mono text-accent" style={{ animationDelay: "0.05s" }}>
+            {site.name} &middot; Autonomous SEO platform
+          </p>
+
+          <h1
+            className="rise-in font-display mt-4 text-[44px] leading-[1.04] tracking-tight sm:text-[68px] md:text-[78px]"
+            style={{ animationDelay: "0.1s" }}
           >
             Win the rankings.
             <br />
             <em className="text-accent">And the AI answers.</em>
-          </motion.h1>
+          </h1>
 
           {/* Names the product and states plainly what it does. A visitor
               (or a reviewer) landing cold should not have to infer either
               from the headline's wordplay. */}
-          <motion.p
-            {...fade(0.2)}
-            className="mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-muted"
+          <p
+            className="rise-in mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-muted"
+            style={{ animationDelay: "0.2s" }}
           >
             <strong className="font-medium text-ink">{site.name}</strong> is an
             autonomous SEO platform. It studies your market, writes pages built
             to rank on Google and get cited by ChatGPT, Perplexity and AI
             Overviews, then publishes them straight to your website on a
             schedule you set. No agency. No retainers. No busywork.
-          </motion.p>
+          </p>
 
-          <motion.div
-            {...fade(0.3)}
-            className="mt-9 flex flex-wrap items-center justify-center gap-3.5"
+          <div
+            className="rise-in mt-9 flex flex-wrap items-center justify-center gap-3.5"
+            style={{ animationDelay: "0.3s" }}
           >
             <Link
               href="/signup"
@@ -68,21 +73,16 @@ export function Hero() {
             >
               See how it works
             </a>
-          </motion.div>
+          </div>
 
-          <motion.p {...fade(0.4)} className="label-mono mt-6 text-muted/70">
+          <p className="rise-in label-mono mt-6 text-muted/70" style={{ animationDelay: "0.4s" }}>
             Month to month &middot; Cancel anytime
-          </motion.p>
+          </p>
         </div>
 
-        <motion.div
-          initial={reduced ? false : { opacity: 0, y: 48 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, delay: 0.5, ease }}
-          className="mx-auto mt-16 max-w-4xl sm:mt-20"
-        >
+        <div className="rise-in mx-auto mt-16 max-w-4xl sm:mt-20" style={{ animationDelay: "0.5s" }}>
           <HeroDashboard />
-        </motion.div>
+        </div>
       </div>
     </section>
   );
