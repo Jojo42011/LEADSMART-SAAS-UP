@@ -110,7 +110,12 @@ export type PageSummary = {
   created_at: string;
 };
 
-const CADENCE_HOURS: Record<string, number> = { daily: 24, every3days: 72, weekly: 168 };
+// "continuous" is a testing cadence, set via SQL rather than offered in
+// onboarding: the site is due again minutes after each run, so every cron
+// firing (scheduled or manual) produces a page. Real customers pick from
+// the three human cadences; this one exists so the pipeline can be
+// exercised without editing timestamps between test runs.
+const CADENCE_HOURS: Record<string, number> = { continuous: 0.1, daily: 24, every3days: 72, weekly: 168 };
 
 /** Sites whose cadence interval has elapsed, on an active tenant plan. */
 export async function getDueSites(limit = 3): Promise<SiteRow[]> {
@@ -121,7 +126,7 @@ export async function getDueSites(limit = 3): Promise<SiteRow[]> {
      where s.active and t.plan_status = 'active'
        and (s.last_run_at is null
             or s.last_run_at < now() - make_interval(hours =>
-              case s.cadence when 'daily' then 24 when 'every3days' then 72 else 168 end))
+              case s.cadence when 'continuous' then 0.1 when 'daily' then 24 when 'every3days' then 72 else 168 end))
      order by s.last_run_at asc nulls first
      limit $1`,
     [limit]

@@ -182,7 +182,17 @@ function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: 
   ];
 
   const internal = (input.internalLinks || []).slice(0, 6);
+  const folderLabel = folder.charAt(0).toUpperCase() + folder.slice(1);
+  const phone = input.business.phone;
 
+  // A published page must read as part of the site it lives on, not as a
+  // bare document dropped into it: the first real publish looked like an
+  // unstyled printout beside the customer's designed site. The page is
+  // still fully self-contained (inline CSS, no external requests), but it
+  // now carries the shell a visitor expects — a header naming the business
+  // and linking home, a breadcrumb, the brand accent used as the brand
+  // color rather than a stripe, and a footer that navigates back — with
+  // the brand's own first color and font driving the palette.
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -199,27 +209,57 @@ function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: 
 <meta property="article:modified_time" content="${today}">
 ${schemas.map((s) => `<script type="application/ld+json">${JSON.stringify(s)}</script>`).join("\n")}
 <style>
-:root{--accent:${accent}}
+:root{--accent:${accent};--ink:#16181d;--muted:#5c6270;--line:#e7e8ec;--soft:#f6f7f9}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:${font},system-ui,sans-serif;color:#1a1a1a;line-height:1.7;background:#fff}
-main{max-width:760px;margin:0 auto;padding:56px 20px}
-h1{font-size:2.1rem;line-height:1.15;margin-bottom:18px}
-h2{font-size:1.4rem;margin:44px 0 12px}
-.answer{background:#f7f7f5;border-left:3px solid var(--accent);padding:14px 18px;margin-bottom:14px;font-weight:500}
-p{margin-bottom:14px}
-.faq h3{font-size:1.05rem;margin:22px 0 6px}
-.cta{background:#111;color:#fff;padding:28px;border-radius:12px;margin-top:48px;text-align:center}
-.cta a{color:#fff;font-weight:600}
-.related{margin-top:40px;padding-top:24px;border-top:1px solid #e5e5e5}
-.related a{display:block;color:var(--accent);margin:6px 0;text-decoration:none}
-footer{margin-top:48px;padding-top:20px;border-top:1px solid #e5e5e5;font-size:.9rem;color:#666}
+html{scroll-behavior:smooth}
+body{font-family:${font},system-ui,-apple-system,sans-serif;color:var(--ink);line-height:1.75;background:#fff;font-size:16.5px}
+a{color:var(--accent)}
+.bar{border-bottom:1px solid var(--line);background:#fff}
+.bar-in{max-width:1040px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{font-weight:700;font-size:1.05rem;color:var(--ink);text-decoration:none;letter-spacing:-.01em}
+.bar .call{background:var(--accent);color:#fff;text-decoration:none;font-weight:600;font-size:.9rem;padding:9px 18px;border-radius:999px;white-space:nowrap}
+.crumbs{max-width:820px;margin:0 auto;padding:28px 24px 0;font-size:.85rem;color:var(--muted)}
+.crumbs a{color:var(--muted);text-decoration:none}
+.crumbs a:hover{color:var(--accent)}
+main{max-width:820px;margin:0 auto;padding:16px 24px 72px}
+h1{font-size:clamp(1.9rem,4.5vw,2.6rem);line-height:1.12;letter-spacing:-.02em;margin:10px 0 14px}
+.updated{font-size:.85rem;color:var(--muted);margin-bottom:26px}
+.intro{font-size:1.13rem;color:#2a2e37;margin-bottom:8px}
+h2{font-size:1.45rem;line-height:1.25;letter-spacing:-.01em;margin:46px 0 14px}
+.answer{background:var(--soft);border-left:4px solid var(--accent);border-radius:0 10px 10px 0;padding:16px 20px;margin-bottom:16px;font-weight:500}
+p{margin-bottom:15px}
+.faq{margin-top:52px}
+.faq-item{border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-top:12px}
+.faq-item h3{font-size:1.02rem;margin-bottom:6px}
+.faq-item p{margin:0;color:#3a3f4b}
+.cta{background:var(--accent);color:#fff;padding:34px 28px;border-radius:16px;margin-top:56px;text-align:center}
+.cta p{margin:0 0 6px;font-size:1.12rem;font-weight:600}
+.cta a{display:inline-block;margin-top:12px;background:#fff;color:var(--ink);text-decoration:none;font-weight:700;padding:12px 26px;border-radius:999px}
+.related{margin-top:52px;padding-top:28px;border-top:1px solid var(--line)}
+.related h2{margin-top:0;font-size:1.15rem}
+.related-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-top:14px}
+.related a{border:1px solid var(--line);border-radius:10px;padding:12px 16px;color:var(--ink);text-decoration:none;font-size:.93rem;font-weight:500}
+.related a:hover{border-color:var(--accent);color:var(--accent)}
+footer{border-top:1px solid var(--line);background:var(--soft)}
+.foot-in{max-width:1040px;margin:0 auto;padding:28px 24px;font-size:.88rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
+footer a{color:var(--muted)}
 </style>
 </head>
 <body>
+<header class="bar"><div class="bar-in">
+<a class="brand" href="${origin}/">${esc(input.business.name)}</a>
+${phone ? `<a class="call" href="tel:${esc(phone)}">Call ${esc(phone)}</a>` : ""}
+</div></header>
+<nav class="crumbs" aria-label="Breadcrumb"><a href="${origin}/">Home</a> &rsaquo; <a href="${origin}/${folder}/">${esc(
+    folderLabel
+  )}</a> &rsaquo; ${esc(c.h1)}</nav>
 <main>
 <article>
 <h1>${esc(c.h1)}</h1>
-<p>${esc(c.intro)}</p>
+<p class="updated">Last updated ${today} &middot; ${esc(input.business.name)}, ${esc(input.business.city)}, ${esc(
+    input.business.region
+  )}</p>
+<p class="intro">${esc(c.intro)}</p>
 ${c.sections
   .map(
     (s) => `<section>
@@ -231,26 +271,28 @@ ${c.sections
   .join("\n")}
 <section class="faq">
 <h2>Frequently asked questions</h2>
-${c.faq.map((f) => `<h3>${esc(f.question)}</h3>\n<p>${esc(f.answer)}</p>`).join("\n")}
+${c.faq
+  .map((f) => `<div class="faq-item"><h3>${esc(f.question)}</h3>\n<p>${esc(f.answer)}</p></div>`)
+  .join("\n")}
 </section>
 <div class="cta"><p>${esc(c.cta)}</p>${
-    input.business.phone ? `<p><a href="tel:${esc(input.business.phone)}">${esc(input.business.phone)}</a></p>` : ""
+    phone ? `<a href="tel:${esc(phone)}">Call ${esc(phone)}</a>` : ""
   }</div>
 ${
   internal.length
-    ? `<nav class="related"><h2>Related pages</h2>${internal
+    ? `<nav class="related"><h2>Related pages</h2><div class="related-grid">${internal
         .map((l) => `<a href="${esc(l.path)}">${esc(l.title)}</a>`)
-        .join("")}</nav>`
+        .join("")}</div></nav>`
     : ""
 }
 </article>
-<footer>
+</main>
+<footer><div class="foot-in">
 <p>${esc(input.business.name)}${input.business.address ? `, ${esc(input.business.address)}` : ""}, ${esc(
     input.business.city
-  )}, ${esc(input.business.region)}${input.business.phone ? ` &middot; ${esc(input.business.phone)}` : ""}</p>
-<p>Last updated ${today}</p>
-</footer>
-</main>
+  )}, ${esc(input.business.region)}${phone ? ` &middot; <a href="tel:${esc(phone)}">${esc(phone)}</a>` : ""}</p>
+<p><a href="${origin}/">${esc(input.business.name)} home</a></p>
+</div></footer>
 </body>
 </html>`;
 }
