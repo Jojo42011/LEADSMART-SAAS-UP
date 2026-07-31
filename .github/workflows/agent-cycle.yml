@@ -28,12 +28,21 @@ jobs:
     timeout-minutes: 8
     steps:
       - name: Trigger the agent cycle
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          if [ -z "${{ secrets.CRON_SECRET }}" ]; then
+          if [ -z "$CRON_SECRET" ]; then
             echo "::error::CRON_SECRET repository secret is not set"; exit 1
           fi
-          response=$(curl -sS -m 330 \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          # Tolerate a value saved as "Bearer <secret>" — the first run
+          # failed with a doubled "Bearer Bearer" header for exactly that.
+          SECRET="${CRON_SECRET#Bearer }"
+          response=$(curl -sS -m 330 -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer ${SECRET}" \
             https://leadsmart-saas-up.vercel.app/api/cron/run)
           echo "$response"
-          echo "$response" | grep -q '"ok": *true' || { echo "::error::cycle failed"; exit 1; }
+          status=$(echo "$response" | grep -o 'HTTP_STATUS:[0-9]*' | cut -d: -f2)
+          if [ "$status" = "401" ]; then
+            echo "::error::401 unauthorized - the CRON_SECRET repository secret does not match Vercel's CRON_SECRET env var"; exit 1
+          fi
+          echo "$response" | grep -q '"ok": *true' || { echo "::error::cycle failed (HTTP $status)"; exit 1; }
