@@ -301,6 +301,64 @@ export async function nextTarget(
   return res.rows[0] ?? null;
 }
 
+/**
+ * Finds the keyword row for a term, creating one if the owner asked for a
+ * page the research pool never produced. The dashboard's planned queue is
+ * built from the local plan, whose terms don't always match the engine's
+ * researched pool — "generate this now" must work for whatever card the
+ * owner actually clicked, not just terms the engine already knew.
+ */
+export async function findOrCreateKeyword(
+  siteId: string,
+  term: string
+): Promise<{ id: string; term: string; intent: string }> {
+  const normalized = term.trim().toLowerCase();
+  const existing = await db().query(
+    `select id, term, intent from keywords where site_id = $1 and lower(term) = $2 limit 1`,
+    [siteId, normalized]
+  );
+  if (existing.rows[0]) return existing.rows[0];
+  const created = await db().query(
+    `insert into keywords (site_id, term, intent, opportunity) values ($1, $2, 'informational', 50)
+     returning id, term, intent`,
+    [siteId, normalized]
+  );
+  return created.rows[0];
+}
+
+/**
+ * Deletes a page if — and only if — it belongs to a site owned by the
+ * given email, returning what the caller needs to also remove the file
+ * from the connected repo. The keyword is uncovered so the queue shows it
+ * as planned again rather than silently never revisiting it.
+ */
+export async function deletePageOwned(
+  pageId: string,
+  email: string
+): Promise<{ siteId: string; slug: string; folder: string; keyword: string } | null> {
+  const res = await db().query(
+    `delete from pages p using sites s, tenants t
+     where p.id = $1 and p.site_id = s.id and s.tenant_id = t.id and t.email = $2
+     returning p.site_id as site_id, p.slug, p.folder, p.keyword`,
+    [pageId, email.toLowerCase()]
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  await db().query(`update keywords set covered_by = null where covered_by = $1`, [pageId]);
+  return { siteId: row.site_id, slug: row.slug, folder: row.folder, keyword: row.keyword };
+}
+
+/** Removes an uncovered keyword the owner dismissed from the queue. */
+export async function deleteKeywordOwned(siteId: string, term: string, email: string): Promise<boolean> {
+  const res = await db().query(
+    `delete from keywords k using sites s, tenants t
+     where k.site_id = $1 and lower(k.term) = $2 and k.covered_by is null
+       and k.site_id = s.id and s.tenant_id = t.id and t.email = $3`,
+    [siteId, term.trim().toLowerCase(), email.toLowerCase()]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
 export async function listPages(siteId: string, withHtml = false): Promise<PageSummary[]> {
   const res = await db().query(
     `select id, keyword, slug, folder, title, status,

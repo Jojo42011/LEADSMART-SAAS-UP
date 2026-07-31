@@ -135,6 +135,58 @@ async function commitFile(input: {
   return res.ok;
 }
 
+/**
+ * Removes a published page's file from the repo. Best-effort like the
+ * other support operations: the database row is the source of truth, and
+ * an orphaned file (branch protection, revoked token) is preferable to a
+ * page the owner deleted still being listed everywhere in the product.
+ */
+export async function deleteGithubFile(input: {
+  token: string;
+  repo: string;
+  branch?: string | null;
+  path: string;
+  message: string;
+}): Promise<boolean> {
+  const repo = normalizeGithubRepo(input.repo);
+  const headers = {
+    Authorization: `Bearer ${input.token}`,
+    Accept: "application/vnd.github+json",
+    "Content-Type": "application/json",
+  };
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/${input.path}`;
+  try {
+    const existing = await fetch(`${apiUrl}${input.branch ? `?ref=${input.branch}` : ""}`, {
+      headers,
+      cache: "no-store",
+    });
+    if (!existing.ok) return existing.status === 404; // already gone counts as deleted
+    const sha = ((await existing.json()) as { sha?: string }).sha;
+    if (!sha) return false;
+    const res = await fetch(apiUrl, {
+      method: "DELETE",
+      headers,
+      body: JSON.stringify({
+        message: input.message,
+        sha,
+        ...(input.branch ? { branch: input.branch } : {}),
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether pages for this repo live under public/ (framework app) or the root. */
+export async function repoPagePrefix(token: string, repo: string, branch?: string | null): Promise<string> {
+  return repoPathPrefix(normalizeGithubRepo(repo), branch, {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "Content-Type": "application/json",
+  });
+}
+
 export type PublishedPageRef = {
   folder: string;
   slug: string;

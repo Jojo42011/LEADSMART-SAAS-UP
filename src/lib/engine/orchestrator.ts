@@ -14,6 +14,7 @@ import {
   markKeywordCovered,
   markPagePublished,
   updateSiteBrand,
+  findOrCreateKeyword,
 } from "./store";
 import { ingestSite, isBrandColor, pickAccent } from "../site-ingest";
 import { runResearch } from "./research";
@@ -47,7 +48,13 @@ export type CycleResult = {
   error?: string;
 };
 
-export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
+export async function runSiteCycle(
+  site: SiteRow,
+  opts?: {
+    /** Generate this exact term now instead of the queue's next pick. */
+    keywordTerm?: string;
+  }
+): Promise<CycleResult> {
   const runId = await claimRun(site.id);
   if (!runId) return { siteId: site.id, ok: false, skipped: "cycle already running" };
 
@@ -71,9 +78,12 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
       await updateRun(runId, { keywords_found: research.keywords.length });
     }
 
-    // Phase 3: pick the next target from the gap queue.
+    // Phase 3: pick the next target from the gap queue — or the exact
+    // keyword the owner clicked "generate now" on.
     await updateRun(runId, { phase: "plan" });
-    const target = await nextTarget(site.id);
+    const target = opts?.keywordTerm
+      ? await findOrCreateKeyword(site.id, opts.keywordTerm)
+      : await nextTarget(site.id);
     if (!target) {
       await finishRun(runId, "done", "No uncovered keywords; research pool exhausted");
       await touchSiteRun(site.id);

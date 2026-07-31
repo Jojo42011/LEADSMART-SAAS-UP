@@ -33,6 +33,18 @@ export async function POST(req: NextRequest) {
   const auth = requireSession(req);
   if (auth.response) return auth.response;
 
+  // Optional: generate a specific keyword (a planned-queue card's button)
+  // instead of the queue's next pick.
+  let keywordTerm: string | undefined;
+  try {
+    const body = (await req.json()) as { keyword?: string };
+    if (typeof body.keyword === "string" && body.keyword.trim()) {
+      keywordTerm = body.keyword.trim().slice(0, 200);
+    }
+  } catch {
+    // no body: queue order
+  }
+
   const sites = await listSitesForEmail(auth.user.email);
   if (sites.length === 0) {
     return NextResponse.json(
@@ -48,7 +60,7 @@ export async function POST(req: NextRequest) {
   )[0];
 
   try {
-    const result = await runSiteCycle(site);
+    const result = await runSiteCycle(site, keywordTerm ? { keywordTerm } : undefined);
     return NextResponse.json({ ok: true, result });
   } catch (e) {
     return NextResponse.json(

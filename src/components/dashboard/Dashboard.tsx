@@ -504,11 +504,14 @@ function QueueRow({
   page,
   detailed = false,
   override,
+  actions,
 }: {
   page: PageDraft;
   detailed?: boolean;
   /** Real engine state for this keyword, replacing the simulated status. */
   override?: { status: string; note: string; suppressVeto?: boolean };
+  /** Owner controls (publish now / remove), rendered at the card's foot. */
+  actions?: React.ReactNode;
 }) {
   const [openSchema, setOpenSchema] = useState<string | null>(null);
   const status = override?.status ?? page.status;
@@ -648,6 +651,7 @@ function QueueRow({
           )}
         </>
       )}
+      {actions}
     </div>
   );
 }
@@ -768,7 +772,7 @@ function AgentPages() {
           </p>
           <div className="mt-5 grid gap-2.5">
             {pages.map((page) => (
-              <AgentPageRow key={page.id} page={page} />
+              <AgentPageRow key={page.id} page={page} onDeleted={refresh} />
             ))}
           </div>
         </>
@@ -777,12 +781,50 @@ function AgentPages() {
   );
 }
 
-function AgentPageRow({ page }: { page: AgentPage & { siteUrl: string } }) {
+function AgentPageRow({
+  page,
+  onDeleted,
+}: {
+  page: AgentPage & { siteUrl: string };
+  onDeleted: () => void;
+}) {
   const isLive = page.status === "published" && Boolean(page.live_url);
   const reachable = page.live_status?.startsWith("live:");
+  // Two-step delete: the first click arms, the second commits. A single
+  // click that removes a live page from the customer's site is too easy
+  // to hit by accident.
+  const [armed, setArmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const doDelete = async () => {
+    if (!armed) {
+      setArmed(true);
+      setTimeout(() => setArmed(false), 4000);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await fetch(`/api/pages?id=${encodeURIComponent(page.id)}`, { method: "DELETE" });
+    } catch {
+      // refresh shows the truth either way
+    }
+    onDeleted();
+  };
   return (
-    <div className="min-w-0 rounded-xl border border-line p-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="relative min-w-0 rounded-xl border border-line p-4">
+      <button
+        onClick={doDelete}
+        disabled={deleting}
+        aria-label={armed ? `Confirm deleting ${page.title}` : `Delete ${page.title}`}
+        title={armed ? "Click again to permanently delete this page" : "Delete this page"}
+        className={`absolute right-2.5 top-2.5 z-10 inline-flex h-6 items-center justify-center rounded-full text-[11px] transition-colors ${
+          armed
+            ? "bg-ink px-2.5 font-medium text-white"
+            : "w-6 text-muted hover:bg-ink/[0.06] hover:text-ink"
+        } disabled:opacity-50`}
+      >
+        {deleting ? "…" : armed ? "Delete?" : "✕"}
+      </button>
+      <div className="flex flex-wrap items-center gap-3 pr-8">
         <span className="flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-lg bg-paper-warm">
           <span className="sr-only">Audit score {page.audit_score} of 100.</span>
           <span aria-hidden="true" className="text-[12px] font-medium leading-none">{page.audit_grade || "—"}</span>
@@ -860,11 +902,74 @@ function Content({ plan }: { plan: ReturnType<typeof buildPlan> }) {
  * keyword with a real page shows that page's real status, everything else
  * says "Planned", which is the truth.
  */
+const DISMISSED_KEY = "queue.dismissed.v1";
+
+function loadDismissed(): Set<string> {
+  try {
+    const raw = window.localStorage.getItem(DISMISSED_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
 function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
-  const { engine, sites } = useAgentPages();
+  const { engine, sites, refresh } = useAgentPages();
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [writingTerm, setWritingTerm] = useState<string | null>(null);
+  const [queueNote, setQueueNote] = useState<string | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from localStorage
+    setDismissed(loadDismissed());
+  }, []);
+
   const real = new Map(
     allPages(sites).map((p) => [p.keyword.trim().toLowerCase(), p])
   );
+
+  // Write this exact card's page now, jumping the queue order.
+  const generateKeyword = async (keyword: string) => {
+    if (writingTerm) return;
+    setWritingTerm(keyword);
+    setQueueNote(null);
+    try {
+      const res = await fetch("/api/agent/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        result?: { auditScore?: number; status?: string; skipped?: string };
+      };
+      if (!res.ok || !json.ok) setQueueNote(json.error || "Could not start the cycle.");
+      else if (json.result?.skipped) setQueueNote(`Nothing written: ${json.result.skipped}.`);
+      else setQueueNote(`"${keyword}" — scored ${json.result?.auditScore}, ${json.result?.status}.`);
+    } catch {
+      setQueueNote("Lost the connection while writing — Refresh above in a minute to see the result.");
+    }
+    setWritingTerm(null);
+    refresh();
+  };
+
+  // Remove a planned card: locally always (plan-preview terms only exist
+  // client-side), and server-side too when the engine tracks the keyword.
+  const removeKeyword = async (keyword: string) => {
+    const next = new Set(dismissed);
+    next.add(keyword.trim().toLowerCase());
+    setDismissed(next);
+    try {
+      window.localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]));
+    } catch {
+      // storage unavailable; the server delete below still applies
+    }
+    void fetch(`/api/agent/keyword?term=${encodeURIComponent(keyword)}`, { method: "DELETE" }).catch(
+      () => {}
+    );
+  };
+
+  const visiblePages = plan.pages.filter((p) => !dismissed.has(p.keyword.trim().toLowerCase()));
 
   const overrideFor = (keyword: string) => {
     if (!engine) return undefined;
@@ -916,10 +1021,48 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
           </>
         )}
       </p>
+      {queueNote && (
+        <p role="status" className="mt-3 rounded-lg bg-paper-warm px-3 py-2 text-[12.5px] text-ink">
+          {queueNote}
+        </p>
+      )}
       <div className="mt-5 grid gap-3">
-        {plan.pages.map((page) => (
-          <QueueRow key={page.keyword} page={page} detailed override={overrideFor(page.keyword)} />
-        ))}
+        {visiblePages.map((page) => {
+          const hasRealPage = engine && real.has(page.keyword.trim().toLowerCase());
+          return (
+            <QueueRow
+              key={page.keyword}
+              page={page}
+              detailed
+              override={overrideFor(page.keyword)}
+              actions={
+                engine && !hasRealPage ? (
+                  <span className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                    <button
+                      onClick={() => generateKeyword(page.keyword)}
+                      disabled={writingTerm !== null}
+                      className="rounded-full bg-ink px-3.5 py-1 text-[12px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+                    >
+                      {writingTerm === page.keyword ? "Writing… (up to 5 min)" : "Publish now"}
+                    </button>
+                    <button
+                      onClick={() => removeKeyword(page.keyword)}
+                      disabled={writingTerm === page.keyword}
+                      className="rounded-full border border-line px-3 py-1 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink disabled:opacity-50"
+                    >
+                      Remove from plan
+                    </button>
+                  </span>
+                ) : undefined
+              }
+            />
+          );
+        })}
+        {visiblePages.length === 0 && (
+          <p className="text-center text-[12.5px] text-muted/70">
+            Every planned page has been removed. Add services or locations in Settings to plan more.
+          </p>
+        )}
       </div>
     </Card>
   );
