@@ -18,7 +18,7 @@ import {
 import { ingestSite } from "../site-ingest";
 import { runResearch } from "./research";
 import { generatePage } from "./generate";
-import { publishGithub, publishWordpress } from "./publish";
+import { publishGithub, publishGithubSupportFiles, pingIndexNow, publishWordpress } from "./publish";
 
 /**
  * The autonomous cycle for one site: research when stale, pick the
@@ -223,6 +223,42 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
           });
           published = true;
           liveStatus = res.liveStatus;
+
+          // Discovery, after the page itself is safely live: sitemap +
+          // folder index (which every page's breadcrumb links to) +
+          // IndexNow key file, then the IndexNow ping so Bing/Copilot
+          // learn about the URL now instead of at next crawl. Best
+          // effort — failures here never unwind a successful publish.
+          try {
+            const allPages = await listPages(site.id);
+            const publishedRefs = allPages
+              .filter((p) => p.status === "published" && p.live_url)
+              .map((p) => ({
+                folder: p.folder,
+                slug: p.slug,
+                title: p.title,
+                liveUrl: p.live_url as string,
+                publishedAt: p.published_at,
+              }));
+            await publishGithubSupportFiles({
+              token: conn.github_token,
+              repo: conn.github_repo,
+              branch: conn.github_branch,
+              siteId: site.id,
+              siteUrl: site.url,
+              businessName: site.business_name,
+              accent: brand?.colors?.[0] || "#111111",
+              // The page's committed path tells us whether this repo is a
+              // framework app (public/) or a plain static site.
+              pathPrefix: res.path.startsWith("public/") ? "public/" : "",
+              pages: publishedRefs,
+            });
+            if (res.liveUrl) {
+              await pingIndexNow({ siteUrl: site.url, siteId: site.id, urls: [res.liveUrl] });
+            }
+          } catch {
+            // discovery plumbing only; the publish already succeeded
+          }
         }
       }
       if (published) await updateRun(runId, { published: 1 });
