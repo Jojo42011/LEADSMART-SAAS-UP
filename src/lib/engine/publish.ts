@@ -235,10 +235,12 @@ function folderIndexHtml(input: {
   siteUrl: string;
   folder: string;
   accent: string;
+  nav?: { label: string; href: string }[];
   pages: PublishedPageRef[];
 }): string {
   const origin = input.siteUrl.replace(/\/$/, "");
   const label = input.folder.charAt(0).toUpperCase() + input.folder.slice(1);
+  const nav = (input.nav || []).slice(0, 8);
   const items = input.pages
     .map((p) => `<li><a href="/${p.folder}/${p.slug}/">${esc(p.title)}</a></li>`)
     .join("\n");
@@ -255,7 +257,12 @@ function folderIndexHtml(input: {
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;color:#16181d;line-height:1.7;background:#fff}
 .bar{border-bottom:1px solid #e7e8ec}
-.bar a{max-width:1040px;margin:0 auto;padding:14px 24px;display:block;font-weight:700;color:#16181d;text-decoration:none}
+.bar-in{max-width:1120px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:24px}
+.brand{font-weight:700;color:#16181d;text-decoration:none;white-space:nowrap}
+.topnav{display:flex;flex-wrap:wrap;gap:2px 4px;margin-left:auto}
+.topnav a{color:#16181d;text-decoration:none;font-size:.92rem;font-weight:500;padding:7px 12px;border-radius:8px}
+.topnav a:hover{color:${input.accent}}
+@media (max-width:760px){.topnav{display:none}}
 main{max-width:820px;margin:0 auto;padding:40px 24px 72px}
 h1{font-size:2rem;letter-spacing:-.02em;margin-bottom:20px}
 ul{list-style:none}
@@ -264,7 +271,13 @@ li a:hover{border-color:${input.accent};color:${input.accent}}
 </style>
 </head>
 <body>
-<header class="bar"><a href="${origin}/">${esc(input.businessName)}</a></header>
+<header class="bar"><div class="bar-in"><a class="brand" href="${origin}/">${esc(input.businessName)}</a>${
+    nav.length
+      ? `<nav class="topnav" aria-label="Primary">${nav
+          .map((l) => `<a href="${origin}${esc(l.href)}">${esc(l.label)}</a>`)
+          .join("")}</nav>`
+      : ""
+  }</div></header>
 <main><h1>${esc(label)}</h1><ul>
 ${items}
 </ul></main>
@@ -294,6 +307,8 @@ export async function publishGithubSupportFiles(input: {
   siteUrl: string;
   businessName: string;
   accent: string;
+  /** The site's real primary navigation, mirrored on generated indexes. */
+  nav?: { label: string; href: string }[];
   pathPrefix: string;
   pages: PublishedPageRef[];
 }): Promise<{ ok: boolean; failed: string[] }> {
@@ -348,6 +363,7 @@ export async function publishGithubSupportFiles(input: {
         siteUrl: input.siteUrl,
         folder,
         accent: input.accent,
+        nav: input.nav,
         pages: input.pages.filter((p) => p.folder === folder),
       }),
       `Update ${folder} index`

@@ -95,7 +95,13 @@ export async function runSiteCycle(
     const siblings = (await listPages(site.id, true))
       .filter((p) => p.html)
       .map((p) => ({ slug: p.slug, html: p.html as string }));
-    let brand = site.brand as { colors?: string[]; fonts?: string[]; description?: string };
+    let brand = site.brand as {
+      colors?: string[];
+      fonts?: string[];
+      description?: string;
+      nav?: { label: string; href: string }[];
+      footerLinks?: { label: string; href: string }[];
+    };
     // Self-heal a missing OR unusable brand snapshot. Pages are styled
     // from it, so an empty one ships black-and-white — and so does one
     // whose colors are all neutrals, which is exactly what the old
@@ -103,14 +109,20 @@ export async function runSiteCycle(
     // as the brand). Re-read the live site once and keep the result;
     // failures fall through to the defaults rather than blocking the
     // cycle.
-    if (!brand?.colors?.some(isBrandColor)) {
+    if (!brand?.colors?.some(isBrandColor) || !brand?.nav?.length) {
       try {
         const ingest = await ingestSite(site.url);
         // Only store an ingest that improves on what we have: replacing a
         // neutral-only snapshot with another neutral-only snapshot would
         // re-run this fetch every cycle for nothing.
-        if (ingest.ok && (ingest.colors.some(isBrandColor) || !brand?.colors?.length)) {
-          brand = { ...brand, colors: ingest.colors, fonts: ingest.fonts.length ? ingest.fonts : brand?.fonts };
+        if (ingest.ok && (ingest.colors.some(isBrandColor) || !brand?.colors?.length || ingest.nav.length)) {
+          brand = {
+            ...brand,
+            colors: ingest.colors.some(isBrandColor) || !brand?.colors?.length ? ingest.colors : brand.colors,
+            fonts: ingest.fonts.length ? ingest.fonts : brand?.fonts,
+            nav: ingest.nav.length ? ingest.nav : brand?.nav,
+            footerLinks: ingest.footerLinks.length ? ingest.footerLinks : brand?.footerLinks,
+          };
           await updateSiteBrand(site.id, brand);
         }
       } catch {
@@ -266,6 +278,7 @@ export async function runSiteCycle(
               siteUrl: site.url,
               businessName: site.business_name,
               accent: pickAccent(brand?.colors),
+              nav: brand?.nav,
               // The page's committed path tells us whether this repo is a
               // framework app (public/) or a plain static site.
               pathPrefix: res.path.startsWith("public/") ? "public/" : "",

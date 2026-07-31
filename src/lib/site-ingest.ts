@@ -20,6 +20,15 @@ export type SiteIngest = {
   h1: string;
   phone: string;
   navLinks: string[];
+  /**
+   * The site's real primary navigation, label and href. navLinks kept the
+   * labels only, which made it useless as navigation — generated pages
+   * could not reproduce the customer's header, so every published page
+   * read as a loose blog post rather than a page of their website.
+   */
+  nav: { label: string; href: string }[];
+  /** Footer links, for the same reason: a real site footer navigates. */
+  footerLinks: { label: string; href: string }[];
   colors: string[];
   fonts: string[];
   pageCount: number | null;
@@ -68,6 +77,36 @@ function decodeEntities(s: string): string {
     .replace(/&#0?39;/g, "'");
 }
 
+/**
+ * Anchors with usable same-site destinations from an HTML fragment.
+ * External links, anchors, mailto/tel, and unlabeled links are dropped;
+ * hrefs are resolved against the origin so pages hosted at any path can
+ * link back correctly.
+ */
+function extractLinks(fragment: string, origin: string): { label: string; href: string }[] {
+  const out: { label: string; href: string }[] = [];
+  const seen = new Set<string>();
+  for (const m of fragment.matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const rawHref = m[1].trim();
+    const label = decodeEntities(m[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim());
+    if (!label || label.length < 2 || label.length > 32) continue;
+    if (/^(#|mailto:|tel:|javascript:)/i.test(rawHref)) continue;
+    let href: string;
+    try {
+      const u = new URL(rawHref, origin);
+      if (u.origin !== origin) continue; // external
+      href = u.pathname + (u.pathname.endsWith("/") || u.pathname.includes(".") ? "" : "/");
+    } catch {
+      continue;
+    }
+    const key = `${label.toLowerCase()}|${href}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ label, href });
+  }
+  return out;
+}
+
 /** Throws on invalid/blocked URLs (see assertPublicUrl); network failures return ok:false. */
 export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
   let url = rawUrl.trim();
@@ -85,6 +124,8 @@ export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
     h1: "",
     phone: "",
     navLinks: [],
+    nav: [],
+    footerLinks: [],
     colors: [],
     fonts: [],
     pageCount: null,
@@ -129,13 +170,20 @@ export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
       }
     }
 
-    // Nav links: anchors inside the first <nav> or <header> block.
+    // Nav links: anchors inside the first <nav> or <header> block, with
+    // their hrefs so generated pages can reproduce the real navigation.
     const navBlock =
       html.match(/<nav[\s\S]{0,6000}?<\/nav>/i)?.[0] || html.match(/<header[\s\S]{0,8000}?<\/header>/i)?.[0] || "";
-    const linkText = [...navBlock.matchAll(/<a[^>]*>([\s\S]*?)<\/a>/gi)]
-      .map((m) => decodeEntities(m[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim()))
-      .filter((t) => t.length > 1 && t.length < 32);
-    result.navLinks = [...new Set(linkText)].slice(0, 10);
+    result.nav = extractLinks(navBlock, origin).slice(0, 8);
+    result.navLinks = result.nav.map((l) => l.label);
+
+    // Footer links: a real site footer navigates too, and these are often
+    // the service/location pages worth linking from new content.
+    const footBlock = html.match(/<footer[\s\S]{0,12000}?<\/footer>/i)?.[0] || "";
+    const navHrefs = new Set(result.nav.map((l) => l.href));
+    result.footerLinks = extractLinks(footBlock, origin)
+      .filter((l) => !navHrefs.has(l.href))
+      .slice(0, 12);
 
     // Design tokens: hex colors and font families by frequency, from inline
     // styles plus the first linked stylesheet.

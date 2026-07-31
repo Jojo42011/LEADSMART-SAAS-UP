@@ -1010,6 +1010,11 @@ function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => 
               colors: ingest.colors,
               fonts: ingest.fonts,
               description: ingest.description || ingest.title || "",
+              // The site's real navigation, so generated pages can wear
+              // its header and footer instead of reading as loose posts.
+              nav: (ingest as { nav?: { label: string; href: string }[] }).nav ?? [],
+              footerLinks:
+                (ingest as { footerLinks?: { label: string; href: string }[] }).footerLinks ?? [],
             }
           : {},
       }),

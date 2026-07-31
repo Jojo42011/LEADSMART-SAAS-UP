@@ -138,7 +138,7 @@ export async function DELETE(req: NextRequest) {
           liveUrl: p.live_url as string,
           publishedAt: p.published_at,
         }));
-      const brand = site.brand as { colors?: string[] };
+      const brand = site.brand as { colors?: string[]; nav?: { label: string; href: string }[] };
       await publishGithubSupportFiles({
         token: conn.github_token,
         repo: conn.github_repo,
@@ -147,6 +147,7 @@ export async function DELETE(req: NextRequest) {
         siteUrl: site.url,
         businessName: site.business_name,
         accent: pickAccent(brand?.colors),
+        nav: brand?.nav,
         pathPrefix: prefix,
         pages: remaining,
       }).catch(() => {});

@@ -24,7 +24,14 @@ export type GenerateInput = {
   websiteUrl: string;
   industry: string;
   services: string;
-  brand?: { colors?: string[]; fonts?: string[]; description?: string };
+  brand?: {
+    colors?: string[];
+    fonts?: string[];
+    description?: string;
+    /** The customer's real site navigation, reproduced on generated pages. */
+    nav?: { label: string; href: string }[];
+    footerLinks?: { label: string; href: string }[];
+  };
   internalLinks?: { title: string; path: string }[];
   /** Existing site pages for duplicate detection. */
   siblings?: { slug: string; html: string }[];
@@ -218,15 +225,16 @@ function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: 
   const internal = (input.internalLinks || []).slice(0, 6);
   const folderLabel = folder.charAt(0).toUpperCase() + folder.slice(1);
   const phone = input.business.phone;
+  const nav = (input.brand?.nav || []).slice(0, 8);
+  const footerLinks = (input.brand?.footerLinks || []).slice(0, 12);
 
-  // A published page must read as part of the site it lives on, not as a
-  // bare document dropped into it: the first real publish looked like an
-  // unstyled printout beside the customer's designed site. The page is
-  // still fully self-contained (inline CSS, no external requests), but it
-  // now carries the shell a visitor expects — a header naming the business
-  // and linking home, a breadcrumb, the brand accent used as the brand
-  // color rather than a stripe, and a footer that navigates back — with
-  // the brand's own first color and font driving the palette.
+  // A published page must read as a page OF the customer's website, not a
+  // blog post beside it. The shell reproduces the site's own primary
+  // navigation (labels and hrefs captured at ingest) in the header and a
+  // navigating footer — which is also plain SEO: every generated page
+  // passes internal links to the site's money pages and inherits crawl
+  // paths from them. Still fully self-contained: inline CSS, no external
+  // requests, brand color and font from the site's own stylesheet.
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -248,10 +256,14 @@ ${schemas.map((s) => `<script type="application/ld+json">${JSON.stringify(s)}</s
 html{scroll-behavior:smooth}
 body{font-family:${font},system-ui,-apple-system,sans-serif;color:var(--ink);line-height:1.75;background:#fff;font-size:16.5px}
 a{color:var(--accent)}
-.bar{border-bottom:1px solid var(--line);background:#fff}
-.bar-in{max-width:1040px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.brand{font-weight:700;font-size:1.05rem;color:var(--ink);text-decoration:none;letter-spacing:-.01em}
-.bar .call{background:var(--accent);color:#fff;text-decoration:none;font-weight:600;font-size:.9rem;padding:9px 18px;border-radius:999px;white-space:nowrap}
+.bar{border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:10}
+.bar-in{max-width:1120px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:24px}
+.brand{font-weight:700;font-size:1.05rem;color:var(--ink);text-decoration:none;letter-spacing:-.01em;white-space:nowrap}
+.topnav{display:flex;flex-wrap:wrap;gap:2px 4px;margin:0 auto}
+.topnav a{color:var(--ink);text-decoration:none;font-size:.92rem;font-weight:500;padding:7px 12px;border-radius:8px}
+.topnav a:hover{background:var(--soft);color:var(--accent)}
+.bar .call{background:var(--accent);color:#fff;text-decoration:none;font-weight:600;font-size:.9rem;padding:9px 18px;border-radius:999px;white-space:nowrap;margin-left:auto}
+@media (max-width:760px){.topnav{display:none}.bar .call{margin-left:auto}}
 .crumbs{max-width:820px;margin:0 auto;padding:28px 24px 0;font-size:.85rem;color:var(--muted)}
 .crumbs a{color:var(--muted);text-decoration:none}
 .crumbs a:hover{color:var(--accent)}
@@ -275,13 +287,24 @@ p{margin-bottom:15px}
 .related a{border:1px solid var(--line);border-radius:10px;padding:12px 16px;color:var(--ink);text-decoration:none;font-size:.93rem;font-weight:500}
 .related a:hover{border-color:var(--accent);color:var(--accent)}
 footer{border-top:1px solid var(--line);background:var(--soft)}
-.foot-in{max-width:1040px;margin:0 auto;padding:28px 24px;font-size:.88rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
-footer a{color:var(--muted)}
+.foot-in{max-width:1120px;margin:0 auto;padding:36px 24px 20px;display:grid;gap:28px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));font-size:.88rem;color:var(--muted)}
+.foot-in h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink);margin-bottom:10px}
+.foot-in a{display:block;color:var(--muted);text-decoration:none;padding:3px 0}
+.foot-in a:hover{color:var(--accent)}
+.foot-base{max-width:1120px;margin:0 auto;padding:0 24px 24px;font-size:.85rem;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+.foot-base a{color:var(--muted)}
 </style>
 </head>
 <body>
 <header class="bar"><div class="bar-in">
 <a class="brand" href="${origin}/">${esc(input.business.name)}</a>
+${
+  nav.length
+    ? `<nav class="topnav" aria-label="Primary">${nav
+        .map((l) => `<a href="${origin}${esc(l.href)}">${esc(l.label)}</a>`)
+        .join("")}</nav>`
+    : ""
+}
 ${phone ? `<a class="call" href="tel:${esc(phone)}">Call ${esc(phone)}</a>` : ""}
 </div></header>
 <nav class="crumbs" aria-label="Breadcrumb"><a href="${origin}/">Home</a> &rsaquo; <a href="${origin}/${folder}/">${esc(
@@ -321,12 +344,40 @@ ${
 }
 </article>
 </main>
-<footer><div class="foot-in">
-<p>${esc(input.business.name)}${input.business.address ? `, ${esc(input.business.address)}` : ""}, ${esc(
-    input.business.city
-  )}, ${esc(input.business.region)}${phone ? ` &middot; <a href="tel:${esc(phone)}">${esc(phone)}</a>` : ""}</p>
-<p><a href="${origin}/">${esc(input.business.name)} home</a></p>
-</div></footer>
+<footer>
+<div class="foot-in">
+<div>
+<h3>${esc(input.business.name)}</h3>
+<p>${input.business.address ? `${esc(input.business.address)}, ` : ""}${esc(input.business.city)}, ${esc(
+    input.business.region
+  )}</p>
+${phone ? `<a href="tel:${esc(phone)}">${esc(phone)}</a>` : ""}
+</div>
+${
+  nav.length
+    ? `<div><h3>Explore</h3>${nav
+        .map((l) => `<a href="${origin}${esc(l.href)}">${esc(l.label)}</a>`)
+        .join("")}</div>`
+    : ""
+}
+${
+  footerLinks.length
+    ? `<div><h3>More</h3>${footerLinks
+        .slice(0, 8)
+        .map((l) => `<a href="${origin}${esc(l.href)}">${esc(l.label)}</a>`)
+        .join("")}</div>`
+    : ""
+}
+${
+  internal.length
+    ? `<div><h3>${esc(folderLabel)}</h3>${internal
+        .map((l) => `<a href="${esc(l.path)}">${esc(l.title)}</a>`)
+        .join("")}</div>`
+    : ""
+}
+</div>
+<div class="foot-base"><a href="${origin}/">${esc(input.business.name)}</a> &middot; Last updated ${today}</div>
+</footer>
 </body>
 </html>`;
 }
