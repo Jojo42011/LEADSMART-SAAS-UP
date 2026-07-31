@@ -137,3 +137,21 @@ create table if not exists pages (
 );
 create index if not exists pages_site_idx on pages(site_id, created_at desc);
 create index if not exists pages_status_idx on pages(site_id, status);
+
+-- ---------------------------------------------------------------------------
+-- Self-repair for tables created by an earlier or partial setup.
+--
+-- "create table if not exists" skips a table that already exists, so a
+-- tenants table born without the uuid default keeps rejecting inserts with
+-- "null value in column id" no matter how many times this file is re-run.
+-- These alters are idempotent and bring an existing installation up to the
+-- definitions above without touching data.
+-- ---------------------------------------------------------------------------
+create extension if not exists pgcrypto;
+alter table tenants          alter column id set default gen_random_uuid();
+alter table sites            alter column id set default gen_random_uuid();
+alter table runs             alter column id set default gen_random_uuid();
+alter table keywords         alter column id set default gen_random_uuid();
+alter table keyword_history  alter column id set default gen_random_uuid();
+alter table competitors      alter column id set default gen_random_uuid();
+alter table pages            alter column id set default gen_random_uuid();
