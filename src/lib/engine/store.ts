@@ -409,11 +409,11 @@ export async function provisionSite(
   let siteId: string;
   if (existing.rows[0]) {
     siteId = existing.rows[0].id as string;
+    // Brand only overwrites when the caller actually sent one. Saves that
+    // carry no brand snapshot (a Settings save, a replayed onboarding)
+    // used to blank it, and every page generated after that rendered in
+    // default black-and-white instead of the site's own colors.
     await db().query(
-      -- Brand only overwrites when the caller actually sent one. Saves that
-      -- carry no brand snapshot (a Settings save, a replayed onboarding)
-      -- used to blank it, and every page generated after that rendered in
-      -- default black-and-white instead of the site's own colors.
       `update sites set platform=$2, cadence=$3, publish_mode=$4, business_name=$5, phone=$6,
          address=$7, city=$8, region=$9, service_area=$10, industry=$11, services=$12,
          target_locations=$13, seed_competitors=$14, avg_sale_value=$15,
