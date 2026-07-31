@@ -410,9 +410,14 @@ export async function provisionSite(
   if (existing.rows[0]) {
     siteId = existing.rows[0].id as string;
     await db().query(
+      -- Brand only overwrites when the caller actually sent one. Saves that
+      -- carry no brand snapshot (a Settings save, a replayed onboarding)
+      -- used to blank it, and every page generated after that rendered in
+      -- default black-and-white instead of the site's own colors.
       `update sites set platform=$2, cadence=$3, publish_mode=$4, business_name=$5, phone=$6,
          address=$7, city=$8, region=$9, service_area=$10, industry=$11, services=$12,
-         target_locations=$13, seed_competitors=$14, avg_sale_value=$15, brand=$16
+         target_locations=$13, seed_competitors=$14, avg_sale_value=$15,
+         brand = case when $16::jsonb = '{}'::jsonb then sites.brand else $16::jsonb end
        where id = $1`,
       [
         siteId, s.platform, s.cadence, s.publishMode, s.businessName, s.phone,
@@ -605,6 +610,11 @@ export async function setTenantPlanByCustomer(
     stripeCustomerId,
     status,
   ]);
+}
+
+/** Stores a recovered brand snapshot (see the orchestrator's self-heal). */
+export async function updateSiteBrand(siteId: string, brand: Record<string, unknown>): Promise<void> {
+  await db().query(`update sites set brand = $2 where id = $1`, [siteId, JSON.stringify(brand)]);
 }
 
 /**

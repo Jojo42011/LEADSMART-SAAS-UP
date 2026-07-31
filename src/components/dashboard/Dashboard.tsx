@@ -661,9 +661,10 @@ function AgentPages() {
   const [genNote, setGenNote] = useState<string | null>(null);
 
   // Generate-on-demand: one full cycle (research → write → audit →
-  // publish), started by the owner instead of the schedule. Runs for
-  // 1–3 minutes; the button holds its busy state the whole time because
-  // a silent long request reads as a dead button.
+  // publish), started by the owner instead of the schedule. Can take up
+  // to five minutes — quality over speed, and the route budgets 300s —
+  // so the button holds its busy state the whole time; a silent long
+  // request reads as a dead button.
   const generateNow = async () => {
     if (generating) return;
     setGenerating(true);
@@ -743,7 +744,7 @@ function AgentPages() {
             disabled={generating}
             className="rounded-full bg-ink px-3.5 py-1 text-[12px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
           >
-            {generating ? "Writing… (1–3 min)" : "Generate a page now"}
+            {generating ? "Writing… (up to 5 min)" : "Generate a page now"}
           </button>
         </div>
       </div>

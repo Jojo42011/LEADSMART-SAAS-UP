@@ -13,7 +13,9 @@ import {
   insertPage,
   markKeywordCovered,
   markPagePublished,
+  updateSiteBrand,
 } from "./store";
+import { ingestSite } from "../site-ingest";
 import { runResearch } from "./research";
 import { generatePage } from "./generate";
 import { publishGithub, publishWordpress } from "./publish";
@@ -83,7 +85,24 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
     const siblings = (await listPages(site.id, true))
       .filter((p) => p.html)
       .map((p) => ({ slug: p.slug, html: p.html as string }));
-    const brand = site.brand as { colors?: string[]; fonts?: string[]; description?: string };
+    let brand = site.brand as { colors?: string[]; fonts?: string[]; description?: string };
+    // Self-heal a missing brand snapshot. Pages are styled from it, so an
+    // empty one (wiped by a re-provision, or an onboarding that skipped
+    // site analysis) ships every page in default black-and-white on a site
+    // that has its own colors. Re-read the live site once and keep the
+    // result; failures fall through to the defaults rather than blocking
+    // the cycle.
+    if (!brand?.colors?.length) {
+      try {
+        const ingest = await ingestSite(site.url);
+        if (ingest.ok && (ingest.colors.length || ingest.fonts.length)) {
+          brand = { ...brand, colors: ingest.colors, fonts: ingest.fonts };
+          await updateSiteBrand(site.id, brand);
+        }
+      } catch {
+        // invalid/blocked site URL; generate with defaults
+      }
+    }
     const pageType = target.intent === "informational" ? "article" : "location";
 
     const generateOnce = () => generatePage({
