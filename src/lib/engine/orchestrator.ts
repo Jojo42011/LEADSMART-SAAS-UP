@@ -186,6 +186,7 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
 
     // Phase 5: publish, autopilot only.
     let published = false;
+    let discoveryNote: string | null = null;
     let liveStatus: string | null = null;
     if (status === "approved") {
       await updateRun(runId, { phase: "publish" });
@@ -228,7 +229,10 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
           // folder index (which every page's breadcrumb links to) +
           // IndexNow key file, then the IndexNow ping so Bing/Copilot
           // learn about the URL now instead of at next crawl. Best
-          // effort — failures here never unwind a successful publish.
+          // effort — failures never unwind a successful publish, but they
+          // are recorded in the run summary: a silent catch here hid a
+          // TypeError for four straight publishes, and "no error anywhere,
+          // no files anywhere" is the worst failure mode to debug.
           try {
             const allPages = await listPages(site.id);
             const publishedRefs = allPages
@@ -240,7 +244,7 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
                 liveUrl: p.live_url as string,
                 publishedAt: p.published_at,
               }));
-            await publishGithubSupportFiles({
+            const support = await publishGithubSupportFiles({
               token: conn.github_token,
               repo: conn.github_repo,
               branch: conn.github_branch,
@@ -253,11 +257,14 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
               pathPrefix: res.path.startsWith("public/") ? "public/" : "",
               pages: publishedRefs,
             });
+            discoveryNote = support.ok ? "discovery ok" : `discovery failed for ${support.failed.join(", ")}`;
             if (res.liveUrl) {
-              await pingIndexNow({ siteUrl: site.url, siteId: site.id, urls: [res.liveUrl] });
+              const ping = await pingIndexNow({ siteUrl: site.url, siteId: site.id, urls: [res.liveUrl] });
+              discoveryNote += `, ${ping}`;
             }
-          } catch {
+          } catch (e) {
             // discovery plumbing only; the publish already succeeded
+            discoveryNote = `discovery error: ${e instanceof Error ? e.message : "unknown"}`;
           }
         }
       }
@@ -266,7 +273,9 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
 
     const summary = `${target.term}: score ${page.audit.score} (${page.audit.grade}), ${
       published ? `published, ${liveStatus ?? "unverified"}` : `status ${status}`
-    }${page.source === "template" ? ` [template: ${page.sourceReason ?? "model unavailable"}]` : ""}`;
+    }${discoveryNote ? ` [${discoveryNote}]` : ""}${
+      page.source === "template" ? ` [template: ${page.sourceReason ?? "model unavailable"}]` : ""
+    }`;
     await finishRun(runId, "done", summary);
     await touchSiteRun(site.id);
 

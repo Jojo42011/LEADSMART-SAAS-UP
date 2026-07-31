@@ -140,7 +140,8 @@ export type PublishedPageRef = {
   slug: string;
   title: string;
   liveUrl: string;
-  publishedAt: string | null;
+  /** ISO string or Date — pg returns timestamptz columns as Date objects. */
+  publishedAt: string | Date | null;
 };
 
 /**
@@ -157,14 +158,22 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function lastmod(publishedAt: string | Date | null): string {
+  // pg hands timestamptz columns back as Date objects even though the row
+  // type says string — calling .slice on one threw inside the best-effort
+  // discovery block, which silently skipped every support file on every
+  // publish. Normalize through Date and guard invalid values.
+  if (!publishedAt) return "";
+  const d = publishedAt instanceof Date ? publishedAt : new Date(publishedAt);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+
 function sitemapXml(pages: PublishedPageRef[]): string {
   const rows = pages
-    .map(
-      (p) =>
-        `<url><loc>${esc(p.liveUrl)}</loc>${
-          p.publishedAt ? `<lastmod>${p.publishedAt.slice(0, 10)}</lastmod>` : ""
-        }</url>`
-    )
+    .map((p) => {
+      const mod = lastmod(p.publishedAt);
+      return `<url><loc>${esc(p.liveUrl)}</loc>${mod ? `<lastmod>${mod}</lastmod>` : ""}</url>`;
+    })
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`;
 }
