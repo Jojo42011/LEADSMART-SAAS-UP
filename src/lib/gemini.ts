@@ -92,7 +92,21 @@ export type GeminiResult = {
 };
 
 export async function geminiCall(prompt: string, opts: GeminiOptions = {}): Promise<GeminiResult> {
-  const first = await attempt(prompt, opts, activeModel());
+  let effective = opts;
+  let first = await attempt(prompt, effective, activeModel());
+
+  // Not every model accepts thinkingConfig — some reject the field outright
+  // with a 400, and some refuse a zero budget because they cannot think
+  // less. Thinking is an optimization, never a requirement, so drop it and
+  // retry rather than failing the call. The rejection is remembered so this
+  // costs one wasted request per process, not one per call.
+  if (first.status === 400 && effective.thinkingBudget !== undefined) {
+    thinkingRejected = true;
+    const { thinkingBudget: _unsupported, ...rest } = effective;
+    effective = rest;
+    first = await attempt(prompt, effective, activeModel());
+  }
+
   // A 404 means the model ID is gone, not that the request was bad. Discover
   // a live one and retry once; every later call reuses the resolved name.
   if (first.status !== 404) return { text: first.text, error: first.error };
@@ -108,9 +122,12 @@ export async function geminiCall(prompt: string, opts: GeminiOptions = {}): Prom
     };
   }
   resolvedModel = discovered;
-  const retry = await attempt(prompt, opts, discovered);
+  const retry = await attempt(prompt, effective, discovered);
   return { text: retry.text, error: retry.error };
 }
+
+/** Set once a model 400s on thinkingConfig, so we stop sending it. */
+let thinkingRejected = false;
 
 type Attempt = GeminiResult & { status: number | null };
 
@@ -123,7 +140,7 @@ async function attempt(prompt: string, opts: GeminiOptions, model: string): Prom
     generationConfig: {
       temperature: opts.temperature ?? 0.4,
       maxOutputTokens: opts.maxOutputTokens ?? 8192,
-      ...(opts.thinkingBudget === undefined
+      ...(opts.thinkingBudget === undefined || thinkingRejected
         ? {}
         : { thinkingConfig: { thinkingBudget: opts.thinkingBudget } }),
     },
