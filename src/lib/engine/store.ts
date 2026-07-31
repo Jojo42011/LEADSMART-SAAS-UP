@@ -125,8 +125,12 @@ export async function getDueSites(limit = 3): Promise<SiteRow[]> {
      join tenants t on t.id = s.tenant_id
      where s.active and t.plan_status = 'active'
        and (s.last_run_at is null
-            or s.last_run_at < now() - make_interval(hours =>
-              case s.cadence when 'continuous' then 0.1 when 'daily' then 24 when 'every3days' then 72 else 168 end))
+            or s.last_run_at < now() - make_interval(mins =>
+              -- Integer minutes on purpose: make_interval only accepts
+              -- integers for every unit except secs, and the fractional
+              -- hours 'continuous' first shipped with made this query —
+              -- and therefore the whole cron endpoint — throw on every call.
+              case s.cadence when 'continuous' then 6 when 'daily' then 1440 when 'every3days' then 4320 else 10080 end))
      order by s.last_run_at asc nulls first
      limit $1`,
     [limit]
