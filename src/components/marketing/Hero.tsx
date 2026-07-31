@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { HeroDashboard } from "./HeroDashboard";
+import { site } from "@/lib/site";
 
 const ease = [0.21, 0.47, 0.32, 0.98] as const;
 
@@ -34,14 +35,18 @@ export function Hero() {
             <em className="text-accent">And the AI answers.</em>
           </motion.h1>
 
+          {/* Names the product and states plainly what it does. A visitor
+              (or a reviewer) landing cold should not have to infer either
+              from the headline's wordplay. */}
           <motion.p
             {...fade(0.2)}
             className="mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-muted"
           >
-            An autonomous agent that studies your market, writes pages built
+            <strong className="font-medium text-ink">{site.name}</strong> is an
+            autonomous SEO platform. It studies your market, writes pages built
             to rank on Google and get cited by ChatGPT, Perplexity and AI
-            Overviews, then publishes them to your live site every day. No
-            agency. No retainers. No busywork.
+            Overviews, then publishes them straight to your website on a
+            schedule you set. No agency. No retainers. No busywork.
           </motion.p>
 
           <motion.div
