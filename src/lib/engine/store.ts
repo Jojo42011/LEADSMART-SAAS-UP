@@ -30,6 +30,35 @@ function db(): Pool {
   return pool;
 }
 
+/**
+ * Actually connects and runs `select 1`, translating the common failure
+ * codes into instructions. Diagnostics used to report the database healthy
+ * whenever DATABASE_URL existed — which is how a deployment sat at
+ * "password authentication failed" on every request while the health check
+ * said everything was fine.
+ */
+export async function probeStore(): Promise<{ ok: boolean; error: string | null }> {
+  if (!storeConfigured()) return { ok: false, error: "DATABASE_URL is not set" };
+  try {
+    await db().query("select 1");
+    return { ok: true, error: null };
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    let hint = "";
+    if (err.code === "28P01") {
+      hint =
+        " The password inside DATABASE_URL is wrong. Common causes: a [YOUR-PASSWORD] placeholder left in the copied string, a reset password that was never updated here, or special characters (@ : / #) in the password that need URL-encoding. Fix the string in Vercel and redeploy.";
+    } else if (err.code === "3D000") {
+      hint = " The database named in DATABASE_URL does not exist on that server.";
+    } else if (err.code === "42P01") {
+      hint = " Connected, but the tables are missing — run db/schema.sql against this database.";
+    } else if (/ENOTFOUND|EAI_AGAIN/.test(err.message || "")) {
+      hint = " The host in DATABASE_URL cannot be resolved — check for typos.";
+    }
+    return { ok: false, error: `${err.message || "connection failed"}${hint}` };
+  }
+}
+
 export type SiteRow = {
   id: string;
   tenant_id: string;

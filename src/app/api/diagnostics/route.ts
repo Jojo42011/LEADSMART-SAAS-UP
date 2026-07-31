@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/api-auth";
 import { geminiCall, geminiConfigured, geminiModel, listGeminiModels } from "@/lib/gemini";
-import { storeConfigured, listSitesForEmail, getConnection } from "@/lib/engine/store";
+import { probeStore, storeConfigured, listSitesForEmail, getConnection } from "@/lib/engine/store";
 
 /**
  * Answers "why isn't the agent publishing?" with facts instead of guesswork.
@@ -61,7 +61,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  checks.database = { ok: storeConfigured(), error: storeConfigured() ? null : "DATABASE_URL is not set" };
+  // A real `select 1`, not just an env-var presence check. A wrong password
+  // is indistinguishable from healthy if all you test is that the string
+  // exists.
+  checks.database = await probeStore();
 
   if (storeConfigured()) {
     try {
