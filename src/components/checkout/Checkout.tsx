@@ -96,7 +96,15 @@ export function Checkout() {
     }
     setPaying(true);
     // Demo mode (no STRIPE_SECRET_KEY): no card needed, activates after a
-    // short beat so testers can click straight through the paywall.
+    // short beat so testers can click straight through the paywall. The
+    // POST is what flips the tenant's plan to active server-side — the
+    // engine only runs sites on active plans, so a purely client-side demo
+    // "payment" left every site invisible to the daily cycle.
+    void fetch("/api/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sites }),
+    }).catch(() => {});
     setTimeout(() => {
       saveBilling({ active: true, sites, activatedAt: new Date().toISOString() });
       setDone(true);

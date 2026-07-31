@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "@/lib/session";
 import { createCheckoutSession, stripeConfigured } from "@/lib/stripe";
+import { setTenantPlanByEmail, storeConfigured } from "@/lib/engine/store";
 
 /**
  * Real subscription checkout. GET reports whether Stripe is configured so
@@ -15,7 +16,23 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   if (!stripeConfigured()) {
-    return NextResponse.json({ configured: false });
+    // Demo checkout still has to activate the plan. The engine only serves
+    // tenants with plan_status 'active', and the sole writer of that status
+    // was the Stripe webhook — so on a keyless deployment every tenant
+    // stayed 'inactive' forever and the cycle skipped every site while all
+    // the individual health checks read green. Activation stays gated on a
+    // real signed-in session; it is the payment that is simulated, not the
+    // identity.
+    const user = readSession(req);
+    if (user && storeConfigured()) {
+      try {
+        await setTenantPlanByEmail(user.email, "active");
+      } catch {
+        // The client-side demo flow proceeds regardless; onboarding's
+        // provisioning surfaces database problems with a real error.
+      }
+    }
+    return NextResponse.json({ configured: false, demoActivated: Boolean(user && storeConfigured()) });
   }
 
   let quantity = 1;
