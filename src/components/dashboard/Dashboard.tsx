@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { Field } from "@/components/onboarding/fields";
@@ -185,6 +186,22 @@ export function Dashboard() {
               {item.label}
             </button>
           ))}
+          {/* Home is a link, not a tab: it leaves the dashboard for the
+              public site, where signing in again is possible. Kept in the
+              same nav so it reads as part of the same list. */}
+          <Link
+            href="/"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] text-muted transition-colors hover:bg-paper-warm hover:text-ink"
+          >
+            <span aria-hidden="true" className="h-4.5 w-4.5 [&>svg]:h-full [&>svg]:w-full">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M3 11l9-7 9 7" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M5 10v10h14V10" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M10 20v-6h4v6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            Home
+          </Link>
         </nav>
         <div className="mt-auto rounded-xl border border-line p-4">
           <p className="label-mono text-muted/70">Plan</p>
@@ -205,12 +222,21 @@ export function Dashboard() {
             <select
               value={tab}
               aria-label="Dashboard section"
-              onChange={(e) => setTab(e.target.value as Tab)}
+              onChange={(e) => {
+                // "Home" leaves the dashboard rather than switching tabs,
+                // so the sidebar's link has a mobile equivalent here.
+                if (e.target.value === "__home") {
+                  window.location.href = "/";
+                  return;
+                }
+                setTab(e.target.value as Tab);
+              }}
               className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[13px] md:hidden"
             >
               {navItems.map((item) => (
                 <option key={item.label}>{item.label}</option>
               ))}
+              <option value="__home">Home</option>
             </select>
             <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-line px-3 py-1.5 sm:px-3.5">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-livepulse" />
