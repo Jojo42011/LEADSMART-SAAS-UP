@@ -18,6 +18,16 @@ export const SESSION_COOKIE = "ascent_session";
 export const PROFILE_COOKIE = "ascent_profile";
 export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
+/**
+ * Session epoch. Bumping this invalidates every session issued before the
+ * bump — the one lever a stateless cookie session has for "log everyone
+ * out". Bumped to 2 when logins started writing tenant rows to the
+ * database, so sessions from before that change (accounts that exist in
+ * nobody's records) cannot linger; those visitors sign in again and their
+ * account lands in the tenants table like every new one.
+ */
+export const SESSION_VERSION = 2;
+
 export type AuthProvider = "google" | "github" | "password";
 
 export type SessionUser = {
@@ -28,6 +38,8 @@ export type SessionUser = {
   provider: AuthProvider;
   /** Issued-at, epoch ms. */
   iat: number;
+  /** Session epoch this token was issued under. */
+  v?: number;
 };
 
 function secret(): string {
@@ -53,7 +65,7 @@ export const profileCookieOptions = {
 };
 
 export function signSession(user: SessionUser): string {
-  const payload = Buffer.from(JSON.stringify(user), "utf8").toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ ...user, v: SESSION_VERSION }), "utf8").toString("base64url");
   const sig = createHmac("sha256", secret()).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
@@ -69,7 +81,11 @@ export function verifySession(token: string | undefined | null): SessionUser | n
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionUser;
+    const user = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionUser;
+    // Sessions from an earlier epoch are gone, not grandfathered: their
+    // holders sign in again, which writes their account to the database.
+    if (user.v !== SESSION_VERSION) return null;
+    return user;
   } catch {
     return null;
   }
