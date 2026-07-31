@@ -29,6 +29,13 @@ export type SiteIngest = {
   nav: { label: string; href: string }[];
   /** Footer links, for the same reason: a real site footer navigates. */
   footerLinks: { label: string; href: string }[];
+  /**
+   * The customer's own logo, absolute URL. Generated pages put it top
+   * left exactly where their site does; a business name in plain text
+   * where the real site shows a mark is the tell that a page is not
+   * really part of the site.
+   */
+  logo: string;
   colors: string[];
   fonts: string[];
   pageCount: number | null;
@@ -83,6 +90,51 @@ function decodeEntities(s: string): string {
  * hrefs are resolved against the origin so pages hosted at any path can
  * link back correctly.
  */
+/**
+ * Finds the site's logo, preferring the mark a visitor actually sees in
+ * the header over the icons a browser uses. Ordered by how likely each
+ * candidate is to be the real brand mark rather than a sprite, a payment
+ * badge, or a social card.
+ */
+function extractLogo(html: string, origin: string): string {
+  const abs = (u: string): string => {
+    try {
+      return new URL(u, origin).href;
+    } catch {
+      return "";
+    }
+  };
+
+  const header =
+    html.match(/<header[\s\S]{0,12000}?<\/header>/i)?.[0] ||
+    html.match(/<nav[\s\S]{0,8000}?<\/nav>/i)?.[0] ||
+    html.slice(0, 12000);
+
+  // 1. An <img> in the header whose src, alt, or class says "logo".
+  for (const m of header.matchAll(/<img[^>]+>/gi)) {
+    const tag = m[0];
+    if (!/logo|brand|wordmark/i.test(tag)) continue;
+    const src = tag.match(/\ssrc=["']([^"']+)["']/i)?.[1];
+    // Skip inline data URIs and tracking pixels.
+    if (src && !/^data:/i.test(src)) return abs(src);
+  }
+  // 2. Any header <img> that is not an obvious icon — many sites ship the
+  //    logo as the first image with no helpful attributes at all.
+  for (const m of header.matchAll(/<img[^>]+>/gi)) {
+    const tag = m[0];
+    if (/icon|avatar|badge|star|arrow|sprite/i.test(tag)) continue;
+    const src = tag.match(/\ssrc=["']([^"']+)["']/i)?.[1];
+    if (src && !/^data:/i.test(src) && /\.(svg|png|webp|jpe?g)/i.test(src)) return abs(src);
+  }
+  // 3. A high-resolution touch icon, which is usually the brand mark.
+  const touch = html.match(/<link[^>]+rel=["'][^"']*apple-touch-icon[^"']*["'][^>]+href=["']([^"']+)["']/i)?.[1];
+  if (touch) return abs(touch);
+  // 4. An SVG-based favicon: still a real mark, unlike a 16px .ico.
+  const svgIcon = html.match(/<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]+href=["']([^"']+\.svg)["']/i)?.[1];
+  if (svgIcon) return abs(svgIcon);
+  return "";
+}
+
 function extractLinks(fragment: string, origin: string): { label: string; href: string }[] {
   const out: { label: string; href: string }[] = [];
   const seen = new Set<string>();
@@ -126,6 +178,7 @@ export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
     navLinks: [],
     nav: [],
     footerLinks: [],
+    logo: "",
     colors: [],
     fonts: [],
     pageCount: null,
@@ -174,6 +227,7 @@ export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
     // their hrefs so generated pages can reproduce the real navigation.
     const navBlock =
       html.match(/<nav[\s\S]{0,6000}?<\/nav>/i)?.[0] || html.match(/<header[\s\S]{0,8000}?<\/header>/i)?.[0] || "";
+    result.logo = extractLogo(html, origin);
     result.nav = extractLinks(navBlock, origin).slice(0, 8);
     result.navLinks = result.nav.map((l) => l.label);
 

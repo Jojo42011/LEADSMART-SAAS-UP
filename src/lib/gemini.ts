@@ -207,6 +207,59 @@ async function attempt(prompt: string, opts: GeminiOptions, model: string): Prom
   }
 }
 
+export type GeminiImage = { data: string; mimeType: string } | null;
+
+let imageModel: string | null = null;
+
+/** Image-capable models this key can call, best first. */
+async function discoverImageModels(): Promise<string[]> {
+  const { models } = await listGeminiModels();
+  const image = models.filter((m) => /image/i.test(m) && !/embed/i.test(m));
+  const preferred = image.filter((m) => /flash-image|image-preview|imagen/i.test(m));
+  return [...preferred, ...image.filter((m) => !preferred.includes(m))].slice(0, 3);
+}
+
+/**
+ * Generates one image, returned base64-encoded.
+ *
+ * Kept separate from geminiCall because image models answer with
+ * inlineData parts rather than text, and because a failure here must
+ * never fail a page — callers fall back to a rendered SVG. The model is
+ * discovered from the account's own list rather than pinned, since a
+ * pinned Gemini model name has already broken this project once.
+ */
+export async function geminiImage(prompt: string): Promise<GeminiImage> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+
+  const candidates = imageModel ? [imageModel] : await discoverImageModels();
+  for (const model of candidates) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }] }),
+          signal: AbortSignal.timeout(90_000),
+        }
+      );
+      if (!res.ok) continue;
+      const json = (await res.json()) as {
+        candidates?: { content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] } }[];
+      };
+      const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+      if (part?.inlineData?.data) {
+        imageModel = model; // remember what worked
+        return { data: part.inlineData.data, mimeType: part.inlineData.mimeType || "image/png" };
+      }
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
 /**
  * Text-only wrapper for callers that do not need the failure reason.
  * Nulls out truncated responses too: every other failure already yields a

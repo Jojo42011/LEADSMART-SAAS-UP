@@ -1,5 +1,6 @@
 import { geminiCall, geminiConfigured, parseJson } from "@/lib/gemini";
 import { pickAccent } from "@/lib/site-ingest";
+import { heroImageFor, type PageImage } from "./images";
 import { auditPage, type AuditReport } from "./audit";
 import {
   localBusinessSchema,
@@ -31,7 +32,11 @@ export type GenerateInput = {
     /** The customer's real site navigation, reproduced on generated pages. */
     nav?: { label: string; href: string }[];
     footerLinks?: { label: string; href: string }[];
+    /** The customer's own logo, shown top left exactly as their site does. */
+    logo?: string;
   };
+  /** Hero artwork for this page: path relative to the site root, plus alt. */
+  heroImage?: { path: string; alt: string };
   internalLinks?: { title: string; path: string }[];
   /** Existing site pages for duplicate detection. */
   siblings?: { slug: string; html: string }[];
@@ -44,6 +49,8 @@ export type GenerateOutput = {
   metaTitle: string;
   metaDescription: string;
   html: string;
+  /** Artwork committed alongside the page; always present. */
+  image: PageImage;
   wordCount: number;
   source: "live" | "template";
   /**
@@ -75,11 +82,37 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/**
+ * Escapes prose while keeping the model's internal links as real links.
+ *
+ * The generation prompt asks for internal links, and the model supplies
+ * them as anchor tags inside the prose. Escaping the whole string
+ * published that markup as visible text — customers saw
+ * `<a href="...">our services</a>` printed mid-sentence on live pages.
+ * Stripping the tags instead would throw away internal links, which are
+ * one of the ranking signals the page is built to earn.
+ *
+ * So: escape everything, then restore anchors, and only anchors whose
+ * href is same-origin or a bare path. An off-site or javascript: URL from
+ * model output has no business being published to a customer's domain.
+ */
+function escProse(s: string, origin: string): string {
+  const escaped = esc(s);
+  return escaped.replace(
+    /&lt;a href=&quot;([^&"]+)&quot;&gt;([\s\S]*?)&lt;\/a&gt;/gi,
+    (whole, href: string, label: string) => {
+      const safe = href.startsWith("/") || href.startsWith(origin);
+      if (!safe) return label; // keep the words, drop the link
+      return `<a href="${href}">${label}</a>`;
+    }
+  );
+}
+
 function fallbackContent(input: GenerateInput): PageContent {
   const kw = input.keyword;
   const city = input.business.city;
   const name = input.business.name;
-  const kwTitle = kw.replace(/\b\w/g, (c) => c.toUpperCase());
+  const kwTitle = titleCase(kw);
   return {
     metaTitle: `${kwTitle} | ${name}`.slice(0, 60),
     metaDescription: `${name} provides ${kw} with transparent pricing and local expertise. Serving ${city} and surrounding areas. Call ${input.business.phone || "today"} for a free estimate.`.slice(0, 158),
@@ -227,6 +260,15 @@ function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: 
   const phone = input.business.phone;
   const nav = (input.brand?.nav || []).slice(0, 8);
   const footerLinks = (input.brand?.footerLinks || []).slice(0, 12);
+  const logo = input.brand?.logo || "";
+  // A very light wash of the accent for alternating bands and callouts,
+  // so tinted areas belong to the brand instead of being generic grey.
+  const tint = tintOf(accent);
+  const hero = input.heroImage;
+  // Section imagery: the hero repeats at a lower position on long pages so
+  // the body is not an unbroken wall of text, which is the single biggest
+  // reason a generated page reads as a blog post rather than a site page.
+  const midSection = Math.min(1, Math.max(0, c.sections.length - 2));
 
   // A published page must read as a page OF the customer's website, not a
   // blog post beside it. The shell reproduces the site's own primary
@@ -251,19 +293,38 @@ function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: 
 <meta property="article:modified_time" content="${today}">
 ${schemas.map((s) => `<script type="application/ld+json">${JSON.stringify(s)}</script>`).join("\n")}
 <style>
-:root{--accent:${accent};--ink:#16181d;--muted:#5c6270;--line:#e7e8ec;--soft:#f6f7f9}
+:root{--accent:${accent};--ink:#16181d;--muted:#5c6270;--line:#e7e8ec;--soft:#f6f7f9;--tint:${tint}}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{font-family:${font},system-ui,-apple-system,sans-serif;color:var(--ink);line-height:1.75;background:#fff;font-size:16.5px}
 a{color:var(--accent)}
-.bar{border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:10}
-.bar-in{max-width:1120px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:24px}
-.brand{font-weight:700;font-size:1.05rem;color:var(--ink);text-decoration:none;letter-spacing:-.01em;white-space:nowrap}
+.bar{border-bottom:1px solid var(--line);background:rgba(255,255,255,.92);backdrop-filter:saturate(180%) blur(12px);position:sticky;top:0;z-index:20}
+.bar-in{max-width:1180px;margin:0 auto;padding:13px 26px;display:flex;align-items:center;gap:24px}
+.brand{font-weight:700;font-size:1.05rem;color:var(--ink);text-decoration:none;letter-spacing:-.01em;white-space:nowrap;display:flex;align-items:center;gap:10px}
+.brand img{height:34px;width:auto;max-width:190px;object-fit:contain;display:block}
 .topnav{display:flex;flex-wrap:wrap;gap:2px 4px;margin:0 auto}
 .topnav a{color:var(--ink);text-decoration:none;font-size:.92rem;font-weight:500;padding:7px 12px;border-radius:8px}
 .topnav a:hover{background:var(--soft);color:var(--accent)}
 .bar .call{background:var(--accent);color:#fff;text-decoration:none;font-weight:600;font-size:.9rem;padding:9px 18px;border-radius:999px;white-space:nowrap;margin-left:auto}
 @media (max-width:760px){.topnav{display:none}.bar .call{margin-left:auto}}
+.hero{position:relative;min-height:clamp(380px,52vh,560px);display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;overflow:hidden}
+.hero img.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero .scrim{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,12,16,.62),rgba(10,12,16,.72))}
+.hero-in{position:relative;max-width:860px;padding:76px 26px}
+.hero h1{color:#fff;text-shadow:0 2px 24px rgba(0,0,0,.35)}
+.hero .lede{margin:18px auto 0;max-width:620px;font-size:1.06rem;color:rgba(255,255,255,.94)}
+.hero .cta-btn{display:inline-block;margin-top:26px;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;letter-spacing:.03em;text-transform:uppercase;font-size:.86rem;padding:14px 30px;border-radius:999px}
+.eyebrow{display:flex;align-items:center;gap:12px;font-size:.76rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+.eyebrow::before{content:"";width:34px;height:2px;background:var(--accent);display:block}
+.takeaways{background:var(--tint);border-left:4px solid var(--accent);border-radius:0 14px 14px 0;padding:22px 26px;margin:26px 0 34px}
+.takeaways h3{font-size:1rem;margin-bottom:12px;color:var(--accent)}
+.takeaways ul{margin:0;padding-left:20px}
+.takeaways li{margin-bottom:9px;color:#3a3f4b}
+figure{margin:38px 0}
+figure img{width:100%;height:auto;border-radius:16px;display:block}
+figcaption{font-size:.83rem;color:var(--muted);margin-top:10px;text-align:center}
+.band{background:var(--tint);margin-top:64px;padding:64px 0}
+.band-in{max-width:820px;margin:0 auto;padding:0 24px}
 .crumbs{max-width:820px;margin:0 auto;padding:28px 24px 0;font-size:.85rem;color:var(--muted)}
 .crumbs a{color:var(--muted);text-decoration:none}
 .crumbs a:hover{color:var(--accent)}
@@ -297,7 +358,11 @@ footer{border-top:1px solid var(--line);background:var(--soft)}
 </head>
 <body>
 <header class="bar"><div class="bar-in">
-<a class="brand" href="${origin}/">${esc(input.business.name)}</a>
+<a class="brand" href="${origin}/">${
+  logo
+    ? `<img src="${esc(logo)}" alt="${esc(input.business.name)}" width="170" height="34">`
+    : esc(input.business.name)
+}</a>
 ${
   nav.length
     ? `<nav class="topnav" aria-label="Primary">${nav
@@ -310,29 +375,64 @@ ${phone ? `<a class="call" href="tel:${esc(phone)}">Call ${esc(phone)}</a>` : ""
 <nav class="crumbs" aria-label="Breadcrumb"><a href="${origin}/">Home</a> &rsaquo; <a href="${origin}/${folder}/">${esc(
     folderLabel
   )}</a> &rsaquo; ${esc(c.h1)}</nav>
+${
+  hero
+    ? `<section class="hero">
+<img class="bg" src="${esc(hero.path)}" alt="${esc(hero.alt)}" fetchpriority="high">
+<span class="scrim"></span>
+<div class="hero-in">
+<h1>${esc(c.h1)}</h1>
+<p class="lede">${esc(leadSentence(c.intro))}</p>
+${phone ? `<a class="cta-btn" href="tel:${esc(phone)}">Call ${esc(phone)}</a>` : ""}
+</div>
+</section>`
+    : ""
+}
 <main>
 <article>
-<h1>${esc(c.h1)}</h1>
+${hero ? "" : `<h1>${esc(c.h1)}</h1>`}
 <p class="updated">Last updated ${today} &middot; ${esc(input.business.name)}, ${esc(input.business.city)}, ${esc(
     input.business.region
   )}</p>
-<p class="intro">${esc(c.intro)}</p>
+<p class="eyebrow">Expert guidance</p>
+<p class="intro">${escProse(c.intro, origin)}</p>
+${
+  c.sections.length
+    ? `<div class="takeaways"><h3>Key takeaways</h3><ul>${c.sections
+        .map((sec) => `<li>${escProse(leadSentence(sec.answer), origin)}</li>`)
+        .join("")}</ul></div>`
+    : ""
+}
 ${c.sections
   .map(
-    (s) => `<section>
+    (s, i) => `<section>
 <h2>${esc(s.heading)}</h2>
-<p class="answer">${esc(s.answer)}</p>
-<p>${esc(s.body)}</p>
+<p class="answer">${escProse(s.answer, origin)}</p>
+<p>${escProse(s.body, origin)}</p>
+${
+  hero && i === midSection
+    ? `<figure><img src="${esc(hero.path)}" alt="${esc(hero.alt)}" loading="lazy"><figcaption>${esc(
+        input.business.name
+      )} &middot; ${esc(input.business.city)}, ${esc(input.business.region)}</figcaption></figure>`
+    : ""
+}
 </section>`
   )
   .join("\n")}
-<section class="faq">
-<h2>Frequently asked questions</h2>
+</article>
+</main>
+<section class="band">
+<div class="band-in">
+<p class="eyebrow">Common questions</p>
+<h2 style="margin-top:0">Frequently asked questions</h2>
 ${c.faq
-  .map((f) => `<div class="faq-item"><h3>${esc(f.question)}</h3>\n<p>${esc(f.answer)}</p></div>`)
+  .map((f) => `<div class="faq-item" style="background:#fff"><h3>${esc(f.question)}</h3>\n<p>${escProse(f.answer, origin)}</p></div>`)
   .join("\n")}
+</div>
 </section>
-<div class="cta"><p>${esc(c.cta)}</p>${
+<main>
+<article>
+<div class="cta"><p>${escProse(c.cta, origin)}</p>${
     phone ? `<a href="tel:${esc(phone)}">Call ${esc(phone)}</a>` : ""
   }</div>
 ${
@@ -401,8 +501,22 @@ export async function generatePage(input: GenerateInput): Promise<GenerateOutput
   const folder =
     input.pageType === "location" ? "locations" : input.pageType === "service" ? "services" : "insights";
 
+  // Artwork is produced before rendering because the template needs its
+  // path. heroImageFor never throws and never returns null — worst case
+  // it composes a brand SVG — so a page can't end up imageless.
+  const image = await heroImageFor({
+    keyword: input.keyword,
+    businessName: input.business.name,
+    city: input.business.city,
+    industry: input.industry,
+    accent: pickAccent(input.brand?.colors),
+    skipModel: !usedLlm,
+  });
+  const heroImage = { path: `/${folder}/${slug}/${image.filename}`, alt: image.alt };
+  const withHero: GenerateInput = { ...input, heroImage };
+
   const runAudit = (c: PageContent) => {
-    const rendered = renderHtml(input, c, slug, folder);
+    const rendered = renderHtml(withHero, c, slug, folder);
     return {
       html: rendered,
       audit: auditPage({
@@ -448,6 +562,7 @@ export async function generatePage(input: GenerateInput): Promise<GenerateOutput
   return {
     slug,
     folder,
+    image,
     title: content.h1,
     metaTitle: content.metaTitle,
     metaDescription: content.metaDescription,
@@ -457,4 +572,55 @@ export async function generatePage(input: GenerateInput): Promise<GenerateOutput
     sourceReason,
     audit,
   };
+}
+
+/** A 6% wash of the accent over white, for callouts and alternating bands. */
+function tintOf(hex: string): string {
+  const m = hex.replace("#", "");
+  const full = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
+  const n = parseInt(full, 16);
+  if (Number.isNaN(n)) return "#f6f7f9";
+  const mix = (c: number) => Math.round(c + (255 - c) * 0.93);
+  const r = mix((n >> 16) & 255);
+  const g = mix((n >> 8) & 255);
+  const b = mix(n & 255);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
+
+/**
+ * The first complete sentence, kept whole.
+ *
+ * The hero lede used the meta description, which is hard-truncated to 158
+ * characters and so ended mid-word ("Serving Greensboro and surrounding
+ * areas. Ca") in the largest type on the page.
+ */
+function leadSentence(text: string): string {
+  const trimmed = text.trim();
+  const end = trimmed.search(/[.!?](\s|$)/);
+  if (end === -1) return trimmed.length > 180 ? `${trimmed.slice(0, 177)}…` : trimmed;
+  return trimmed.slice(0, end + 1);
+}
+
+/**
+ * Title case that leaves acronyms and US state codes alone. Naive
+ * per-word capitalisation rendered "small business nc" as "Small Business
+ * Nc" in the H1 and breadcrumb of every location page.
+ */
+const KEEP_UPPER = new Set([
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC","SEO","AEO","GEO","AI","HVAC","LLC","USA","B2B","B2C",
+]);
+const LOWER_WORDS = new Set(["a","an","and","as","at","but","by","for","in","of","on","or","the","to","vs"]);
+
+function titleCase(s: string): string {
+  const words = s.split(/\s+/);
+  return words
+    .map((w, i) => {
+      const bare = w.replace(/[^a-zA-Z]/g, "");
+      if (KEEP_UPPER.has(bare.toUpperCase())) return w.replace(bare, bare.toUpperCase());
+      if (i > 0 && i < words.length - 1 && LOWER_WORDS.has(bare.toLowerCase())) return w.toLowerCase();
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
+    .join(" ");
 }

@@ -101,6 +101,7 @@ export async function runSiteCycle(
       description?: string;
       nav?: { label: string; href: string }[];
       footerLinks?: { label: string; href: string }[];
+      logo?: string;
     };
     // Self-heal a missing OR unusable brand snapshot. Pages are styled
     // from it, so an empty one ships black-and-white — and so does one
@@ -109,19 +110,23 @@ export async function runSiteCycle(
     // as the brand). Re-read the live site once and keep the result;
     // failures fall through to the defaults rather than blocking the
     // cycle.
-    if (!brand?.colors?.some(isBrandColor) || !brand?.nav?.length) {
+    if (!brand?.colors?.some(isBrandColor) || !brand?.nav?.length || !brand?.logo) {
       try {
         const ingest = await ingestSite(site.url);
         // Only store an ingest that improves on what we have: replacing a
         // neutral-only snapshot with another neutral-only snapshot would
         // re-run this fetch every cycle for nothing.
-        if (ingest.ok && (ingest.colors.some(isBrandColor) || !brand?.colors?.length || ingest.nav.length)) {
+        if (
+          ingest.ok &&
+          (ingest.colors.some(isBrandColor) || !brand?.colors?.length || ingest.nav.length || ingest.logo)
+        ) {
           brand = {
             ...brand,
             colors: ingest.colors.some(isBrandColor) || !brand?.colors?.length ? ingest.colors : brand.colors,
             fonts: ingest.fonts.length ? ingest.fonts : brand?.fonts,
             nav: ingest.nav.length ? ingest.nav : brand?.nav,
             footerLinks: ingest.footerLinks.length ? ingest.footerLinks : brand?.footerLinks,
+            logo: ingest.logo || brand?.logo,
           };
           await updateSiteBrand(site.id, brand);
         }
@@ -241,6 +246,7 @@ export async function runSiteCycle(
           title: page.title,
           html: page.html,
           siteUrl: site.url,
+          image: { filename: page.image.filename, base64: page.image.base64 },
         });
         if (res.ok && res.platform === "github") {
           await markPagePublished(pageId, {

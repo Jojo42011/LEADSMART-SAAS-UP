@@ -51,6 +51,8 @@ export async function publishGithub(input: {
   title: string;
   html: string;
   siteUrl?: string;
+  /** Artwork to commit beside the page, referenced by its HTML. */
+  image?: { filename: string; base64: string };
 }): Promise<PublishResult> {
   // Defensive: stored connections predating input normalization may hold a
   // full URL, and the cron path never passes through the wizard.
@@ -83,6 +85,20 @@ export async function publishGithub(input: {
     return { ok: false, error: `GitHub commit failed (${res.status})`, detail: (await res.text()).slice(0, 300) };
   }
 
+  // The image ships with the page. Committed after the HTML so a failure
+  // here leaves a page with a broken img rather than no page at all, and
+  // is best effort for the same reason the sitemap is.
+  if (input.image) {
+    await commitFile({
+      token: input.token,
+      repo,
+      branch: input.branch,
+      path: `${prefix}${input.folder}/${input.slug}/${input.image.filename}`,
+      contentBase64: input.image.base64,
+      message: `Add artwork for ${input.title}`,
+    }).catch(() => false);
+  }
+
   const json = (await res.json()) as { commit?: { sha?: string } };
   const liveUrl = input.siteUrl ? `${input.siteUrl.replace(/\/$/, "")}/${input.folder}/${input.slug}/` : null;
   const liveStatus = liveUrl ? await verifyLive(liveUrl) : null;
@@ -95,7 +111,9 @@ async function commitFile(input: {
   repo: string;
   branch?: string | null;
   path: string;
-  content: string;
+  content?: string;
+  /** Already base64 (binary assets); use instead of content. */
+  contentBase64?: string;
   message: string;
 }): Promise<boolean> {
   const headers = {
@@ -116,7 +134,7 @@ async function commitFile(input: {
     // Skip the commit when the content is already identical — the key file
     // in particular never changes, and re-committing it on every publish
     // would add an empty commit's worth of API traffic and repo noise.
-    if (j.content) {
+    if (j.content && input.content !== undefined) {
       const current = Buffer.from(j.content, "base64").toString("utf8");
       unchanged = current === input.content;
     }
@@ -127,7 +145,7 @@ async function commitFile(input: {
     headers,
     body: JSON.stringify({
       message: input.message,
-      content: Buffer.from(input.content, "utf8").toString("base64"),
+      content: input.contentBase64 ?? Buffer.from(input.content ?? "", "utf8").toString("base64"),
       ...(input.branch ? { branch: input.branch } : {}),
       ...(sha ? { sha } : {}),
     }),
