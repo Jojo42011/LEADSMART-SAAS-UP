@@ -1,0 +1,33 @@
+# Drives the agent's page production on an hourly beat.
+#
+# Vercel's own cron fires once a day (vercel.json), which is right for
+# production cadences but too slow for testing and for the "continuous"
+# cadence. GitHub's scheduler is free, runs regardless of anyone's laptop
+# or session, and this repo is already the deployment source of truth.
+#
+# Requires one repository secret: CRON_SECRET, matching the Vercel env var
+# of the same name (Settings → Secrets and variables → Actions).
+#
+# The engine still decides whether any site is actually due — firing this
+# more often than sites are due is a cheap no-op (sitesDue: 0).
+name: Agent cycle
+on:
+  schedule:
+    - cron: "10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Trigger the agent cycle
+        run: |
+          if [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "::error::CRON_SECRET repository secret is not set"; exit 1
+          fi
+          response=$(curl -sS -m 330 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://leadsmart-saas-up.vercel.app/api/cron/run)
+          echo "$response"
+          echo "$response" | grep -q '"ok": *true' || { echo "::error::cycle failed"; exit 1; }
