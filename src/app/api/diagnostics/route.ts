@@ -41,9 +41,14 @@ export async function GET(req: NextRequest) {
       error: "GEMINI_API_KEY is not set — pages fall back to the built-in template and score below the publish gate.",
     };
   } else {
+    // thinkingBudget 0 and a real token allowance: the 2.5-generation models
+    // reason before answering out of the same budget, so a 16-token cap
+    // reported "no text (finishReason MAX_TOKENS)" on a perfectly healthy
+    // key — the health check was failing itself, not the service.
     const probe = await geminiCall("Reply with the single word: ready", {
       temperature: 0,
-      maxOutputTokens: 16,
+      maxOutputTokens: 256,
+      thinkingBudget: 0,
     });
     checks.gemini = {
       ok: probe.error === null,

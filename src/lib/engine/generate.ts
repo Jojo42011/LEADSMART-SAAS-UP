@@ -142,7 +142,11 @@ Respond with ONLY JSON:
  "faq": [{"question","answer"}, exactly 4, distinct from the sections],
  "cta": "one sentence call to action"}`;
 
-  const { text, error } = await geminiCall(prompt, { temperature: 0.6, maxOutputTokens: 8192 });
+  // 8192 was the whole budget for a full article *and* the model's internal
+  // reasoning, which the 2.5-generation models draw from the same pool —
+  // leaving pages at real risk of stopping mid-JSON. Doubling it costs
+  // nothing when unused (billing is on tokens produced, not reserved).
+  const { text, error } = await geminiCall(prompt, { temperature: 0.6, maxOutputTokens: 16384 });
   if (error) return { content: null, error };
   const parsed = parseJson<PageContent>(text);
   if (!parsed || !parsed.h1 || !Array.isArray(parsed.sections) || parsed.sections.length === 0) {

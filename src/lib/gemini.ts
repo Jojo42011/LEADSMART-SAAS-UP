@@ -64,6 +64,16 @@ type GeminiOptions = {
   useSearch?: boolean;
   temperature?: number;
   maxOutputTokens?: number;
+  /**
+   * Tokens the model may spend on internal reasoning before writing.
+   *
+   * The 2.5-generation models think first, and that thinking is drawn from
+   * the same maxOutputTokens budget as the visible answer — so a small cap
+   * yields finishReason MAX_TOKENS with no text at all, and a generous one
+   * still loses however much thinking consumed. 0 disables it, which is
+   * right for short mechanical calls; leave unset to let the model decide.
+   */
+  thinkingBudget?: number;
 };
 
 export function geminiConfigured(): boolean {
@@ -113,6 +123,9 @@ async function attempt(prompt: string, opts: GeminiOptions, model: string): Prom
     generationConfig: {
       temperature: opts.temperature ?? 0.4,
       maxOutputTokens: opts.maxOutputTokens ?? 8192,
+      ...(opts.thinkingBudget === undefined
+        ? {}
+        : { thinkingConfig: { thinkingBudget: opts.thinkingBudget } }),
     },
   };
   if (opts.system) {
@@ -152,13 +165,23 @@ async function attempt(prompt: string, opts: GeminiOptions, model: string): Prom
       candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
     };
     const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
+    const finish = json.candidates?.[0]?.finishReason;
     if (!text) {
-      const finish = json.candidates?.[0]?.finishReason;
       return {
         text: null,
-        error: `Gemini returned no text${finish ? ` (finishReason ${finish})` : ""}`,
+        error: `Gemini returned no text${finish ? ` (finishReason ${finish})` : ""}${
+          finish === "MAX_TOKENS"
+            ? " — the model spent its whole output budget on internal reasoning. Raise maxOutputTokens or set thinkingBudget: 0."
+            : ""
+        }`,
         status: res.status,
       };
+    }
+    // A page cut off mid-sentence is not a usable draft, and returning it as
+    // one would ship a half-written article that reads as thin content. Say
+    // it was truncated so the caller can hold it rather than publish it.
+    if (finish === "MAX_TOKENS") {
+      return { text, error: "Gemini truncated the response at the token limit", status: res.status };
     }
     return { text, error: null, status: res.status };
   } catch (e) {
@@ -167,9 +190,15 @@ async function attempt(prompt: string, opts: GeminiOptions, model: string): Prom
   }
 }
 
-/** Text-only wrapper for callers that do not need the failure reason. */
+/**
+ * Text-only wrapper for callers that do not need the failure reason.
+ * Nulls out truncated responses too: every other failure already yields a
+ * null text, and handing back half a reply under the same contract would
+ * make partial output indistinguishable from complete output.
+ */
 export async function gemini(prompt: string, opts: GeminiOptions = {}): Promise<string | null> {
-  return (await geminiCall(prompt, opts)).text;
+  const { text, error } = await geminiCall(prompt, opts);
+  return error ? null : text;
 }
 
 /**
