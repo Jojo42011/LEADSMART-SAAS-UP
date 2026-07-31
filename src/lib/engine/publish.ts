@@ -22,6 +22,25 @@ export async function verifyLive(url: string): Promise<string> {
   }
 }
 
+/**
+ * Where in the repo a static page must live to be served at /<folder>/<slug>/.
+ *
+ * A plain HTML site serves files from the repo root, but a framework app
+ * (Next.js, Vite, CRA...) only serves static files placed in public/ — a
+ * page committed to the root of a Next.js repo builds cleanly, deploys
+ * cleanly, and 404s forever. Detection is one API call: framework repos
+ * have a package.json at the root, static ones don't.
+ */
+async function repoPathPrefix(repo: string, branch: string | null | undefined, headers: Record<string, string>): Promise<string> {
+  try {
+    const url = `https://api.github.com/repos/${repo}/contents/package.json${branch ? `?ref=${branch}` : ""}`;
+    const res = await fetch(url, { headers, cache: "no-store" });
+    return res.ok ? "public/" : "";
+  } catch {
+    return "";
+  }
+}
+
 export async function publishGithub(input: {
   token: string;
   repo: string;
@@ -32,16 +51,17 @@ export async function publishGithub(input: {
   html: string;
   siteUrl?: string;
 }): Promise<PublishResult> {
-  const path = `${input.folder}/${input.slug}/index.html`;
   // Defensive: stored connections predating input normalization may hold a
   // full URL, and the cron path never passes through the wizard.
   const repo = normalizeGithubRepo(input.repo);
-  const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
   const headers = {
     Authorization: `Bearer ${input.token}`,
     Accept: "application/vnd.github+json",
     "Content-Type": "application/json",
   };
+  const prefix = await repoPathPrefix(repo, input.branch, headers);
+  const path = `${prefix}${input.folder}/${input.slug}/index.html`;
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
 
   let sha: string | undefined;
   const existing = await fetch(apiUrl, { headers, cache: "no-store" });
