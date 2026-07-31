@@ -76,10 +76,22 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
     // Browser-only reads (window.location, document.cookie) that must run
     // after mount, mirroring the app's client-only hydration pattern.
     const code = new URLSearchParams(window.location.search).get("error");
-    const profile = readProfileCookie();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount browser read
     if (code) setError(ERROR_COPY[code] ?? "Sign-in failed. Please try again.");
-    setExisting(profile);
+
+    // Only offer "Continue as ..." when the server still honors the
+    // session. The readable profile cookie can outlive the session itself
+    // (sign-out elsewhere, a session-epoch bump), and a continue button
+    // into a bounce reads as broken.
+    const profile = readProfileCookie();
+    if (profile) {
+      fetch("/api/auth/session")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { authed?: boolean } | null) => {
+          if (j?.authed) setExisting(profile);
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const submit = async (e: React.FormEvent) => {
