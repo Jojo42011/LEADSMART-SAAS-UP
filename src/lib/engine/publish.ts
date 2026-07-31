@@ -257,9 +257,31 @@ export async function publishGithubSupportFiles(input: {
   );
 
   const folders = [...new Set(input.pages.map((p) => p.folder))];
+  const origin = input.siteUrl.replace(/\/$/, "");
   for (const folder of folders) {
+    // Only fill a gap, never fight the site's own pages. If /<folder>/
+    // already resolves, the site has a real (better) index — and worse,
+    // committing public/<folder>/index.html against an existing app route
+    // can fail a Next.js static-export build outright, taking the whole
+    // site down with it. The generated index exists solely so the
+    // breadcrumb on published pages stops 404ing where no page exists.
+    // Skipped when our own index is what's live: it serves under the same
+    // URL, so re-checking would strand it stale; re-committing an
+    // unchanged one is already a no-op in commitFile.
+    const indexPath = `${input.pathPrefix}${folder}/index.html`;
+    const ownIndex = await fetch(
+      `https://api.github.com/repos/${repo}/contents/${indexPath}${input.branch ? `?ref=${input.branch}` : ""}`,
+      {
+        headers: { Authorization: `Bearer ${input.token}`, Accept: "application/vnd.github+json" },
+        cache: "no-store",
+      }
+    ).then((r) => r.ok).catch(() => false);
+    if (!ownIndex) {
+      const already = await verifyLive(`${origin}/${folder}/`);
+      if (already.startsWith("live:")) continue;
+    }
     await commit(
-      `${input.pathPrefix}${folder}/index.html`,
+      indexPath,
       folderIndexHtml({
         businessName: input.businessName,
         siteUrl: input.siteUrl,

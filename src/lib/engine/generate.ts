@@ -155,6 +155,36 @@ Respond with ONLY JSON:
   return { content: parsed, error: null };
 }
 
+/**
+ * Targeted revision: the audit's concrete findings go back to the model so
+ * it fixes what actually scored low, instead of rerolling and hoping. This
+ * is the mechanism that moves a page from "clears the 75 gate" toward an
+ * A: rerolls sample the same distribution, revision climbs it.
+ */
+async function llmRevise(
+  input: GenerateInput,
+  draft: PageContent,
+  issues: string[]
+): Promise<{ content: PageContent | null; error: string | null }> {
+  const prompt = `You wrote this page content JSON for the keyword "${input.keyword}" (${input.business.name}, ${input.business.city}, ${input.business.region}):
+
+${JSON.stringify(draft)}
+
+An SEO audit scored it below the A grade. Its specific findings:
+${issues.map((i) => `- ${i}`).join("\n")}
+
+Rewrite the content to fix every finding while keeping everything that already works: answer-first structure, question headings, concrete realistic statistics (framed as typical or estimated, never fabricated claims about the business), one quotable sentence per section, the city mentioned naturally including in one heading, 700 to 1100 words, no hyphens or em dashes, no exclamation marks.
+
+Respond with ONLY the complete corrected JSON in exactly the same shape.`;
+  const { text, error } = await geminiCall(prompt, { temperature: 0.4, maxOutputTokens: 16384 });
+  if (error) return { content: null, error };
+  const parsed = parseJson<PageContent>(text);
+  if (!parsed || !parsed.h1 || !Array.isArray(parsed.sections) || parsed.sections.length === 0) {
+    return { content: null, error: "revision could not be parsed" };
+  }
+  return { content: parsed, error: null };
+}
+
 function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: string): string {
   const origin = input.websiteUrl.replace(/\/$/, "");
   const canonical = `${origin}/${folder}/${slug}/`;
@@ -315,18 +345,50 @@ export async function generatePage(input: GenerateInput): Promise<GenerateOutput
   const slug = slugify(input.title || input.keyword);
   const folder =
     input.pageType === "location" ? "locations" : input.pageType === "service" ? "services" : "insights";
-  const html = renderHtml(input, content, slug, folder);
 
-  const audit = auditPage({
-    html,
-    keyword: input.keyword,
-    city: input.business.city,
-    region: input.business.region,
-    phone: input.business.phone,
-    businessName: input.business.name,
-    siblings: input.siblings,
-    maskTerms: [input.business.city, input.business.region],
-  });
+  const runAudit = (c: PageContent) => {
+    const rendered = renderHtml(input, c, slug, folder);
+    return {
+      html: rendered,
+      audit: auditPage({
+        html: rendered,
+        keyword: input.keyword,
+        city: input.business.city,
+        region: input.business.region,
+        phone: input.business.phone,
+        businessName: input.business.name,
+        siblings: input.siblings,
+        maskTerms: [input.business.city, input.business.region],
+      }),
+    };
+  };
+
+  let { html, audit } = runAudit(content);
+
+  // Revise toward an A. Passing the 75 gate is the floor, not the target:
+  // the audit knows exactly which dimensions scored low and why, so those
+  // findings go back to the model for a targeted rewrite — up to two
+  // rounds, keeping the best version, stopping early at grade A. Rerolls
+  // sample the same distribution; revision climbs it. Vetoed drafts are
+  // not revised (structural, not stylistic), nor are template fallbacks
+  // (no model to revise with).
+  const A_GRADE = 92;
+  let rounds = 0;
+  while (usedLlm && !audit.veto && audit.score < A_GRADE && rounds < 2) {
+    rounds++;
+    const issues = audit.dimensions
+      .filter((d) => d.issues.length > 0)
+      .flatMap((d) => d.issues.map((i) => `${d.name}: ${i}`))
+      .slice(0, 12);
+    if (issues.length === 0) break;
+    const revised = await llmRevise(input, content, issues);
+    if (!revised.content) break;
+    const candidate = runAudit(revised.content);
+    if (candidate.audit.score <= audit.score) break;
+    content = revised.content;
+    html = candidate.html;
+    audit = candidate.audit;
+  }
 
   return {
     slug,
