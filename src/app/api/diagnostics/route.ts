@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
     DATABASE_URL: Boolean(process.env.DATABASE_URL),
     GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY),
     GITHUB_CLIENT_ID: Boolean(process.env.GITHUB_CLIENT_ID),
+    GOOGLE_CLIENT_ID: Boolean(process.env.GOOGLE_CLIENT_ID),
+    GOOGLE_CLIENT_SECRET: Boolean(process.env.GOOGLE_CLIENT_SECRET),
     STRIPE_SECRET_KEY: Boolean(process.env.STRIPE_SECRET_KEY),
   };
 
