@@ -21,6 +21,16 @@ export async function GET(req: NextRequest) {
 
   const checks: Record<string, unknown> = {};
 
+  // Which code is actually running. Vercel's "Redeploy" button rebuilds the
+  // commit of the deployment it was clicked on — not the latest push — so a
+  // fix can be on the branch while production still runs the code from
+  // before it. This makes that state visible instead of arguable.
+  checks.deployment = {
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
+    commitMessage: process.env.VERCEL_GIT_COMMIT_MESSAGE?.slice(0, 72) ?? null,
+    branch: process.env.VERCEL_GIT_COMMIT_REF ?? null,
+  };
+
   // Environment presence. Values are never returned, only whether they exist.
   checks.env = {
     AUTH_SECRET: Boolean(process.env.AUTH_SECRET),
@@ -41,14 +51,15 @@ export async function GET(req: NextRequest) {
       error: "GEMINI_API_KEY is not set — pages fall back to the built-in template and score below the publish gate.",
     };
   } else {
-    // thinkingBudget 0 and a real token allowance: the 2.5-generation models
-    // reason before answering out of the same budget, so a 16-token cap
-    // reported "no text (finishReason MAX_TOKENS)" on a perfectly healthy
-    // key — the health check was failing itself, not the service.
+    // A plain request on purpose: no thinkingConfig (models that cannot
+    // bound their reasoning 400 on it) and a budget roomy enough that the
+    // reasoning phase plus the one-word reply always fit. The probe's only
+    // job is to prove the key and model work — every extra knob it sets is
+    // another way for the health check to fail on a healthy service, which
+    // it has now done twice (a 16-token cap, then thinkingBudget: 0).
     const probe = await geminiCall("Reply with the single word: ready", {
       temperature: 0,
-      maxOutputTokens: 256,
-      thinkingBudget: 0,
+      maxOutputTokens: 2048,
     });
     checks.gemini = {
       ok: probe.error === null,
