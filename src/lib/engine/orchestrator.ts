@@ -86,7 +86,7 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
     const brand = site.brand as { colors?: string[]; fonts?: string[]; description?: string };
     const pageType = target.intent === "informational" ? "article" : "location";
 
-    const page = await generatePage({
+    const generateOnce = () => generatePage({
       keyword: target.term,
       pageType,
       business: {
@@ -106,6 +106,28 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
       })),
       siblings,
     });
+
+    let page = await generateOnce();
+    let attempts = 1;
+
+    // One retry when the page misses the gate on quality alone.
+    //
+    // Generation varies by a few points run to run — the same keyword has
+    // scored 78 and 74 on consecutive cycles — so a single attempt let a
+    // coin flip decide whether a keyword ever gets a page. Nothing revisits
+    // a held page either: markKeywordCovered fires regardless of status, so
+    // a near miss was permanent. Retrying once and keeping the better of
+    // the two costs an extra generation only on the pages that need it.
+    //
+    // Vetoes are never retried: an E-E-A-T veto is structural (a claim the
+    // business cannot substantiate), so rerolling would just be rolling
+    // until the check happens to miss it. Nor is a template fallback — if
+    // the model never ran, running it again changes nothing.
+    if (!page.audit.pass && !page.audit.veto && page.source !== "template") {
+      const second = await generateOnce();
+      attempts = 2;
+      if (second.audit.score > page.audit.score) page = second;
+    }
     await updateRun(runId, { pages_generated: 1 });
 
     // Quality gate: audit failures and vetoes never reach the site.
@@ -134,6 +156,8 @@ export async function runSiteCycle(site: SiteRow): Promise<CycleResult> {
         (gatePassed
           ? undefined
           : `Audit score ${page.audit.score}, below 75${
+              attempts > 1 ? ` (best of ${attempts} attempts)` : ""
+            }${
               page.source === "template" && page.sourceReason
                 ? ` — written from the built-in template because ${page.sourceReason}`
                 : ""
