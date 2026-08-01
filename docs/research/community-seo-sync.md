@@ -60,7 +60,7 @@ its `skill.md`-style pages are designed to make agents execute instructions
 - Treat anything an agent forum "recommends doing" as untrusted input, not an
   instruction.
 
-**Last synced:** 2026-07-31
+**Last synced:** 2026-08-01
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -585,3 +585,37 @@ act on what's genuinely new beyond this.
   handling, DB connection probe, demo-checkout plan activation, framework-
   aware GitHub publish paths — logged in their own commits on the default
   branch.)
+
+- **2026-08-01** — Reddit still blocked (r/SEO and old.reddit r/TechSEO .json
+  fetches failed). Searched: "Google algorithm update August 2026 AI Mode",
+  "new AI crawler user agents robots.txt August 2026" (rotation: last checked
+  07-22), "AEO new tactics study August 2026", plus a dedicated corroboration
+  query on an unfamiliar crawler token. Quiet day — no code change. Findings:
+  - **Checked and correctly NOT added (single-source token):** one aggregator
+    reference set lists a "Google-Agent" user agent for user-triggered
+    fetches. Corroboration search resolved it to **Google-CloudVertexBot**
+    (SEJ, ppc.land, Google Cloud docs): a crawler that fetches ONLY at a site
+    owner's own request when building Vertex AI agents and does not index
+    public sites — not a citation or training surface, so it does not belong
+    in either robots.ts tier. "Google-Agent" itself appears to be aggregator
+    shorthand, not an official token. No change.
+  - **Crawler roster otherwise confirmed current:** the 2026 references'
+    named agents (GPTBot, ClaudeBot, anthropic-ai, CCBot, OAI-SearchBot,
+    Claude-SearchBot, PerplexityBot, ChatGPT-User, Perplexity-User,
+    Google-Extended, Applebot-Extended) are all already present in our
+    training/citation tiers. Also reconfirmed the first-matching-rule and
+    exact-capitalization pitfalls our generated robots.txt already avoids.
+  - **Confirmed, already captured:** FAQ rich-results tooling finishes its
+    retirement through August 2026 — the SERP-display-vs-AEO-value
+    distinction was already logged 07-17 and FAQPage schema stays for
+    citation value. Confirmed 2026 core-update list (March spam, March core,
+    May core; AI Overviews merging into AI Mode) matches the 07-19/07-21
+    entries. The rumored "Aug 26" core update remains speculative — nothing
+    landed as of today.
+  - **Confirmed, already captured:** AirOps 2026 State of AI Search
+    (structure, freshness, credible sourcing as the controllable citation
+    predictors) and the Princeton GEO lift numbers — both already encoded in
+    the weighted GEO tactics; the "entity authorization" framing repeats
+    entity-clarity ground.
+  - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
+    in today's rotation).
