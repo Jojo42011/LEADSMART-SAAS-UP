@@ -202,6 +202,21 @@ export function Dashboard() {
             </span>
             Home
           </Link>
+          <Link
+            href="/support"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] text-muted transition-colors hover:bg-paper-warm hover:text-ink"
+          >
+            <span aria-hidden="true" className="h-4.5 w-4.5 [&>svg]:h-full [&>svg]:w-full">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path
+                  d="M21 11.5a8.4 8.4 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.4 8.4 0 01-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.4 8.4 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+            Support
+          </Link>
         </nav>
         <div className="mt-auto rounded-xl border border-line p-4">
           <p className="label-mono text-muted/70">Plan</p>
@@ -230,6 +245,10 @@ export function Dashboard() {
                   window.location.href = "/";
                   return;
                 }
+                if (e.target.value === "__support") {
+                  window.location.href = "/support";
+                  return;
+                }
                 setTab(e.target.value as Tab);
               }}
               className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[13px] md:hidden"
@@ -238,6 +257,7 @@ export function Dashboard() {
                 <option key={item.label}>{item.label}</option>
               ))}
               <option value="__home">Home</option>
+              <option value="__support">Support</option>
             </select>
           </div>
         </header>

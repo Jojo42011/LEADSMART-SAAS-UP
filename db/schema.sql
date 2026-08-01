@@ -155,3 +155,27 @@ alter table keywords         alter column id set default gen_random_uuid();
 alter table keyword_history  alter column id set default gen_random_uuid();
 alter table competitors      alter column id set default gen_random_uuid();
 alter table pages            alter column id set default gen_random_uuid();
+
+-- ---------------------------------------------------------------------------
+-- Support enquiries.
+--
+-- Every message is written here before delivery is attempted, so a mail
+-- transport that is misconfigured, rate limited, or simply not set up yet
+-- loses nobody's message — it can be read out of the table and answered by
+-- hand. delivered/delivery_error record what actually happened to the send,
+-- not what we hoped happened.
+-- ---------------------------------------------------------------------------
+create table if not exists support_messages (
+  id             uuid primary key default gen_random_uuid(),
+  name           text,
+  email          text not null,
+  subject        text,
+  message        text not null,
+  /** Set when the sender was signed in; null for the public contact form. */
+  tenant_email   text,
+  delivered      boolean not null default false,
+  delivery_error text,
+  created_at     timestamptz not null default now()
+);
+create index if not exists support_messages_created_idx on support_messages(created_at desc);
+alter table support_messages alter column id set default gen_random_uuid();

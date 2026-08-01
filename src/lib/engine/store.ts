@@ -752,3 +752,43 @@ export async function markPagePublished(
     [pageId, patch.liveUrl ?? null, patch.liveStatus ?? null, patch.wpPageId ?? null, patch.githubSha ?? null]
   );
 }
+
+/* ------------------------------ Support mail ----------------------------- */
+
+export type SupportMessage = {
+  name?: string | null;
+  email: string;
+  subject?: string | null;
+  message: string;
+  tenantEmail?: string | null;
+};
+
+/**
+ * Records a support enquiry before any send is attempted, and returns its
+ * id so the delivery outcome can be written back honestly.
+ *
+ * Storing first is the point: if the mail transport is unconfigured or
+ * failing, the message is still on disk to be answered by hand rather than
+ * discarded behind a cheerful "thanks, we'll be in touch".
+ */
+export async function insertSupportMessage(m: SupportMessage): Promise<string | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(
+    `insert into support_messages (name, email, subject, message, tenant_email)
+     values ($1, $2, $3, $4, $5) returning id`,
+    [m.name ?? null, m.email, m.subject ?? null, m.message, m.tenantEmail ?? null]
+  );
+  return res.rows[0].id as string;
+}
+
+export async function markSupportDelivered(
+  id: string,
+  delivered: boolean,
+  error?: string
+): Promise<void> {
+  if (!storeConfigured()) return;
+  await db().query(
+    `update support_messages set delivered = $2, delivery_error = $3 where id = $1`,
+    [id, delivered, error ?? null]
+  );
+}
