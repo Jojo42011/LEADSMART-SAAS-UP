@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "@/lib/session";
 import { insertSupportMessage, markSupportDelivered, storeConfigured } from "@/lib/engine/store";
-import { sendSupportMail, mailConfigured, SUPPORT_INBOX } from "@/lib/mailer";
+import { sendSupportMail, mailConfigured, probeMail, SUPPORT_INBOX } from "@/lib/mailer";
 
 /**
  * Receives a support enquiry: stores it, then tries to email it on.
@@ -95,12 +95,22 @@ export async function POST(req: NextRequest) {
   });
 }
 
-/** Lets the page show the real inbox address rather than hard-coding it twice. */
-export async function GET() {
-  return NextResponse.json({
+/**
+ * Lets the page show the real inbox address rather than hard-coding it
+ * twice, and — with ?probe=1 — actually opens the SMTP connection so a
+ * new deployment can be proven to deliver before anyone relies on it.
+ * Only booleans and the provider's error text come back; no credential
+ * is ever echoed.
+ */
+export async function GET(req: NextRequest) {
+  const base = {
     ok: true,
     inbox: SUPPORT_INBOX,
     mail: mailConfigured(),
     store: storeConfigured(),
-  });
+  };
+  if (req.nextUrl.searchParams.get("probe") !== "1") {
+    return NextResponse.json(base);
+  }
+  return NextResponse.json({ ...base, probe: await probeMail() });
 }

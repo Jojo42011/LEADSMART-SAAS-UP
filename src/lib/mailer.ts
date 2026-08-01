@@ -37,8 +37,13 @@ export function mailConfigured(): boolean {
 
 export async function sendSupportMail(mail: Mail): Promise<MailResult> {
   const resendKey = process.env.RESEND_API_KEY;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
+  const smtpUser = process.env.SMTP_USER?.trim();
+  // Google shows app passwords grouped as "abcd efgh ijkl mnop" and the
+  // spaces are display only — pasted verbatim they authenticate as a
+  // 19-character password and Gmail rejects the login. Stripping
+  // whitespace here turns the single most likely setup mistake into a
+  // non-event rather than an opaque 535.
+  const smtpPass = process.env.SMTP_PASS?.replace(/\s+/g, "");
 
   if (resendKey) {
     try {
@@ -95,4 +100,42 @@ export async function sendSupportMail(mail: Mail): Promise<MailResult> {
     reason:
       "No mail transport is configured on this deployment (set SMTP_USER and SMTP_PASS, or RESEND_API_KEY).",
   };
+}
+
+/**
+ * Verifies the SMTP login without sending anything.
+ *
+ * Setup fails silently in a way that is miserable to debug — a wrong app
+ * password looks identical to a working one until someone writes in and
+ * never gets a reply. This proves the credentials authenticate, and
+ * returns Gmail's own words when they don't.
+ */
+export async function probeMail(): Promise<{ ok: boolean; via: string; error: string | null }> {
+  if (process.env.RESEND_API_KEY) {
+    // Resend has no cheap auth-only endpoint that doesn't send, so this
+    // reports configuration rather than claiming a verified connection.
+    return { ok: true, via: "resend", error: null };
+  }
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.replace(/\s+/g, "");
+  if (!user || !pass) {
+    return { ok: false, via: "none", error: "SMTP_USER and SMTP_PASS are not both set." };
+  }
+  try {
+    const port = Number(process.env.SMTP_PORT || 465);
+    const transport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    });
+    await transport.verify();
+    return { ok: true, via: "smtp", error: null };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "SMTP verify failed";
+    const hint = /535|Username and Password not accepted|BadCredentials/i.test(msg)
+      ? " Gmail rejected the login. SMTP_PASS must be a 16-character App Password created under Google Account > Security > 2-Step Verification > App passwords — a normal account password will always fail here."
+      : "";
+    return { ok: false, via: "smtp", error: `${msg}${hint}` };
+  }
 }
