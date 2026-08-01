@@ -439,6 +439,32 @@ function PublishingStep({ data, update }: StepProps) {
   const wpConnected = Boolean(p.wpUser && p.wpAppPassword);
   const ghConnected = p.githubOauth || Boolean(p.githubRepo && p.githubToken);
 
+  // Credentials are proven against the live site, not merely stored:
+  // "saved" and "the agent can publish here" are different facts, and a
+  // typo'd password used to surface days later as a failed cron publish.
+  const [wpTest, setWpTest] = useState<{ state: "idle" | "busy" | "ok" | "fail"; msg: string }>({
+    state: "idle",
+    msg: "",
+  });
+  const testWordpress = async () => {
+    setWpTest({ state: "busy", msg: "" });
+    try {
+      const res = await fetch("/api/connect/wordpress/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site: data.website.url, user: p.wpUser, appPassword: p.wpAppPassword }),
+      });
+      const j = (await res.json()) as { ok: boolean; error?: string; name?: string };
+      setWpTest(
+        j.ok
+          ? { state: "ok", msg: `Verified — signed in as ${j.name || p.wpUser}, publishing allowed.` }
+          : { state: "fail", msg: j.error || "The connection test failed." }
+      );
+    } catch {
+      setWpTest({ state: "fail", msg: "Could not reach the server to run the test." });
+    }
+  };
+
   // After GitHub OAuth, load the repo list for the picker.
   useEffect(() => {
     if (!isWp && p.githubOauth && repos.length === 0) {
@@ -511,11 +537,28 @@ function PublishingStep({ data, update }: StepProps) {
       <div className="mt-8 grid gap-5">
         {isWp ? (
           wpConnected ? (
-            <ConnectedCard
-              title="WordPress connected"
-              detail={`Signed in as ${p.wpUser}. The agent can now publish pages to your site.`}
-              onDisconnect={() => set({ wpUser: "", wpAppPassword: "" })}
-            />
+            <>
+              <ConnectedCard
+                title="WordPress connected"
+                detail={`Signed in as ${p.wpUser}. The agent can now publish pages to your site.`}
+                onDisconnect={() => {
+                  set({ wpUser: "", wpAppPassword: "" });
+                  setWpTest({ state: "idle", msg: "" });
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={testWordpress}
+                  disabled={wpTest.state === "busy"}
+                  className="rounded-full border border-line bg-white px-4 py-2 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-60"
+                >
+                  {wpTest.state === "busy" ? "Testing…" : "Test the connection"}
+                </button>
+                {wpTest.state === "ok" && <span className="text-[12.5px] text-ink">{wpTest.msg}</span>}
+                {wpTest.state === "fail" && <span className="text-[12.5px] text-muted">{wpTest.msg}</span>}
+              </div>
+            </>
           ) : (
             <>
               <button
@@ -560,6 +603,18 @@ function PublishingStep({ data, update }: StepProps) {
                     value={p.wpAppPassword}
                     onChange={(e) => set({ wpAppPassword: e.target.value })}
                   />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={testWordpress}
+                      disabled={wpTest.state === "busy" || !p.wpUser.trim() || !p.wpAppPassword.trim()}
+                      className="rounded-full border border-line bg-white px-4 py-2 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-60"
+                    >
+                      {wpTest.state === "busy" ? "Testing…" : "Test the connection"}
+                    </button>
+                    {wpTest.state === "ok" && <span className="text-[12.5px] text-ink">{wpTest.msg}</span>}
+                    {wpTest.state === "fail" && <span className="text-[12.5px] text-muted">{wpTest.msg}</span>}
+                  </div>
                 </>
               )}
             </>

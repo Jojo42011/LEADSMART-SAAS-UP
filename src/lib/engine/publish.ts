@@ -424,6 +424,91 @@ export async function pingIndexNow(input: {
   }
 }
 
+/**
+ * Converts one of our standalone HTML documents into WordPress page
+ * content.
+ *
+ * The generator emits a complete document — doctype, <head> with a
+ * <style> block, <body> with our own header and footer. WordPress renders
+ * post content INSIDE the active theme's template, so publishing the raw
+ * document produced a page with two <html> roots and our site chrome
+ * nested inside the customer's theme chrome. What WordPress needs is the
+ * article itself: the styles, and the body minus our header/nav/footer —
+ * the theme already provides those, and they are the customer's real ones.
+ *
+ * The result is wrapped in a wp:html block so the block editor treats it
+ * as raw HTML instead of trying to parse it into blocks and "fixing" it.
+ */
+export function wordpressContentOf(fullHtml: string): string {
+  const styles = [...fullHtml.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)]
+    .map((m) => m[1])
+    .join("\n");
+  const bodyMatch = fullHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  let body = bodyMatch ? bodyMatch[1] : fullHtml;
+
+  // Drop our own page furniture: the site header bar, the breadcrumb
+  // trail, and the footer. Each is anchored to a class the generator
+  // controls, so this doesn't depend on parsing arbitrary HTML.
+  body = body
+    .replace(/<header class="bar">[\s\S]*?<\/header>/i, "")
+    .replace(/<nav class="crumbs"[\s\S]*?<\/nav>/i, "")
+    .replace(/<footer[\s\S]*?<\/footer>\s*$/i, "")
+    .trim();
+
+  // Scope html/body-level rules to the article wrapper: the originals
+  // would restyle the customer's entire theme.
+  const scoped = styles
+    .replace(/(^|\})\s*html\s*\{/g, "$1 .ascent-page{")
+    .replace(/(^|\})\s*body\s*\{/g, "$1 .ascent-page{");
+
+  return `<!-- wp:html -->\n<div class="ascent-page"><style>${scoped}</style>\n${body}</div>\n<!-- /wp:html -->`;
+}
+
+/**
+ * Proves a WordPress connection actually works before it is stored:
+ * authenticates as the user and checks they can create pages. "The URL
+ * and password were saved" and "the agent can publish here" are different
+ * facts, and onboarding used to record the first while implying the
+ * second.
+ */
+export async function verifyWordpress(input: {
+  site: string;
+  user: string;
+  appPassword: string;
+}): Promise<{ ok: boolean; error?: string; name?: string }> {
+  const site = input.site.replace(/\/$/, "");
+  const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
+  try {
+    const res = await fetch(`${site}/wp-json/wp/v2/users/me?context=edit`, {
+      headers: { Authorization: `Basic ${auth}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (res.status === 401 || res.status === 403) {
+      return {
+        ok: false,
+        error:
+          "WordPress rejected the credentials. Application passwords need WordPress 5.6+ and HTTPS; check the username matches the account that created the password.",
+      };
+    }
+    if (!res.ok) {
+      return { ok: false, error: `WordPress answered ${res.status} — is the REST API enabled at ${site}/wp-json/?` };
+    }
+    const me = (await res.json()) as { name?: string; capabilities?: Record<string, boolean> };
+    if (me.capabilities && !me.capabilities.publish_pages) {
+      return {
+        ok: false,
+        error: `Signed in as ${me.name ?? input.user}, but this account cannot publish pages — use an Administrator or Editor account.`,
+      };
+    }
+    return { ok: true, name: me.name };
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Could not reach ${site}/wp-json/ (${e instanceof Error ? e.message : "network error"}). Some free hosts block server-to-server requests with bot protection; the site must allow API traffic.`,
+    };
+  }
+}
+
 export async function publishWordpress(input: {
   site: string;
   user: string;
@@ -443,7 +528,10 @@ export async function publishWordpress(input: {
       title: input.title,
       slug: input.slug,
       status: input.status || "publish",
-      content: input.html,
+      // Never the raw document: WordPress renders content inside the
+      // theme template, so the full standalone page must be reduced to
+      // theme-safe article content first.
+      content: wordpressContentOf(input.html),
     }),
     signal: AbortSignal.timeout(20_000),
   });
