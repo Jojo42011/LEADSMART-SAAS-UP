@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "npx tsx test/wordpress-publish.test.ts"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.1",

@@ -3,6 +3,7 @@ import {
   getConnection,
   listPages,
   markPagePublished,
+  updatePageHtml,
 } from "./store";
 import { pickAccent } from "../site-ingest";
 import { siteOrigin } from "../url";
@@ -43,9 +44,10 @@ export async function publishStoredPage(
     title: string;
     html: string;
     /** Fresh generations carry their artwork; a republish of a stored row
-     * does not (the base64 is never persisted), so GitHub republishes ship
-     * the page and rely on its SVG fallback rather than blocking. */
-    image?: { filename: string; base64: string };
+     * does not, because the bytes are never persisted. GitHub republishes
+     * keep the committed file; WordPress republishes read the media URL
+     * already baked into the stored HTML by the original publish. */
+    image?: { filename: string; base64: string; mimeType: string; alt: string };
   }
 ): Promise<StoredPagePublishResult> {
   const origin = siteOrigin(site.url);
@@ -64,8 +66,14 @@ export async function publishStoredPage(
       slug: page.slug,
       title: page.title,
       html: page.html,
+      image: page.image,
     });
     if (res.ok && res.platform === "wordpress") {
+      // Keep the stored copy identical to what the site serves: the
+      // publish rewrote artwork paths into media-library URLs, and a
+      // republish from the un-rewritten original would reintroduce the
+      // broken references this whole path exists to fix.
+      if (res.html !== page.html) await updatePageHtml(page.id, res.html);
       await markPagePublished(page.id, {
         liveUrl: res.liveUrl,
         liveStatus: res.liveStatus ?? undefined,
@@ -74,6 +82,7 @@ export async function publishStoredPage(
       published = true;
       liveUrl = res.liveUrl;
       liveStatus = res.liveStatus;
+      discoveryNote = res.imageNote;
     } else if (!res.ok) {
       publishError = [res.error, res.detail].filter(Boolean).join(" — ");
     }

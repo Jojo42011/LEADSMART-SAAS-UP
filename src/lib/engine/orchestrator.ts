@@ -300,7 +300,12 @@ export async function runSiteCycle(
           folder: page.folder,
           title: page.title,
           html: page.html,
-          image: { filename: page.image.filename, base64: page.image.base64 },
+          image: {
+            filename: page.image.filename,
+            base64: page.image.base64,
+            mimeType: page.image.mimeType,
+            alt: page.image.alt,
+          },
         }
       );
       published = res.published;

@@ -848,3 +848,17 @@ export async function getTenantBillingByEmail(
   if (!row) return null;
   return { planStatus: row.plan_status as string, stripeCustomerId: (row.stripe_customer_id as string) ?? null };
 }
+
+/**
+ * Replaces a page's stored HTML.
+ *
+ * Used after a WordPress publish rewrites artwork references from the
+ * generator's root-relative paths to real media-library URLs: persisting
+ * the published version means a later republish, preview, or sibling
+ * comparison sees what the site actually serves rather than a path that
+ * only ever resolved on GitHub.
+ */
+export async function updatePageHtml(pageId: string, html: string): Promise<void> {
+  if (!storeConfigured()) return;
+  await db().query(`update pages set html = $2 where id = $1`, [pageId, html]);
+}

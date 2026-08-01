@@ -9,7 +9,18 @@ import { siteOrigin } from "../url";
 
 export type PublishResult =
   | { ok: true; platform: "github"; commitSha: string | null; path: string; liveUrl: string | null; liveStatus: string | null }
-  | { ok: true; platform: "wordpress"; pageId: number; liveUrl: string; liveStatus: string | null }
+  | {
+      ok: true;
+      platform: "wordpress";
+      pageId: number;
+      liveUrl: string;
+      liveStatus: string | null;
+      /** How the artwork was resolved, for the run summary. */
+      imageNote: string | null;
+      /** The HTML actually published, with artwork references rewritten to
+       * real URLs — worth persisting so a later republish stays correct. */
+      html: string;
+    }
   | { ok: false; error: string; detail?: string };
 
 export async function verifyLive(url: string): Promise<string> {
@@ -465,6 +476,65 @@ export function wordpressContentOf(fullHtml: string): string {
   return `<!-- wp:html -->\n<div class="ascent-page"><style>${scoped}</style>\n${body}</div>\n<!-- /wp:html -->`;
 }
 
+/** Escapes a string for literal use inside a RegExp. */
+function reEscape(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Uploads artwork to the WordPress media library and returns its public URL.
+ *
+ * Necessary because the generator writes root-relative image paths like
+ * /insights/<slug>/hero.jpg. On a GitHub publish the file is committed
+ * beside the page so that path resolves; WordPress has no such file and
+ * never will, so every page published there pointed at artwork that did
+ * not exist. The media library is WordPress's answer to this: upload the
+ * bytes, get back an absolute URL, and rewrite the reference.
+ *
+ * The upload is a raw binary body with Content-Disposition naming the
+ * file — the media endpoint does not take JSON or multipart here.
+ */
+export async function uploadWordpressMedia(input: {
+  site: string;
+  user: string;
+  appPassword: string;
+  filename: string;
+  base64: string;
+  mimeType: string;
+  alt: string;
+}): Promise<{ ok: true; id: number; sourceUrl: string } | { ok: false; error: string }> {
+  const site = siteOrigin(input.site);
+  const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
+  try {
+    const res = await fetch(`${site}/wp-json/wp/v2/media`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": input.mimeType,
+        "Content-Disposition": `attachment; filename="${input.filename.replace(/"/g, "")}"`,
+      },
+      body: Buffer.from(input.base64, "base64"),
+      signal: AbortSignal.timeout(45_000),
+    });
+    const json = (await res.json()) as { id?: number; source_url?: string; message?: string };
+    if (!res.ok || !json.id || !json.source_url) {
+      return { ok: false, error: json.message || `media upload failed (${res.status})` };
+    }
+    // Alt text is a second call because the upload response is the raw
+    // attachment. Best effort: a missing alt is an accessibility and AEO
+    // loss, not a reason to fail a publish that already has the bytes.
+    await fetch(`${site}/wp-json/wp/v2/media/${json.id}`, {
+      method: "POST",
+      headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ alt_text: input.alt }),
+      signal: AbortSignal.timeout(15_000),
+    }).catch(() => {});
+    return { ok: true, id: json.id, sourceUrl: json.source_url };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "network error" };
+  }
+}
+
 /**
  * Proves a WordPress connection actually works before it is stored:
  * authenticates as the user and checks they can create pages. "The URL
@@ -527,9 +597,55 @@ export async function publishWordpress(input: {
   title: string;
   html: string;
   status?: "publish" | "draft";
+  /** Artwork the HTML references by a root-relative path. */
+  image?: { filename: string; base64: string; mimeType: string; alt: string };
 }): Promise<PublishResult> {
   const site = siteOrigin(input.site);
   const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
+
+  // Resolve the artwork reference before publishing. The generator writes
+  // /<folder>/<slug>/<filename>, which only resolves on a GitHub publish
+  // where the file is committed beside the page; on WordPress that path is
+  // guaranteed to 404, so it has to become a real URL or go away.
+  let html = input.html;
+  let imageNote: string | null = null;
+  if (input.image) {
+    const { filename, base64, mimeType, alt } = input.image;
+    const srcPattern = new RegExp(`src="[^"]*${reEscape(filename)}"`, "g");
+    let resolved: string | null = null;
+
+    if (mimeType === "image/svg+xml") {
+      // WordPress refuses SVG uploads by default (a standing XSS
+      // precaution most sites never relax), so the brandmark fallback is
+      // inlined instead of fighting the platform. It is a few KB of
+      // deterministic vector, so the page weight cost is negligible.
+      resolved = `data:image/svg+xml;base64,${base64}`;
+      imageNote = "svg inlined";
+    } else {
+      const up = await uploadWordpressMedia({ site, user: input.user, appPassword: input.appPassword, filename, base64, mimeType, alt });
+      if (up.ok) {
+        resolved = up.sourceUrl;
+        imageNote = "media uploaded";
+      } else {
+        // Inline rather than ship a broken image. Heavier than a media
+        // URL and worse for caching, but a page that renders is worth
+        // more than a tidy one that shows a broken-image icon.
+        resolved = `data:${mimeType};base64,${base64}`;
+        imageNote = `media upload failed (${up.error}); inlined instead`;
+      }
+    }
+    html = html.replace(srcPattern, `src="${resolved}"`);
+  } else {
+    // No artwork to resolve — most likely a republish of a stored page,
+    // whose bytes were never persisted. Drop the images that point at
+    // page-relative artwork so the hero degrades to its brand-coloured
+    // ground instead of rendering a broken-image icon.
+    const orphan = /<img\b[^>]*src="\/[^"]*\.(?:png|jpe?g|webp|svg)"[^>]*>/gi;
+    if (orphan.test(html)) {
+      html = html.replace(orphan, "");
+      imageNote = "orphaned artwork references removed";
+    }
+  }
 
   const res = await fetch(`${site}/wp-json/wp/v2/pages`, {
     method: "POST",
@@ -541,7 +657,7 @@ export async function publishWordpress(input: {
       // Never the raw document: WordPress renders content inside the
       // theme template, so the full standalone page must be reduced to
       // theme-safe article content first.
-      content: wordpressContentOf(input.html),
+      content: wordpressContentOf(html),
     }),
     signal: AbortSignal.timeout(20_000),
   });
@@ -552,7 +668,7 @@ export async function publishWordpress(input: {
 
   const json = (await res.json()) as { id: number; link: string };
   const liveStatus = json.link ? await verifyLive(json.link) : null;
-  return { ok: true, platform: "wordpress", pageId: json.id, liveUrl: json.link, liveStatus };
+  return { ok: true, platform: "wordpress", pageId: json.id, liveUrl: json.link, liveStatus, imageNote, html };
 }
 
 /**
