@@ -111,10 +111,27 @@ export async function sendSupportMail(mail: Mail): Promise<MailResult> {
  * returns Gmail's own words when they don't.
  */
 export async function probeMail(): Promise<{ ok: boolean; via: string; error: string | null }> {
-  if (process.env.RESEND_API_KEY) {
-    // Resend has no cheap auth-only endpoint that doesn't send, so this
-    // reports configuration rather than claiming a verified connection.
-    return { ok: true, via: "resend", error: null };
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  if (resendKey) {
+    // Listing domains authenticates the key without sending anything.
+    // Reporting "configured" as though it were "working" is the exact
+    // failure this probe exists to catch, so the key is actually used.
+    try {
+      const res = await fetch("https://api.resend.com/domains", {
+        headers: { Authorization: `Bearer ${resendKey}` },
+      });
+      if (res.ok) return { ok: true, via: "resend", error: null };
+      return {
+        ok: false,
+        via: "resend",
+        error:
+          res.status === 401
+            ? "Resend rejected the API key (401). Check RESEND_API_KEY was copied whole and the deployment was rebuilt after adding it."
+            : `Resend returned ${res.status}: ${(await res.text()).slice(0, 200)}`,
+      };
+    } catch (e) {
+      return { ok: false, via: "resend", error: e instanceof Error ? e.message : "Resend unreachable" };
+    }
   }
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.replace(/\s+/g, "");
