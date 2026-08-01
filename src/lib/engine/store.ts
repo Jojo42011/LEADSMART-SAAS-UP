@@ -834,3 +834,17 @@ export async function getPageWithSiteOwned(
   const { site, ...page } = row as typeof res.rows[0] & { site: SiteRow };
   return { page, site };
 }
+
+/** The tenant's billing identity: plan status plus Stripe customer id. */
+export async function getTenantBillingByEmail(
+  email: string
+): Promise<{ planStatus: string; stripeCustomerId: string | null } | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(
+    `select plan_status, stripe_customer_id from tenants where email = $1`,
+    [email.toLowerCase()]
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  return { planStatus: row.plan_status as string, stripeCustomerId: (row.stripe_customer_id as string) ?? null };
+}

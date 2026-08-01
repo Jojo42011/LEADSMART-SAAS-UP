@@ -16,9 +16,12 @@ import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
 import { useAgentPages, allPages, type AgentPage } from "@/lib/agent-pages";
+import { Billing } from "./Billing";
 import { Analytics } from "./Analytics";
 
-type Tab = "Overview" | "Content" | "Analytics" | "Keywords" | "Competitors" | "Settings";
+// Billing is a Tab but not a navItem: it is entered through the Plan card
+// (and the mobile switcher), not the section list.
+type Tab = "Overview" | "Content" | "Analytics" | "Keywords" | "Competitors" | "Settings" | "Billing";
 
 const navItems: { label: Tab; icon: React.ReactNode }[] = [
   {
@@ -206,11 +209,19 @@ export function Dashboard() {
             Support
           </Link>
         </nav>
-        <div className="mt-auto rounded-xl border border-line p-4">
+        <button
+          type="button"
+          onClick={() => setTab("Billing")}
+          aria-current={tab === "Billing" ? "page" : undefined}
+          className={`mt-auto rounded-xl border p-4 text-left transition-colors ${
+            tab === "Billing" ? "border-ink/40 bg-paper-warm" : "border-line hover:border-ink/40 hover:bg-paper-warm"
+          }`}
+        >
           <p className="label-mono text-muted/70">Plan</p>
           <p className="mt-1 text-[13.5px] font-medium">Active</p>
           <p className="mt-0.5 text-[12px] text-muted">$49 per website, monthly</p>
-        </div>
+          <p className="mt-2 text-[12px] font-medium text-accent">Manage billing &rarr;</p>
+        </button>
       </aside>
 
       {/* Main */}
@@ -241,6 +252,7 @@ export function Dashboard() {
                 <option key={item.label}>{item.label}</option>
               ))}
               <option value="__support">Support</option>
+              <option value="Billing">Billing</option>
             </select>
           </div>
         </header>
@@ -267,6 +279,7 @@ export function Dashboard() {
                 <Competitors plan={plan} goTo={setTab} />
               </div>
             )}
+            {tab === "Billing" && <Billing />}
             {tab === "Settings" && (
               <Settings data={data} update={update} onApplied={() => setIntel(loadIntel())} />
             )}
