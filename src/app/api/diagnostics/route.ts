@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/api-auth";
 import { geminiCall, geminiConfigured, geminiModel, listGeminiModels } from "@/lib/gemini";
 import { probeStore, storeConfigured, listSitesForEmail, getConnection } from "@/lib/engine/store";
+import { verifyWordpress } from "@/lib/engine/publish";
 
 /**
  * Answers "why isn't the agent publishing?" with facts instead of guesswork.
@@ -92,13 +93,31 @@ export async function GET(req: NextRequest) {
             site.platform === "wordpress"
               ? Boolean(conn?.wp_user && conn.wp_app_password)
               : Boolean(conn?.github_repo && conn.github_token);
+
+          // Stored credentials are not working credentials. For WordPress
+          // this authenticates against the customer's live site and checks
+          // the account may publish pages, so a revoked application
+          // password or a site that has since gone behind bot protection
+          // is reported here rather than discovered by a failed publish
+          // inside a cron run nobody is watching.
+          let credentialCheck: { ok: boolean; error?: string; name?: string } | null = null;
+          if (canPublish && site.platform === "wordpress" && conn?.wp_user && conn.wp_app_password) {
+            credentialCheck = await verifyWordpress({
+              site: site.url,
+              user: conn.wp_user,
+              appPassword: conn.wp_app_password,
+            });
+          }
           return {
             url: site.url,
             platform: site.platform,
             cadence: site.cadence,
             publishMode: site.publish_mode,
+            active: site.active,
             lastRunAt: site.last_run_at,
             canPublish,
+            /** Live proof, where the platform allows one cheaply. */
+            credentialCheck,
             publishBlockedBy: canPublish
               ? null
               : `No ${site.platform} credentials stored for this site — reconnect publishing in onboarding.`,
