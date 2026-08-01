@@ -53,6 +53,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // A paused agent stays paused. The stop control is a master switch on
+  // production, so honouring it only for scheduled cycles while the
+  // dashboard still published on demand would make the switch a lie.
+  if (sites.every((s) => !s.active)) {
+    return NextResponse.json(
+      { ok: false, error: "The agent is paused. Resume it to generate pages." },
+      { status: 409 }
+    );
+  }
+
   // One site per press. Multi-site accounts run their oldest-idle site
   // first, matching the cron's ordering.
   const site = [...sites].sort((a, b) =>

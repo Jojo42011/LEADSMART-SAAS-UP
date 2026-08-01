@@ -218,6 +218,7 @@ export function Dashboard() {
             {siteUrl && <p className="truncate text-[12.5px] text-muted">{siteUrl}</p>}
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <AgentSwitch />
             {/* Mobile tab switcher */}
             <select
               value={tab}
@@ -238,10 +239,6 @@ export function Dashboard() {
               ))}
               <option value="__home">Home</option>
             </select>
-            <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-line px-3 py-1.5 sm:px-3.5">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-livepulse" />
-              <span className="label-mono hidden text-muted sm:inline">Agent active</span>
-            </span>
           </div>
         </header>
 
@@ -1602,4 +1599,87 @@ function LiveResearch({ intel, mode }: { intel: Intel; mode: "keywords" | "compe
   }
 
   return null;
+}
+
+/**
+ * The master switch for autonomous production, in the dashboard header
+ * where it is reachable from every tab.
+ *
+ * State lives in the database (sites.active), not in this component, so a
+ * paused agent stays paused across reloads, other devices, and the cron —
+ * which reads the same column. The label states the current state rather
+ * than the action ("Agent running" / "Agent paused") with the verb on the
+ * button, because a control that only says "Stop" leaves you guessing
+ * whether you already pressed it.
+ */
+function AgentSwitch() {
+  const { engine, sites, refresh } = useAgentPages();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // With no engine (or no site yet) there is nothing to stop, so the switch
+  // would be a button that controls nothing. Show the plain indicator instead
+  // — one status element in the header either way, never two that disagree.
+  if (!engine || sites.length === 0) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-line px-3 py-1.5 sm:px-3.5">
+        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-livepulse" />
+        <span className="label-mono hidden text-muted sm:inline">Preview</span>
+      </span>
+    );
+  }
+  const paused = sites.every((s) => !s.active);
+
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/agent/pause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: !paused }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) setError(json.error || "Could not change the agent state.");
+    } catch {
+      setError("Could not reach the server.");
+    }
+    setBusy(false);
+    refresh();
+  };
+
+  return (
+    <span className="flex items-center gap-2">
+      <span
+        className={`hidden items-center gap-1.5 text-[12.5px] sm:inline-flex ${
+          paused ? "text-muted" : "text-ink"
+        }`}
+        title={error ?? undefined}
+      >
+        <span
+          aria-hidden="true"
+          className={`h-1.5 w-1.5 rounded-full ${paused ? "bg-muted/50" : "bg-accent animate-livepulse"}`}
+        />
+        {paused ? "Agent paused" : "Agent running"}
+      </span>
+      <button
+        onClick={toggle}
+        disabled={busy}
+        aria-pressed={paused}
+        title={
+          paused
+            ? "Resume automatic page production"
+            : "Stop the agent from producing new pages until you resume it"
+        }
+        className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors disabled:opacity-60 ${
+          paused
+            ? "bg-ink text-white hover:bg-accent"
+            : "border border-line text-ink hover:border-ink/40 hover:bg-paper-warm"
+        }`}
+      >
+        {busy ? "…" : paused ? "Resume agent" : "Stop agent"}
+      </button>
+    </span>
+  );
 }

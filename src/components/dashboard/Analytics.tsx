@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAgentPages } from "@/lib/agent-pages";
 
 /**
  * The Analytics tab: real Google Search Console data — clicks,
@@ -345,11 +346,20 @@ export function Analytics() {
   }
   if (!data) return null;
 
-  if (!data.connected) {
-    return <ConnectCard googleReady={data.googleReady} error={data.error} />;
-  }
-  if (data.error || !data.series) {
-    return <ConnectCard googleReady={data.googleReady} error={data.error || "No data returned."} />;
+  // The calendar is drawn from the agent's own rows, not from Search Console,
+  // so it stays visible while Google is unconnected or erroring — otherwise
+  // the publishing record disappears for a reason that has nothing to do with
+  // publishing.
+  if (!data.connected || data.error || !data.series) {
+    return (
+      <div className="grid gap-5">
+        <PublishingCalendar />
+        <ConnectCard
+          googleReady={data.googleReady}
+          error={data.connected ? data.error || "No data returned." : data.error}
+        />
+      </div>
+    );
   }
 
   const { series, totals, prevTotals, topQueries } = data;
@@ -374,6 +384,7 @@ export function Analytics() {
 
   return (
     <div className="grid gap-5">
+      <PublishingCalendar />
       {/* Filter row */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -511,6 +522,164 @@ export function Analytics() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * A month of publishing at a glance: which days the agent shipped a page,
+ * which days it held one, and when the next cycle is due.
+ *
+ * Built from the engine's own rows rather than a schedule model, so it
+ * shows what actually happened. Upcoming days are projected from the
+ * site's cadence and marked as projections, never mixed in with real
+ * history — a calendar that draws planned work in the same ink as
+ * finished work is the kind of thing that quietly misleads an owner about
+ * what their site contains.
+ */
+function PublishingCalendar() {
+  const { engine, sites } = useAgentPages();
+  const [monthOffset, setMonthOffset] = useState(0);
+
+  if (!engine || sites.length === 0) return null;
+
+  const site = sites[0];
+  const pages = sites.flatMap((s) => s.pages);
+
+  const now = new Date();
+  const view = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  const year = view.getFullYear();
+  const month = view.getMonth();
+  const monthLabel = view.toLocaleString("en-US", { month: "long", year: "numeric" });
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const todayKey = new Date().toDateString();
+
+  // Group real pages by the day they were published (or created, for the
+  // ones still held — those days still represent agent activity).
+  const byDay = new Map<number, { published: number; held: number; titles: string[] }>();
+  for (const p of pages) {
+    const stamp = p.published_at || p.created_at;
+    if (!stamp) continue;
+    const d = new Date(stamp);
+    if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+    const day = d.getDate();
+    const cell = byDay.get(day) || { published: 0, held: 0, titles: [] };
+    if (p.status === "published") cell.published += 1;
+    else cell.held += 1;
+    if (cell.titles.length < 4) cell.titles.push(p.title);
+    byDay.set(day, cell);
+  }
+
+  // Projected cycles: from the last run, stepping by cadence, while the
+  // agent is actually running. A paused agent has no next cycle to show.
+  const stepDays = site.cadence === "weekly" ? 7 : site.cadence === "every3days" ? 3 : 1;
+  const upcoming = new Set<number>();
+  if (site.active) {
+    const start = site.lastRunAt ? new Date(site.lastRunAt) : new Date();
+    for (let i = 1; i <= 40; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i * stepDays);
+      if (d < new Date()) continue;
+      if (d.getFullYear() === year && d.getMonth() === month) upcoming.add(d.getDate());
+    }
+  }
+
+  const publishedTotal = [...byDay.values()].reduce((a, c) => a + c.published, 0);
+  const heldTotal = [...byDay.values()].reduce((a, c) => a + c.held, 0);
+
+  return (
+    <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-medium">Publishing calendar</h2>
+          <p className="mt-0.5 text-[12px] text-muted">
+            {publishedTotal} published, {heldTotal} held in {monthLabel} ·{" "}
+            {site.active ? `Publishing ${site.cadence === "every3days" ? "every 3 days" : site.cadence}` : "Agent paused"}
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setMonthOffset((m) => m - 1)}
+            aria-label="Previous month"
+            className="rounded-lg border border-line px-2.5 py-1 text-[13px] text-muted hover:border-ink/40 hover:text-ink"
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => setMonthOffset(0)}
+            className="rounded-lg border border-line px-3 py-1 text-[12.5px] text-muted hover:border-ink/40 hover:text-ink"
+          >
+            Today
+          </button>
+          <button
+            onClick={() => setMonthOffset((m) => m + 1)}
+            aria-label="Next month"
+            className="rounded-lg border border-line px-2.5 py-1 text-[13px] text-muted hover:border-ink/40 hover:text-ink"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-7 gap-1.5">
+        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+          <div key={`${d}${i}`} className="pb-1 text-center text-[11px] font-medium text-muted/70">
+            {d}
+          </div>
+        ))}
+        {Array.from({ length: firstWeekday }, (_, i) => (
+          <div key={`pad${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }, (_, i) => {
+          const day = i + 1;
+          const cell = byDay.get(day);
+          const isToday = new Date(year, month, day).toDateString() === todayKey;
+          const projected = upcoming.has(day) && !cell;
+          const label = cell
+            ? `${day}: ${cell.published} published, ${cell.held} held — ${cell.titles.join("; ")}`
+            : projected
+              ? `${day}: cycle projected`
+              : `${day}`;
+          return (
+            <div
+              key={day}
+              title={label}
+              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg border text-[12px] ${
+                cell
+                  ? "border-accent/40 bg-accent/[0.08] font-medium text-ink"
+                  : projected
+                    ? "border-dashed border-line text-muted/70"
+                    : "border-line text-muted/60"
+              } ${isToday ? "ring-2 ring-ink/70" : ""}`}
+            >
+              <span>{day}</span>
+              {cell && (
+                <span className="mt-0.5 flex gap-0.5">
+                  {Array.from({ length: Math.min(cell.published, 3) }, (_, k) => (
+                    <span key={`p${k}`} className="h-1 w-1 rounded-full bg-accent" />
+                  ))}
+                  {Array.from({ length: Math.min(cell.held, 3) }, (_, k) => (
+                    <span key={`h${k}`} className="h-1 w-1 rounded-full bg-ink/30" />
+                  ))}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-line pt-3 text-[11.5px] text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent" /> Published
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-ink/30" /> Held below the quality gate
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded border border-dashed border-line" /> Projected cycle
+        </span>
+      </div>
     </div>
   );
 }

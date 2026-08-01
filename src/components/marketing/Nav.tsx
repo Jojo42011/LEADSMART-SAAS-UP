@@ -18,17 +18,44 @@ export function Nav() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
+    // Coalesced to one read per frame, and only re-renders when the
+    // boolean actually flips. The naive version ran a layout-reading
+    // setState on every scroll event, which on a fixed header means work
+    // on the compositor's critical path.
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const next = window.scrollY > 12;
+        setScrolled((prev) => (prev === next ? prev : next));
+      });
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
 
   return (
+    // Two deliberate performance choices on a fixed, full-width header:
+    //
+    // backdrop-blur-md rather than -xl. A backdrop filter forces the
+    // browser to re-sample and re-blur everything behind the element on
+    // every scrolled frame, and the cost scales with the blur radius; 24px
+    // across the full viewport width is the classic source of scroll jank
+    // on real hardware. 12px over a more opaque background is visually
+    // near-identical and roughly half the work.
+    //
+    // transition-colors rather than transition-all. transition-all
+    // animates the backdrop filter itself for 300ms on the scroll
+    // threshold, which is the most expensive property on the element.
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+      className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
         scrolled
-          ? "bg-white/80 backdrop-blur-xl border-b border-line"
+          ? "bg-white/90 backdrop-blur-md border-b border-line"
           : "bg-transparent border-b border-transparent"
       }`}
     >

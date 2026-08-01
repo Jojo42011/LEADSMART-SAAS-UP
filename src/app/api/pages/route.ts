@@ -77,6 +77,8 @@ export async function GET(req: NextRequest) {
           platform: site.platform,
           cadence: site.cadence,
           publishMode: site.publish_mode,
+          /** False when the owner paused autonomous production. */
+          active: site.active,
           lastRunAt: site.last_run_at,
           pages,
           runs: await listRuns(site.id, 5),

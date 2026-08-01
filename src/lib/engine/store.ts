@@ -62,6 +62,8 @@ export async function probeStore(): Promise<{ ok: boolean; error: string | null 
 export type SiteRow = {
   id: string;
   tenant_id: string;
+  /** False while the owner has paused autonomous production. */
+  active: boolean;
   url: string;
   platform: "wordpress" | "github";
   cadence: "daily" | "every3days" | "weekly";
@@ -672,6 +674,26 @@ export async function setTenantPlanByCustomer(
     stripeCustomerId,
     status,
   ]);
+}
+
+/**
+ * The master switch for autonomous production.
+ *
+ * getDueSites already filters on sites.active, so flipping this column is
+ * all that stopping the agent requires — no new scheduling state, and no
+ * risk of the cron and the UI disagreeing about whether work is paused.
+ * Scoped through the ownership join so one account cannot pause another's
+ * agent. Returns how many sites changed, which is what the caller reports.
+ */
+export async function setAgentActive(email: string, active: boolean): Promise<number> {
+  if (!storeConfigured()) return 0;
+  const res = await db().query(
+    `update sites s set active = $2
+     from tenants t
+     where s.tenant_id = t.id and t.email = $1`,
+    [email.toLowerCase(), active]
+  );
+  return res.rowCount ?? 0;
 }
 
 /** Stores a recovered brand snapshot (see the orchestrator's self-heal). */

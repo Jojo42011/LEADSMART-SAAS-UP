@@ -44,6 +44,8 @@ export type AgentSite = {
   platform: string;
   cadence: string;
   publishMode: string;
+  /** False while the owner has production paused. */
+  active: boolean;
   lastRunAt: string | null;
   pages: AgentPage[];
   runs: AgentRun[];
