@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx tsx test/wordpress-publish.test.ts && npx tsx test/wordpress-refresh.test.ts"
+    "test": "npx tsx test/wordpress-publish.test.ts && npx tsx test/wordpress-refresh.test.ts && npx tsx test/link-graph.test.ts"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.1",

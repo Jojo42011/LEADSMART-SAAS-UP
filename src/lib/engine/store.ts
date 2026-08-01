@@ -1009,3 +1009,10 @@ export async function getTenantEmailByCustomer(customerId: string): Promise<stri
   const res = await db().query(`select email from tenants where stripe_customer_id = $1`, [customerId]);
   return (res.rows[0]?.email as string) ?? null;
 }
+
+/** The WordPress page id for a stored page, so a rewrite updates in place. */
+export async function wpPageIdFor(pageId: string): Promise<number | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(`select wp_page_id from pages where id = $1`, [pageId]);
+  return (res.rows[0]?.wp_page_id as number) ?? null;
+}

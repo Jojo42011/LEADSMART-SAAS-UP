@@ -26,6 +26,7 @@ import { siteOrigin } from "../url";
 import { runResearch } from "./research";
 import { generatePage } from "./generate";
 import { publishStoredPage } from "./publish-page";
+import { relatedFor } from "./link-graph";
 
 /**
  * The autonomous cycle for one site: research when stale, pick the
@@ -221,9 +222,24 @@ export async function runSiteCycle(
 
     // Phase 4: generate one page, audited against its siblings.
     await updateRun(runId, { phase: "generate" });
-    const siblings = (await listPages(site.id, true))
+    const sibRows = await listPages(site.id, true);
+    const siblings = sibRows
       .filter((p) => p.html)
       .map((p) => ({ slug: p.slug, html: p.html as string }));
+    const linkTargets = relatedFor(
+      { id: "", slug: "", folder: "", title: target.term, keyword: target.term, liveUrl: null, html: null },
+      sibRows.map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        folder: p.folder,
+        title: p.title,
+        keyword: p.keyword,
+        liveUrl: p.live_url,
+        html: p.html,
+      })),
+      origin,
+      6
+    );
     let brand = site.brand as {
       colors?: string[];
       fonts?: string[];
@@ -279,10 +295,12 @@ export async function runSiteCycle(
       industry: site.industry,
       services: site.services,
       brand,
-      internalLinks: siblings.slice(0, 6).map((s) => ({
-        title: s.slug.replace(/-/g, " "),
-        path: `/${s.slug}/`,
-      })),
+      // Real published URLs, not a guess. This was `/${slug}/`, but
+      // GitHub sites publish to /<folder>/<slug>/ — so every internal
+      // link on a static site pointed at a page that did not exist, and
+      // nothing noticed because live-status only ever verifies a page's
+      // own URL, never the links inside it.
+      internalLinks: linkTargets,
       siblings,
     });
 
@@ -435,7 +453,8 @@ async function refreshPage(input: {
   // Siblings exclude the page being rewritten: comparing a refresh against
   // its own previous version would score it as duplicative of itself and
   // fail the information-gain check every time.
-  const siblings = (await listPages(site.id, true))
+  const pageRows = await listPages(site.id, true);
+  const siblings = pageRows
     .filter((p) => p.html && p.id !== candidate.id)
     .map((p) => ({ slug: p.slug, html: p.html as string }));
 
@@ -461,10 +480,31 @@ async function refreshPage(input: {
     industry: site.industry,
     services: site.services,
     brand,
-    internalLinks: siblings.slice(0, 6).map((sib) => ({
-      title: sib.slug.replace(/-/g, " "),
-      path: `/${sib.slug}/`,
-    })),
+    // A refresh is the moment a page's outbound links get corrected: the
+    // graph has grown since it was written, so it links forward to pages
+    // that did not exist then, using their real published URLs.
+    internalLinks: relatedFor(
+      {
+        id: candidate.id,
+        slug: candidate.slug,
+        folder: candidate.folder,
+        title: candidate.title,
+        keyword: candidate.keyword,
+        liveUrl: candidate.live_url,
+        html: null,
+      },
+      pageRows.map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        folder: p.folder,
+        title: p.title,
+        keyword: p.keyword,
+        liveUrl: p.live_url,
+        html: p.html,
+      })),
+      origin,
+      6
+    ),
     siblings,
   });
 

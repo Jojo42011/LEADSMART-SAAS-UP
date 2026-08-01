@@ -1,5 +1,6 @@
 import {
   type SiteRow,
+  wpPageIdFor,
   getConnection,
   listPages,
   markPagePublished,
@@ -7,6 +8,7 @@ import {
   getSiteOwnerEmail,
 } from "./store";
 import { notifyPagePublished } from "./notify";
+import { type LinkablePage, relatedFor, relatedness, withRelatedLinks } from "./link-graph";
 import { pickAccent } from "../site-ingest";
 import { siteOrigin } from "../url";
 import {
@@ -165,6 +167,16 @@ export async function publishStoredPage(
     publishError = `No ${site.platform} credentials stored for this site — reconnect publishing in onboarding.`;
   }
 
+  // Backfill inbound links on the pages that should point here.
+  //
+  // Runs after the page is live so a failure here can never cost the
+  // publish, and bounded to a few pages so one publish cannot fan out into
+  // a rewrite of the whole site. Skipped on a refresh (the page is already
+  // in the graph) and when a publish failed.
+  if (published && liveUrl && page.notify) {
+    await backfillInboundLinks(site, page.id).catch(() => {});
+  }
+
   if (published && liveUrl && page.notify) {
     // Fire and forget: a delivered email is not a condition of a
     // successful publish, and a slow SMTP handshake must not eat into the
@@ -184,4 +196,66 @@ export async function publishStoredPage(
   }
 
   return { published, liveUrl, liveStatus, publishError, discoveryNote };
+}
+
+/**
+ * Updates the most related older pages so they link to a newly published
+ * one.
+ *
+ * Bounded to MAX_BACKFILL pages per publish: the value is in the strongest
+ * few links, and rewriting every page on every publish would multiply API
+ * calls, churn the repo, and — on WordPress — bump every page's modified
+ * date, making the whole site look freshly edited to crawlers when only
+ * one page actually changed.
+ *
+ * refreshed_at is deliberately not touched. A related-links block is not a
+ * content refresh, and letting it reset the freshness clock would let the
+ * agent mark its own homework: pages would look maintained without their
+ * substance having been revisited.
+ */
+const MAX_BACKFILL = 3;
+
+async function backfillInboundLinks(site: SiteRow, newPageId: string): Promise<void> {
+  const origin = siteOrigin(site.url);
+  const conn = await getConnection(site.id);
+  if (!conn) return;
+
+  const all: LinkablePage[] = (await listPages(site.id, true))
+    .filter((p) => p.status === "published" && p.live_url)
+    .map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      folder: p.folder,
+      title: p.title,
+      keyword: p.keyword,
+      liveUrl: p.live_url,
+      html: p.html,
+    }));
+
+  const target = all.find((p) => p.id === newPageId);
+  if (!target || all.length < 2) return;
+
+  // The pages most related to the new one, excluding itself.
+  const neighbours = all
+    .filter((p) => p.id !== newPageId && p.html)
+    .map((p) => ({ page: p, score: relatedness(target, p) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_BACKFILL)
+    .map((n) => n.page);
+
+  for (const neighbour of neighbours) {
+    const links = relatedFor(neighbour, all, origin);
+    const updated = withRelatedLinks(neighbour.html as string, links);
+    if (!updated) continue; // already correct — no publish, no commit
+
+    const res = await publishStoredPage(site, {
+      id: neighbour.id,
+      slug: neighbour.slug,
+      folder: neighbour.folder,
+      title: neighbour.title,
+      html: updated,
+      wpPageId: await wpPageIdFor(neighbour.id),
+    });
+    if (res.published) await updatePageHtml(neighbour.id, updated);
+  }
 }
