@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { normalizeGithubRepo } from "../github-repo";
+import { siteOrigin } from "../url";
 /**
  * Phase 5: publishing to the connected destination, plus post publish
  * live URL verification so a repo path that does not map to a public URL
@@ -476,7 +477,7 @@ export async function verifyWordpress(input: {
   user: string;
   appPassword: string;
 }): Promise<{ ok: boolean; error?: string; name?: string }> {
-  const site = input.site.replace(/\/$/, "");
+  const site = siteOrigin(input.site);
   const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
   try {
     const res = await fetch(`${site}/wp-json/wp/v2/users/me?context=edit`, {
@@ -502,9 +503,18 @@ export async function verifyWordpress(input: {
     }
     return { ok: true, name: me.name };
   } catch (e) {
+    const msg = e instanceof Error ? e.message : "network error";
     return {
       ok: false,
-      error: `Could not reach ${site}/wp-json/ (${e instanceof Error ? e.message : "network error"}). Some free hosts block server-to-server requests with bot protection; the site must allow API traffic.`,
+      // The hint is chosen from the failure, not attached to all of
+      // them: an earlier version blamed host bot protection for every
+      // error, which made a bug in our own URL handling read as the
+      // customer's host misbehaving.
+      error: `Could not reach ${site}/wp-json/ (${msg}).${
+        /parse URL|Invalid URL/i.test(msg)
+          ? " That is a malformed site URL rather than a problem with the site."
+          : " Check the REST API is reachable there; some free hosts block server-to-server requests with bot protection."
+      }`,
     };
   }
 }
@@ -518,7 +528,7 @@ export async function publishWordpress(input: {
   html: string;
   status?: "publish" | "draft";
 }): Promise<PublishResult> {
-  const site = input.site.replace(/\/$/, "");
+  const site = siteOrigin(input.site);
   const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
 
   const res = await fetch(`${site}/wp-json/wp/v2/pages`, {

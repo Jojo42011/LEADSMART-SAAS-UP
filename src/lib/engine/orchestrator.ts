@@ -19,6 +19,7 @@ import {
   findOrCreateKeyword,
 } from "./store";
 import { ingestSite, isBrandColor, pickAccent } from "../site-ingest";
+import { siteOrigin } from "../url";
 import { runResearch } from "./research";
 import { generatePage } from "./generate";
 import { publishGithub, publishGithubSupportFiles, pingIndexNow, publishWordpress } from "./publish";
@@ -57,6 +58,12 @@ export async function runSiteCycle(
     keywordTerm?: string;
   }
 ): Promise<CycleResult> {
+  // Normalized once, here, rather than at seven call sites. Onboarding
+  // accepts "example.com" the way people type it and stored it verbatim,
+  // so every consumer that treated site.url as a URL — fetch(), canonical
+  // tags, schema.org — was working from a string that is not one.
+  const origin = siteOrigin(site.url);
+
   // Reap this site's dead runs before claiming. A serverless invocation
   // killed at its 300s ceiling never reaches finishRun(), so the flight
   // slot stays held by a process that no longer exists — and because only
@@ -92,7 +99,7 @@ export async function runSiteCycle(
           locations: site.target_locations,
           competitors: site.seed_competitors,
         },
-        websiteUrl: site.url,
+        websiteUrl: origin,
       });
       await upsertKeywords(site.id, research.keywords);
       await upsertCompetitors(site.id, research.competitors);
@@ -133,7 +140,7 @@ export async function runSiteCycle(
     // cycle.
     if (!brand?.colors?.some(isBrandColor) || !brand?.nav?.length || !brand?.logo) {
       try {
-        const ingest = await ingestSite(site.url);
+        const ingest = await ingestSite(origin);
         // Only store an ingest that improves on what we have: replacing a
         // neutral-only snapshot with another neutral-only snapshot would
         // re-run this fetch every cycle for nothing.
@@ -167,7 +174,7 @@ export async function runSiteCycle(
         city: site.city,
         region: site.region,
       },
-      websiteUrl: site.url,
+      websiteUrl: origin,
       industry: site.industry,
       services: site.services,
       brand,
@@ -240,12 +247,17 @@ export async function runSiteCycle(
     let published = false;
     let discoveryNote: string | null = null;
     let liveStatus: string | null = null;
+    // A publish that returns a failure used to be dropped on the floor:
+    // the branch only acted on success, so a rejected credential or a 500
+    // from the host left the page marked approved-but-not-published with
+    // nothing anywhere saying why.
+    let publishError: string | null = null;
     if (status === "approved") {
       await updateRun(runId, { phase: "publish" });
       const conn = await getConnection(site.id);
       if (site.platform === "wordpress" && conn?.wp_user && conn.wp_app_password) {
         const res = await publishWordpress({
-          site: site.url,
+          site: origin,
           user: conn.wp_user,
           appPassword: conn.wp_app_password,
           slug: page.slug,
@@ -256,6 +268,8 @@ export async function runSiteCycle(
           await markPagePublished(pageId, { liveUrl: res.liveUrl, liveStatus: res.liveStatus ?? undefined, wpPageId: res.pageId });
           published = true;
           liveStatus = res.liveStatus;
+        } else if (!res.ok) {
+          publishError = [res.error, res.detail].filter(Boolean).join(" — ");
         }
       } else if (site.platform === "github" && conn?.github_repo && conn.github_token) {
         const res = await publishGithub({
@@ -266,7 +280,7 @@ export async function runSiteCycle(
           slug: page.slug,
           title: page.title,
           html: page.html,
-          siteUrl: site.url,
+          siteUrl: origin,
           image: { filename: page.image.filename, base64: page.image.base64 },
         });
         if (res.ok && res.platform === "github") {
@@ -302,7 +316,7 @@ export async function runSiteCycle(
               repo: conn.github_repo,
               branch: conn.github_branch,
               siteId: site.id,
-              siteUrl: site.url,
+              siteUrl: origin,
               businessName: site.business_name,
               accent: pickAccent(brand?.colors),
               nav: brand?.nav,
@@ -313,7 +327,7 @@ export async function runSiteCycle(
             });
             discoveryNote = support.ok ? "discovery ok" : `discovery failed for ${support.failed.join(", ")}`;
             if (res.liveUrl) {
-              const ping = await pingIndexNow({ siteUrl: site.url, siteId: site.id, urls: [res.liveUrl] });
+              const ping = await pingIndexNow({ siteUrl: origin, siteId: site.id, urls: [res.liveUrl] });
               discoveryNote += `, ${ping}`;
             }
           } catch (e) {
@@ -327,7 +341,7 @@ export async function runSiteCycle(
 
     const summary = `${target.term}: score ${page.audit.score} (${page.audit.grade}), ${
       published ? `published, ${liveStatus ?? "unverified"}` : `status ${status}`
-    }${discoveryNote ? ` [${discoveryNote}]` : ""}${
+    }${publishError ? ` [publish failed: ${publishError}]` : ""}${discoveryNote ? ` [${discoveryNote}]` : ""}${
       page.source === "template" ? ` [template: ${page.sourceReason ?? "model unavailable"}]` : ""
     }`;
     await finishRun(runId, "done", summary);
@@ -344,6 +358,7 @@ export async function runSiteCycle(
       liveStatus,
       source: page.source,
       sourceReason: page.sourceReason,
+      error: publishError ?? undefined,
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : "cycle failed";
