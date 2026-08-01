@@ -6,7 +6,6 @@ import {
   updateRun,
   finishRun,
   touchSiteRun,
-  getConnection,
   upsertKeywords,
   upsertCompetitors,
   countKeywords,
@@ -14,15 +13,14 @@ import {
   listPages,
   insertPage,
   markKeywordCovered,
-  markPagePublished,
   updateSiteBrand,
   findOrCreateKeyword,
 } from "./store";
-import { ingestSite, isBrandColor, pickAccent } from "../site-ingest";
+import { ingestSite, isBrandColor } from "../site-ingest";
 import { siteOrigin } from "../url";
 import { runResearch } from "./research";
 import { generatePage } from "./generate";
-import { publishGithub, publishGithubSupportFiles, pingIndexNow, publishWordpress } from "./publish";
+import { publishStoredPage } from "./publish-page";
 
 /**
  * The autonomous cycle for one site: research when stale, pick the
@@ -87,6 +85,49 @@ export async function runSiteCycle(
   }
 
   try {
+    // Phase 0: drain the stranded backlog before spending on generation.
+    // A page can end up approved-but-unpublished when its publish attempt
+    // fails (the schemeless-URL bug stranded three at once), and nothing
+    // else ever returns to it — each cycle picks a NEW keyword, so the
+    // backlog is invisible to the normal flow. Publishing the oldest one
+    // IS this cycle's page: the work is already generated and audited, so
+    // shipping it costs no model tokens, and one-page-per-cycle pacing is
+    // preserved. Skipped when the owner asked for a specific keyword,
+    // because that press means "write THIS", not "do the oldest chore".
+    if (!opts?.keywordTerm) {
+      const stranded = (await listPages(site.id, true)).filter(
+        (p) => p.status === "approved" && !p.live_url && p.html
+      );
+      if (stranded.length > 0) {
+        const oldest = stranded[stranded.length - 1];
+        await updateRun(runId, { phase: "publish" });
+        const res = await publishStoredPage(site, {
+          id: oldest.id,
+          slug: oldest.slug,
+          folder: oldest.folder,
+          title: oldest.title,
+          html: oldest.html as string,
+        });
+        if (res.published) await updateRun(runId, { published: 1 });
+        const summary = `${oldest.keyword}: backlog publish, ${
+          res.published ? `published, ${res.liveStatus ?? "unverified"}` : `failed: ${res.publishError}`
+        }${res.discoveryNote ? ` [${res.discoveryNote}]` : ""}`;
+        await finishRun(runId, res.published ? "done" : "failed", summary, res.publishError ?? undefined);
+        await touchSiteRun(site.id);
+        return {
+          siteId: site.id,
+          ok: res.published,
+          keyword: oldest.keyword,
+          slug: oldest.slug,
+          auditScore: oldest.audit_score,
+          status: res.published ? "published" : "approved",
+          published: res.published,
+          liveStatus: res.liveStatus,
+          error: res.publishError ?? undefined,
+        };
+      }
+    }
+
     // Phase 1: research, when the keyword pool is thin.
     await updateRun(runId, { phase: "research" });
     const existing = await countKeywords(site.id);
@@ -243,99 +284,29 @@ export async function runSiteCycle(
     });
     await markKeywordCovered(target.id, pageId);
 
-    // Phase 5: publish, autopilot only.
+    // Phase 5: publish, autopilot only — through the same function the
+    // owner's Publish button uses, so the two can never diverge.
     let published = false;
     let discoveryNote: string | null = null;
     let liveStatus: string | null = null;
-    // A publish that returns a failure used to be dropped on the floor:
-    // the branch only acted on success, so a rejected credential or a 500
-    // from the host left the page marked approved-but-not-published with
-    // nothing anywhere saying why.
     let publishError: string | null = null;
     if (status === "approved") {
       await updateRun(runId, { phase: "publish" });
-      const conn = await getConnection(site.id);
-      if (site.platform === "wordpress" && conn?.wp_user && conn.wp_app_password) {
-        const res = await publishWordpress({
-          site: origin,
-          user: conn.wp_user,
-          appPassword: conn.wp_app_password,
+      const res = await publishStoredPage(
+        { ...site, brand },
+        {
+          id: pageId,
           slug: page.slug,
-          title: page.title,
-          html: page.html,
-        });
-        if (res.ok && res.platform === "wordpress") {
-          await markPagePublished(pageId, { liveUrl: res.liveUrl, liveStatus: res.liveStatus ?? undefined, wpPageId: res.pageId });
-          published = true;
-          liveStatus = res.liveStatus;
-        } else if (!res.ok) {
-          publishError = [res.error, res.detail].filter(Boolean).join(" — ");
-        }
-      } else if (site.platform === "github" && conn?.github_repo && conn.github_token) {
-        const res = await publishGithub({
-          token: conn.github_token,
-          repo: conn.github_repo,
-          branch: conn.github_branch,
           folder: page.folder,
-          slug: page.slug,
           title: page.title,
           html: page.html,
-          siteUrl: origin,
           image: { filename: page.image.filename, base64: page.image.base64 },
-        });
-        if (res.ok && res.platform === "github") {
-          await markPagePublished(pageId, {
-            liveUrl: res.liveUrl ?? undefined,
-            liveStatus: res.liveStatus ?? undefined,
-            githubSha: res.commitSha ?? undefined,
-          });
-          published = true;
-          liveStatus = res.liveStatus;
-
-          // Discovery, after the page itself is safely live: sitemap +
-          // folder index (which every page's breadcrumb links to) +
-          // IndexNow key file, then the IndexNow ping so Bing/Copilot
-          // learn about the URL now instead of at next crawl. Best
-          // effort — failures never unwind a successful publish, but they
-          // are recorded in the run summary: a silent catch here hid a
-          // TypeError for four straight publishes, and "no error anywhere,
-          // no files anywhere" is the worst failure mode to debug.
-          try {
-            const allPages = await listPages(site.id);
-            const publishedRefs = allPages
-              .filter((p) => p.status === "published" && p.live_url)
-              .map((p) => ({
-                folder: p.folder,
-                slug: p.slug,
-                title: p.title,
-                liveUrl: p.live_url as string,
-                publishedAt: p.published_at,
-              }));
-            const support = await publishGithubSupportFiles({
-              token: conn.github_token,
-              repo: conn.github_repo,
-              branch: conn.github_branch,
-              siteId: site.id,
-              siteUrl: origin,
-              businessName: site.business_name,
-              accent: pickAccent(brand?.colors),
-              nav: brand?.nav,
-              // The page's committed path tells us whether this repo is a
-              // framework app (public/) or a plain static site.
-              pathPrefix: res.path.startsWith("public/") ? "public/" : "",
-              pages: publishedRefs,
-            });
-            discoveryNote = support.ok ? "discovery ok" : `discovery failed for ${support.failed.join(", ")}`;
-            if (res.liveUrl) {
-              const ping = await pingIndexNow({ siteUrl: origin, siteId: site.id, urls: [res.liveUrl] });
-              discoveryNote += `, ${ping}`;
-            }
-          } catch (e) {
-            // discovery plumbing only; the publish already succeeded
-            discoveryNote = `discovery error: ${e instanceof Error ? e.message : "unknown"}`;
-          }
         }
-      }
+      );
+      published = res.published;
+      liveStatus = res.liveStatus;
+      publishError = res.publishError;
+      discoveryNote = res.discoveryNote;
       if (published) await updateRun(runId, { published: 1 });
     }
 

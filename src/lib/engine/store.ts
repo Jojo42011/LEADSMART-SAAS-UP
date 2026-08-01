@@ -807,3 +807,30 @@ export async function markSupportDelivered(
     [id, delivered, error ?? null]
   );
 }
+
+/**
+ * One page with its full HTML plus the owning site row, fetched through
+ * the tenant join so an id from another account returns nothing. This is
+ * what the owner's Publish button operates on.
+ */
+export async function getPageWithSiteOwned(
+  pageId: string,
+  email: string
+): Promise<{
+  page: { id: string; slug: string; folder: string; title: string; keyword: string; status: string; html: string | null; live_url: string | null };
+  site: SiteRow;
+} | null> {
+  const res = await db().query(
+    `select p.id, p.slug, p.folder, p.title, p.keyword, p.status, p.html, p.live_url,
+            row_to_json(s.*) as site
+     from pages p
+     join sites s on s.id = p.site_id
+     join tenants t on t.id = s.tenant_id
+     where p.id = $1 and t.email = $2`,
+    [pageId, email.toLowerCase()]
+  );
+  const row = res.rows[0];
+  if (!row) return null;
+  const { site, ...page } = row as typeof res.rows[0] & { site: SiteRow };
+  return { page, site };
+}

@@ -816,6 +816,31 @@ function AgentPageRow({
 }) {
   const isLive = page.status === "published" && Boolean(page.live_url);
   const reachable = page.live_status?.startsWith("live:");
+  // Approved (or awaiting review) but not live: the work is done and paid
+  // for, one step from shipping. The button runs the same engine function
+  // the cycle runs, so it cannot behave differently from autopilot.
+  const canPublish = (page.status === "approved" || page.status === "pending") && !page.live_url;
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const doPublish = async () => {
+    if (publishing) return;
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      const res = await fetch(`/api/pages/publish?id=${encodeURIComponent(page.id)}`, { method: "POST" });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        setPublishError(json.error || "Publish failed.");
+        setPublishing(false);
+        return;
+      }
+    } catch {
+      setPublishError("Could not reach the server.");
+      setPublishing(false);
+      return;
+    }
+    onDeleted(); // shared refresh: pulls the new published state
+  };
   // Two-step delete: the first click arms, the second commits. A single
   // click that removes a live page from the customer's site is too easy
   // to hit by accident.
@@ -900,6 +925,15 @@ function AgentPageRow({
           </svg>
           Preview page
         </a>
+        {canPublish && (
+          <button
+            onClick={doPublish}
+            disabled={publishing}
+            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-[12.5px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+          >
+            {publishing ? "Publishing…" : page.status === "pending" ? "Approve & publish" : "Publish now"}
+          </button>
+        )}
         {isLive && (
           <a
             href={page.live_url ?? undefined}
@@ -912,6 +946,9 @@ function AgentPageRow({
           </a>
         )}
       </div>
+      {publishError && (
+        <p className="mt-2 text-[12px] leading-relaxed text-muted">{publishError}</p>
+      )}
       {isLive && (
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <span className="sr-only">Live page details.</span>
