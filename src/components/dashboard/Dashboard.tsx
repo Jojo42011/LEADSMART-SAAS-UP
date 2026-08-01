@@ -775,12 +775,16 @@ function AgentPages() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[14.5px] font-medium">Pages the agent has written</h2>
         <div className="flex items-center gap-2">
+          {/* Reloads the list. Deliberately not called "Refresh": that word
+              now names the agent action that rewrites a live page, and two
+              buttons reading "Refresh" on one screen with entirely
+              different consequences is a trap. */}
           <button
             onClick={refresh}
             disabled={refreshing}
             className="rounded-full border border-line px-3 py-1 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink disabled:opacity-60"
           >
-            {refreshing ? "Refreshing…" : "Refresh"}
+            {refreshing ? "Reloading…" : "Reload"}
           </button>
           <button
             onClick={generateNow}
@@ -833,6 +837,46 @@ function AgentPageRow({
   // for, one step from shipping. The button runs the same engine function
   // the cycle runs, so it cannot behave differently from autopilot.
   const canPublish = (page.status === "approved" || page.status === "pending") && !page.live_url;
+
+  // Freshness, from the last time the page actually changed. The same
+  // 150-day threshold the agent schedules refreshes on, so the badge and
+  // the agent's behaviour cannot tell different stories.
+  const changedAt = page.refreshed_at || page.published_at;
+  const staleDays = changedAt
+    ? Math.floor((Date.now() - new Date(changedAt).getTime()) / 86_400_000)
+    : null;
+  const freshness =
+    staleDays === null
+      ? null
+      : staleDays <= 90
+        ? { label: "Fresh", due: false }
+        : staleDays <= 150
+          ? { label: "Aging", due: false }
+          : { label: "Refresh due", due: true };
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
+  const doRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshNote(null);
+    try {
+      const res = await fetch(`/api/pages/refresh?id=${encodeURIComponent(page.id)}`, { method: "POST" });
+      const json = (await res.json()) as { ok?: boolean; error?: string; result?: { skipped?: string } };
+      if (json.result?.skipped) {
+        // A declined refresh is a real outcome, not a failure: the live
+        // page was kept because the rewrite was not better.
+        setRefreshNote(json.result.skipped);
+      } else if (!res.ok || !json.ok) {
+        setRefreshNote(json.error || "The refresh did not go through.");
+      } else {
+        onDeleted();
+        return;
+      }
+    } catch {
+      setRefreshNote("Could not reach the server.");
+    }
+    setRefreshing(false);
+  };
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const doPublish = async () => {
@@ -917,6 +961,15 @@ function AgentPageRow({
         </span>
         <StatusPill status={page.status} />
       </div>
+      {isLive && freshness && (
+        <p className="mt-2 text-[11.5px] text-muted">
+          <span className={freshness.due ? "text-ink" : ""}>{freshness.label}</span>
+          {" \u00b7 "}
+          {page.refresh_count > 0
+            ? `refreshed ${staleDays}d ago (${page.refresh_count}\u00d7)`
+            : `published ${staleDays}d ago`}
+        </p>
+      )}
       {liveWarning && (
         <p className="mt-3 rounded-lg border border-line bg-paper-warm p-3 text-[12px] leading-relaxed text-ink/80">
           <span className="font-medium">Removed here, still live.</span> {liveWarning}{" "}
@@ -948,6 +1001,16 @@ function AgentPageRow({
           </button>
         )}
         {isLive && (
+          <button
+            onClick={doRefresh}
+            disabled={refreshing}
+            title="Rewrite this page with current research and republish it to the same URL"
+            className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[12.5px] font-medium text-ink transition-colors hover:border-ink/40 hover:bg-paper-warm disabled:opacity-60"
+          >
+            {refreshing ? "Refreshing\u2026" : "Refresh"}
+          </button>
+        )}
+        {isLive && (
           <a
             href={page.live_url ?? undefined}
             target="_blank"
@@ -959,6 +1022,9 @@ function AgentPageRow({
           </a>
         )}
       </div>
+      {refreshNote && (
+        <p className="mt-2 text-[12px] leading-relaxed text-muted">{refreshNote}</p>
+      )}
       {publishError && (
         <p className="mt-2 text-[12px] leading-relaxed text-muted">{publishError}</p>
       )}

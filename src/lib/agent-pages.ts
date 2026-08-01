@@ -26,6 +26,9 @@ export type AgentPage = {
   held_reason: string | null;
   word_count: number;
   published_at: string | null;
+  /** When the agent last rewrote this page in place. */
+  refreshed_at: string | null;
+  refresh_count: number;
   created_at: string;
 };
 

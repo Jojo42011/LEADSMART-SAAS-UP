@@ -48,6 +48,8 @@ export async function publishStoredPage(
      * keep the committed file; WordPress republishes read the media URL
      * already baked into the stored HTML by the original publish. */
     image?: { filename: string; base64: string; mimeType: string; alt: string };
+    /** Set when rewriting a page that is already live on WordPress. */
+    wpPageId?: number | null;
   }
 ): Promise<StoredPagePublishResult> {
   const origin = siteOrigin(site.url);
@@ -67,6 +69,7 @@ export async function publishStoredPage(
       title: page.title,
       html: page.html,
       image: page.image,
+      wpPageId: page.wpPageId,
     });
     if (res.ok && res.platform === "wordpress") {
       // Keep the stored copy identical to what the site serves: the

@@ -15,6 +15,11 @@ import {
   markKeywordCovered,
   updateSiteBrand,
   findOrCreateKeyword,
+  type RefreshCandidate,
+  getRefreshCandidate,
+  getPageAsRefreshCandidate,
+  countPublishedPages,
+  markPageRefreshed,
 } from "./store";
 import { ingestSite, isBrandColor } from "../site-ingest";
 import { siteOrigin } from "../url";
@@ -48,6 +53,31 @@ export type CycleResult = {
   liveStatus?: string | null;
   error?: string;
 };
+
+/**
+ * Days before a live page is considered stale enough to rewrite. Matches
+ * the "Refresh due" threshold `scoreFreshness` already uses, so the signal
+ * the dashboard shows and the action the agent takes cannot disagree.
+ */
+const REFRESH_AFTER_DAYS = 150;
+
+/**
+ * Library size at which maintenance starts outranking expansion. A
+ * judgment call, not a measured constant: below it, a site still has
+ * obvious coverage gaps and a new page is worth more than a rewrite.
+ */
+const MAINTAIN_ABOVE_PAGES = 8;
+
+/**
+ * A refreshed page replaces the live one only if it clears the publish
+ * gate and does not lose meaningful ground. Generation varies a few points
+ * run to run — the same keyword has scored 78 and 74 on consecutive cycles
+ * — so a small dip is noise rather than a regression, and the freshness
+ * gain outweighs it. A real drop means the rewrite was worse than what is
+ * already live, and shipping it would trade a citation factor for content
+ * quality, which is a bad trade in the direction that matters.
+ */
+const REFRESH_SCORE_TOLERANCE = 3;
 
 export async function runSiteCycle(
   site: SiteRow,
@@ -125,6 +155,36 @@ export async function runSiteCycle(
           liveStatus: res.liveStatus,
           error: res.publishError ?? undefined,
         };
+      }
+    }
+
+    // Phase 0.5: refresh the stalest live page.
+    //
+    // Freshness is a top-three controllable AI-citation factor — roughly
+    // 83% of citations go to pages updated within twelve months — and the
+    // agent has always scored it and shown a "Refresh due" signal while
+    // nothing acted on it, because every cycle picked a NEW keyword and no
+    // code path ever returned to a published page. Its value decayed on a
+    // dashboard that could see it happening.
+    //
+    // A refresh takes the cycle rather than running alongside one: the
+    // one-page-per-cycle budget is what keeps duration predictable and
+    // rate limits clear, and a rewrite of a decaying page is worth more
+    // than an additional page on most days it is due.
+    if (!opts?.keywordTerm) {
+      const candidate = await getRefreshCandidate(site.id, REFRESH_AFTER_DAYS);
+      const uncovered = candidate ? await nextTarget(site.id) : null;
+      const libraryCount = candidate ? await countPublishedPages(site.id) : 0;
+      // Expand first, maintain second. While a site still has uncovered
+      // keywords AND a small library, a new page adds more than a rewrite
+      // does — coverage gaps cost more than mild staleness early on. Once
+      // the library is established, or there is nothing new left to write,
+      // maintenance compounds and takes priority.
+      const shouldRefresh = Boolean(candidate) && (!uncovered || libraryCount >= MAINTAIN_ABOVE_PAGES);
+      if (candidate && shouldRefresh) {
+        const result = await refreshPage({ site, origin, runId, candidate, brand: site.brand });
+        await touchSiteRun(site.id);
+        return result;
       }
     }
 
@@ -339,6 +399,190 @@ export async function runSiteCycle(
   } catch (e) {
     const message = e instanceof Error ? e.message : "cycle failed";
     await finishRun(runId, "failed", "Cycle failed", message);
+    await touchSiteRun(site.id);
+    return { siteId: site.id, ok: false, error: message };
+  }
+}
+
+/**
+ * Rewrites one live page in place with current research, and replaces the
+ * published version only if the rewrite earns it.
+ *
+ * The failure mode this guards against is subtle and expensive: a refresh
+ * that ships a weaker page trades content quality for a freshness signal
+ * and quietly erodes the library over time, one page per cycle, with the
+ * dashboard reporting success every time. So the new draft is audited on
+ * the same terms as a new page, and the live version stands unless the
+ * rewrite clears the gate and holds its score. A refusal is a real
+ * outcome, reported as one — not an error, and not a silent no-op.
+ */
+async function refreshPage(input: {
+  site: SiteRow;
+  origin: string;
+  runId: string;
+  candidate: RefreshCandidate;
+  brand: Record<string, unknown>;
+}): Promise<CycleResult> {
+  const { site, origin, runId, candidate } = input;
+  await updateRun(runId, { phase: "refresh" });
+
+  // Siblings exclude the page being rewritten: comparing a refresh against
+  // its own previous version would score it as duplicative of itself and
+  // fail the information-gain check every time.
+  const siblings = (await listPages(site.id, true))
+    .filter((p) => p.html && p.id !== candidate.id)
+    .map((p) => ({ slug: p.slug, html: p.html as string }));
+
+  const brand = input.brand as {
+    colors?: string[];
+    fonts?: string[];
+    nav?: { label: string; href: string }[];
+    footerLinks?: { label: string; href: string }[];
+    logo?: string;
+  };
+
+  const page = await generatePage({
+    keyword: candidate.keyword,
+    pageType: candidate.page_type === "article" ? "article" : "location",
+    business: {
+      name: site.business_name,
+      phone: site.phone,
+      address: site.address,
+      city: site.city,
+      region: site.region,
+    },
+    websiteUrl: origin,
+    industry: site.industry,
+    services: site.services,
+    brand,
+    internalLinks: siblings.slice(0, 6).map((sib) => ({
+      title: sib.slug.replace(/-/g, " "),
+      path: `/${sib.slug}/`,
+    })),
+    siblings,
+  });
+
+  const improved =
+    page.audit.pass && page.audit.score >= candidate.audit_score - REFRESH_SCORE_TOLERANCE;
+
+  if (!improved) {
+    const why = !page.audit.pass
+      ? `rewrite scored ${page.audit.score} and missed the gate`
+      : `rewrite scored ${page.audit.score} vs ${candidate.audit_score} live`;
+    const summary = `${candidate.keyword}: refresh declined after ${candidate.stale_days}d — ${why}; live page kept`;
+    await finishRun(runId, "done", summary);
+    return {
+      siteId: site.id,
+      ok: true,
+      keyword: candidate.keyword,
+      slug: candidate.slug,
+      auditScore: candidate.audit_score,
+      status: "published",
+      published: false,
+      skipped: `refresh declined: ${why}`,
+      source: page.source,
+    };
+  }
+
+  // The slug never changes on a refresh. A new URL would abandon whatever
+  // ranking and citations the existing one has earned, which is the
+  // opposite of the point — so the rewrite is published to the same
+  // address, overwriting the GitHub file or the WordPress page by id.
+  const res = await publishStoredPage(site, {
+    id: candidate.id,
+    slug: candidate.slug,
+    folder: candidate.folder,
+    title: candidate.title,
+    html: page.html,
+    image: {
+      filename: page.image.filename,
+      base64: page.image.base64,
+      mimeType: page.image.mimeType,
+      alt: page.image.alt,
+    },
+    wpPageId: candidate.wp_page_id,
+  });
+
+  if (!res.published) {
+    const summary = `${candidate.keyword}: refresh failed to publish — ${res.publishError ?? "unknown"}; live page unchanged`;
+    await finishRun(runId, "failed", summary, res.publishError ?? undefined);
+    return {
+      siteId: site.id,
+      ok: false,
+      keyword: candidate.keyword,
+      slug: candidate.slug,
+      status: "published",
+      published: false,
+      error: res.publishError ?? "refresh publish failed",
+    };
+  }
+
+  await markPageRefreshed(candidate.id, {
+    html: page.html,
+    auditScore: page.audit.score,
+    auditGrade: page.audit.grade,
+    auditReport: page.audit,
+    wordCount: page.wordCount,
+    liveStatus: res.liveStatus ?? undefined,
+  });
+  await updateRun(runId, { published: 1 });
+
+  const summary = `${candidate.keyword}: refreshed after ${candidate.stale_days}d, score ${candidate.audit_score} to ${page.audit.score} (${page.audit.grade}), ${res.liveStatus ?? "unverified"}${
+    res.discoveryNote ? ` [${res.discoveryNote}]` : ""
+  }`;
+  await finishRun(runId, "done", summary);
+
+  return {
+    siteId: site.id,
+    ok: true,
+    keyword: candidate.keyword,
+    slug: candidate.slug,
+    auditScore: page.audit.score,
+    status: "published",
+    published: true,
+    liveStatus: res.liveStatus,
+    source: page.source,
+    sourceReason: page.sourceReason,
+  };
+}
+
+/**
+ * Refreshes one specific page on demand, bypassing the staleness
+ * threshold but not the quality guard.
+ *
+ * Shares refreshPage() with the scheduled path for the same reason every
+ * other on-demand action does: a button that rewrote pages by slightly
+ * different rules than the agent would eventually diverge from it, and
+ * the owner would be testing something the engine never runs.
+ */
+export async function refreshPageNow(site: SiteRow, pageId: string): Promise<CycleResult | null> {
+  const origin = siteOrigin(site.url);
+  await recoverStuckRuns(site.id);
+
+  const candidate = await getPageAsRefreshCandidate(site.id, pageId);
+  if (!candidate) return null;
+
+  const runId = await claimRun(site.id);
+  if (!runId) {
+    const since = await runningSince(site.id);
+    const mins = since ? Math.max(0, Math.round((Date.now() - since.getTime()) / 60000)) : null;
+    return {
+      siteId: site.id,
+      ok: false,
+      skipped:
+        mins === null
+          ? "cycle already running"
+          : `a cycle started ${mins === 0 ? "moments" : `${mins} min`} ago is still running`,
+    };
+  }
+
+  try {
+    const result = await refreshPage({ site, origin, runId, candidate, brand: site.brand });
+    await touchSiteRun(site.id);
+    return result;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "refresh failed";
+    await finishRun(runId, "failed", "Refresh failed", message);
     await touchSiteRun(site.id);
     return { siteId: site.id, ok: false, error: message };
   }

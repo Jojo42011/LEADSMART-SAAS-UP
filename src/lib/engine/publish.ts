@@ -599,6 +599,15 @@ export async function publishWordpress(input: {
   status?: "publish" | "draft";
   /** Artwork the HTML references by a root-relative path. */
   image?: { filename: string; base64: string; mimeType: string; alt: string };
+  /**
+   * The existing WordPress page to overwrite. Refreshing without this
+   * would POST to the collection endpoint again and create a second page:
+   * WordPress silently de-duplicates the slug to "<slug>-2", so the site
+   * would accumulate a near-duplicate for every refresh while the original
+   * stale page stayed live and canonical. Updating in place is the whole
+   * point of a refresh.
+   */
+  wpPageId?: number | null;
 }): Promise<PublishResult> {
   const site = siteOrigin(input.site);
   const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
@@ -647,7 +656,10 @@ export async function publishWordpress(input: {
     }
   }
 
-  const res = await fetch(`${site}/wp-json/wp/v2/pages`, {
+  const endpoint = input.wpPageId
+    ? `${site}/wp-json/wp/v2/pages/${input.wpPageId}`
+    : `${site}/wp-json/wp/v2/pages`;
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -663,7 +675,11 @@ export async function publishWordpress(input: {
   });
 
   if (!res.ok) {
-    return { ok: false, error: `WordPress publish failed (${res.status})`, detail: (await res.text()).slice(0, 300) };
+    return {
+      ok: false,
+      error: `WordPress ${input.wpPageId ? "update" : "publish"} failed (${res.status})`,
+      detail: (await res.text()).slice(0, 300),
+    };
   }
 
   const json = (await res.json()) as { id: number; link: string };

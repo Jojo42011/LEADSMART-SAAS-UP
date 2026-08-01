@@ -109,6 +109,9 @@ export type PageSummary = {
   held_reason: string | null;
   word_count: number;
   published_at: string | null;
+  /** When the agent last rewrote this page in place. Null until refreshed. */
+  refreshed_at: string | null;
+  refresh_count: number;
   created_at: string;
 };
 
@@ -409,7 +412,7 @@ export async function listPages(siteId: string, withHtml = false): Promise<PageS
   const res = await db().query(
     `select id, keyword, slug, folder, title, status,
             live_url, live_status, audit_score, audit_grade, held_reason,
-            word_count, published_at, created_at,
+            word_count, published_at, refreshed_at, refresh_count, created_at,
             ${withHtml ? "html" : "null as html"}
      from pages where site_id = $1 order by created_at desc limit 60`,
     [siteId]
@@ -861,4 +864,88 @@ export async function getTenantBillingByEmail(
 export async function updatePageHtml(pageId: string, html: string): Promise<void> {
   if (!storeConfigured()) return;
   await db().query(`update pages set html = $2 where id = $1`, [pageId, html]);
+}
+
+/* -------------------------------- Refresh -------------------------------- */
+
+export type RefreshCandidate = {
+  id: string;
+  keyword: string;
+  slug: string;
+  folder: string;
+  page_type: string;
+  title: string;
+  audit_score: number;
+  live_url: string | null;
+  wp_page_id: number | null;
+  /** Days since the page last changed — published or refreshed. */
+  stale_days: number;
+};
+
+/**
+ * The stalest live page past the refresh threshold, or null.
+ *
+ * Staleness counts from the last time the page actually changed
+ * (refreshed_at, falling back to published_at), not from when it was first
+ * written — a page maintained last week is fresh regardless of its age.
+ * Only published pages are candidates: refreshing a held draft would be
+ * rewriting something no reader has ever seen.
+ */
+export async function getRefreshCandidate(
+  siteId: string,
+  olderThanDays: number
+): Promise<RefreshCandidate | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(
+    `select id, keyword, slug, folder, page_type, title, audit_score, live_url, wp_page_id,
+            floor(extract(epoch from now() - coalesce(refreshed_at, published_at)) / 86400)::int as stale_days
+     from pages
+     where site_id = $1
+       and status = 'published'
+       and coalesce(refreshed_at, published_at) is not null
+       and coalesce(refreshed_at, published_at) < now() - make_interval(days => $2::int)
+     order by coalesce(refreshed_at, published_at) asc
+     limit 1`,
+    [siteId, Math.max(1, Math.round(olderThanDays))]
+  );
+  return (res.rows[0] as RefreshCandidate) ?? null;
+}
+
+/** How many published pages this site has — the library the agent maintains. */
+export async function countPublishedPages(siteId: string): Promise<number> {
+  if (!storeConfigured()) return 0;
+  const res = await db().query(
+    `select count(*)::int as n from pages where site_id = $1 and status = 'published'`,
+    [siteId]
+  );
+  return (res.rows[0]?.n as number) ?? 0;
+}
+
+/** Records a completed refresh: new content, new score, and a fresh clock. */
+export async function markPageRefreshed(
+  pageId: string,
+  patch: { html: string; auditScore: number; auditGrade: string; auditReport: unknown; wordCount: number; liveStatus?: string }
+): Promise<void> {
+  await db().query(
+    `update pages set html = $2, audit_score = $3, audit_grade = $4, audit_report = $5,
+            word_count = $6, live_status = coalesce($7, live_status),
+            refreshed_at = now(), refresh_count = refresh_count + 1
+     where id = $1`,
+    [pageId, patch.html, patch.auditScore, patch.auditGrade, JSON.stringify(patch.auditReport), patch.wordCount, patch.liveStatus ?? null]
+  );
+}
+
+/** One page as a refresh candidate, by id, regardless of how stale it is. */
+export async function getPageAsRefreshCandidate(
+  siteId: string,
+  pageId: string
+): Promise<RefreshCandidate | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(
+    `select id, keyword, slug, folder, page_type, title, audit_score, live_url, wp_page_id,
+            coalesce(floor(extract(epoch from now() - coalesce(refreshed_at, published_at)) / 86400)::int, 0) as stale_days
+     from pages where id = $1 and site_id = $2 and status = 'published'`,
+    [pageId, siteId]
+  );
+  return (res.rows[0] as RefreshCandidate) ?? null;
 }

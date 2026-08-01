@@ -179,3 +179,22 @@ create table if not exists support_messages (
 );
 create index if not exists support_messages_created_idx on support_messages(created_at desc);
 alter table support_messages alter column id set default gen_random_uuid();
+
+-- ---------------------------------------------------------------------------
+-- Refresh tracking.
+--
+-- Freshness is a top-three controllable AI-citation factor (~83% of citations
+-- come from pages updated within 12 months), and the agent scores it — but
+-- until refresh cycles existed nothing ever acted on it, because every cycle
+-- picked a NEW keyword and no code path returned to a published page.
+--
+-- refreshed_at is kept separate from published_at on purpose: published_at is
+-- when the page first went live and belongs in the sitemap's record, while
+-- refreshed_at drives the staleness queue. Overwriting one with the other
+-- would destroy the ability to tell "this page is old" from "this page has
+-- been maintained".
+-- ---------------------------------------------------------------------------
+alter table pages add column if not exists refreshed_at timestamptz;
+alter table pages add column if not exists refresh_count int not null default 0;
+create index if not exists pages_refresh_idx
+  on pages(site_id, coalesce(refreshed_at, published_at));
