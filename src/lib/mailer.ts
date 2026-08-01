@@ -156,3 +156,84 @@ export async function probeMail(): Promise<{ ok: boolean; via: string; error: st
     return { ok: false, via: "smtp", error: `${msg}${hint}` };
   }
 }
+
+/* ---------------------------- Customer notices ---------------------------- */
+
+/**
+ * Mail addressed to a customer, as opposed to the support inbox.
+ *
+ * Deliberately a separate function from sendSupportMail: support mail goes
+ * to us and can ride the shared Resend test sender, but customer mail goes
+ * to a stranger's inbox and that sender cannot reach one. Resend's
+ * onboarding@resend.dev only delivers to the address that owns the Resend
+ * account, so until a verified domain exists, mail to customers is
+ * accepted by nobody. Reporting that plainly beats a queue of notices that
+ * silently never arrive.
+ */
+export function customerMailReady(): { ready: boolean; reason: string | null } {
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    return { ready: true, reason: null };
+  }
+  if (process.env.RESEND_API_KEY) {
+    const from = process.env.RESEND_FROM || "";
+    if (!from || /resend\.dev/.test(from)) {
+      return {
+        ready: false,
+        reason:
+          "Resend's shared test sender only delivers to the account owner. Set RESEND_FROM to an address on a domain verified in Resend to email customers.",
+      };
+    }
+    return { ready: true, reason: null };
+  }
+  return { ready: false, reason: "No mail transport is configured on this deployment." };
+}
+
+export async function sendCustomerMail(input: {
+  to: string;
+  subject: string;
+  text: string;
+}): Promise<MailResult> {
+  const ready = customerMailReady();
+  if (!ready.ready) return { delivered: false, reason: ready.reason ?? "customer mail unavailable" };
+
+  const resendKey = process.env.RESEND_API_KEY;
+  if (resendKey) {
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: process.env.RESEND_FROM,
+          to: [input.to],
+          reply_to: SUPPORT_INBOX,
+          subject: input.subject,
+          text: input.text,
+        }),
+      });
+      if (res.ok) return { delivered: true, via: "resend" };
+      return { delivered: false, reason: `Resend ${res.status}: ${(await res.text()).slice(0, 200)}` };
+    } catch (e) {
+      return { delivered: false, reason: e instanceof Error ? e.message : "Resend request failed" };
+    }
+  }
+
+  try {
+    const port = Number(process.env.SMTP_PORT || 465);
+    const transport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port,
+      secure: port === 465,
+      auth: { user: process.env.SMTP_USER!.trim(), pass: process.env.SMTP_PASS!.replace(/\s+/g, "") },
+    });
+    await transport.sendMail({
+      from: process.env.SMTP_FROM || `Ascent <${process.env.SMTP_USER}>`,
+      to: input.to,
+      replyTo: SUPPORT_INBOX,
+      subject: input.subject,
+      text: input.text,
+    });
+    return { delivered: true, via: "smtp" };
+  } catch (e) {
+    return { delivered: false, reason: e instanceof Error ? e.message : "SMTP send failed" };
+  }
+}

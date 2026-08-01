@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "@/lib/session";
 import { storeConfigured, provisionSite, resetSitePlanning } from "@/lib/engine/store";
+import { notifyWelcome } from "@/lib/engine/notify";
 import type { OnboardingData } from "@/lib/onboarding";
 
 /**
@@ -104,6 +105,14 @@ export async function POST(req: NextRequest) {
     // researches when the keyword pool is thin, so without this the agent
     // would keep working from the answers given at onboarding.
     const reset = body.replan ? await resetSitePlanning(result.siteId) : null;
+
+    // Welcome mail only on first provisioning. This route is also the
+    // Settings save path, and re-mailing "you're set up" every time
+    // somebody edits their phone number would be noise from a system that
+    // otherwise only writes when it has something to say.
+    if (result.created) {
+      notifyWelcome(user.email, data.business.name || "your business", data.website.url);
+    }
 
     return NextResponse.json({
       ok: true,

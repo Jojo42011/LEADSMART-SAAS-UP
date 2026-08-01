@@ -198,3 +198,25 @@ alter table pages add column if not exists refreshed_at timestamptz;
 alter table pages add column if not exists refresh_count int not null default 0;
 create index if not exists pages_refresh_idx
   on pages(site_id, coalesce(refreshed_at, published_at));
+
+-- ---------------------------------------------------------------------------
+-- Customer notifications.
+--
+-- notify_publishes is the one notice an owner can switch off: welcome and
+-- payment-failure mail is transactional (it concerns their account and their
+-- money), while a per-page notice is a preference. Sent notices are recorded
+-- delivered-or-not for the same reason support enquiries are — "we emailed
+-- them" and "the email arrived" are different claims.
+-- ---------------------------------------------------------------------------
+alter table tenants add column if not exists notify_publishes boolean not null default true;
+
+create table if not exists notifications (
+  id            uuid primary key default gen_random_uuid(),
+  tenant_email  text not null,
+  kind          text not null,                      -- welcome | page_published | payment_failed
+  delivered     boolean not null default false,
+  error         text,
+  created_at    timestamptz not null default now()
+);
+create index if not exists notifications_tenant_idx on notifications(tenant_email, created_at desc);
+alter table notifications alter column id set default gen_random_uuid();

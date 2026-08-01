@@ -500,7 +500,7 @@ export type ProvisionInput = {
  */
 export async function provisionSite(
   input: ProvisionInput
-): Promise<{ tenantId: string; siteId: string } | null> {
+): Promise<{ tenantId: string; siteId: string; created: boolean } | null> {
   if (!storeConfigured()) return null;
 
   const tenantRes = await db().query(
@@ -518,6 +518,13 @@ export async function provisionSite(
   ]);
 
   let siteId: string;
+
+
+  // True only when this call inserted the site row, so first-run side
+
+  // effects (the welcome email) do not fire on every Settings save.
+
+  let created = false;
   if (existing.rows[0]) {
     siteId = existing.rows[0].id as string;
     // Brand only overwrites when the caller actually sent one. Saves that
@@ -550,6 +557,7 @@ export async function provisionSite(
       ]
     );
     siteId = siteRes.rows[0].id as string;
+    created = true;
   }
 
   const c = input.connection;
@@ -578,7 +586,7 @@ export async function provisionSite(
     ]
   );
 
-  return { tenantId, siteId };
+  return { tenantId, siteId, created };
 }
 
 /**
@@ -948,4 +956,56 @@ export async function getPageAsRefreshCandidate(
     [pageId, siteId]
   );
   return (res.rows[0] as RefreshCandidate) ?? null;
+}
+
+/* ----------------------------- Notifications ----------------------------- */
+
+export async function getTenantNotifyPrefs(
+  email: string
+): Promise<{ notifyPublishes: boolean } | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(`select notify_publishes from tenants where email = $1`, [
+    email.toLowerCase(),
+  ]);
+  const row = res.rows[0];
+  return row ? { notifyPublishes: Boolean(row.notify_publishes) } : null;
+}
+
+export async function setTenantNotifyPrefs(email: string, notifyPublishes: boolean): Promise<void> {
+  if (!storeConfigured()) return;
+  await db().query(`update tenants set notify_publishes = $2 where email = $1`, [
+    email.toLowerCase(),
+    notifyPublishes,
+  ]);
+}
+
+/** Records what was sent and whether it actually left — never just that it was attempted. */
+export async function recordNotification(
+  email: string,
+  kind: string,
+  delivered: boolean,
+  error?: string | null
+): Promise<void> {
+  if (!storeConfigured()) return;
+  await db().query(
+    `insert into notifications (tenant_email, kind, delivered, error) values ($1, $2, $3, $4)`,
+    [email.toLowerCase(), kind, delivered, error ?? null]
+  );
+}
+
+/** The tenant email that owns a site — the address customer notices go to. */
+export async function getSiteOwnerEmail(siteId: string): Promise<string | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(
+    `select t.email from sites s join tenants t on t.id = s.tenant_id where s.id = $1`,
+    [siteId]
+  );
+  return (res.rows[0]?.email as string) ?? null;
+}
+
+/** The tenant behind a Stripe customer id, for billing notices. */
+export async function getTenantEmailByCustomer(customerId: string): Promise<string | null> {
+  if (!storeConfigured()) return null;
+  const res = await db().query(`select email from tenants where stripe_customer_id = $1`, [customerId]);
+  return (res.rows[0]?.email as string) ?? null;
 }

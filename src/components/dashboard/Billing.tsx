@@ -50,6 +50,7 @@ export function Billing() {
   // The cancel flow confirms in place. A subscription is not a page card;
   // one mis-click must never schedule its end.
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [notify, setNotify] = useState<{ on: boolean; deliverable: boolean; reason: string | null } | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/billing/subscription")
@@ -60,6 +61,26 @@ export function Billing() {
   }, []);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    fetch("/api/notifications")
+      .then((r) => r.json())
+      .then((j: { notifyPublishes?: boolean; deliverable?: boolean; reason?: string | null }) =>
+        setNotify({ on: j.notifyPublishes ?? true, deliverable: Boolean(j.deliverable), reason: j.reason ?? null })
+      )
+      .catch(() => {});
+  }, []);
+
+  const toggleNotify = async () => {
+    if (!notify) return;
+    const next = !notify.on;
+    setNotify({ ...notify, on: next });
+    await fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notifyPublishes: next }),
+    }).catch(() => setNotify({ ...notify, on: !next }));
+  };
 
   const act = async (action: "cancel" | "resume" | "portal") => {
     setBusy(action);
@@ -278,6 +299,39 @@ export function Billing() {
               </span>
               <span aria-hidden="true" className="text-muted">&rarr;</span>
             </button>
+          )}
+
+          {notify && (
+            <div className="rounded-xl border border-line p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span>
+                  <span className="block text-[13.5px] font-medium">Email me when a page goes live</span>
+                  <span className="block text-[12px] text-muted">
+                    Account and billing emails are always sent — this covers publishing notices only.
+                  </span>
+                </span>
+                <button
+                  onClick={toggleNotify}
+                  role="switch"
+                  aria-checked={notify.on}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                    notify.on ? "bg-accent" : "bg-line"
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                      notify.on ? "left-[22px]" : "left-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
+              {!notify.deliverable && notify.reason && (
+                <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">
+                  <span className="text-ink">Not sending yet.</span> {notify.reason}
+                </p>
+              )}
+            </div>
           )}
 
           <Link

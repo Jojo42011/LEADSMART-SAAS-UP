@@ -4,7 +4,9 @@ import {
   listPages,
   markPagePublished,
   updatePageHtml,
+  getSiteOwnerEmail,
 } from "./store";
+import { notifyPagePublished } from "./notify";
 import { pickAccent } from "../site-ingest";
 import { siteOrigin } from "../url";
 import {
@@ -50,6 +52,10 @@ export async function publishStoredPage(
     image?: { filename: string; base64: string; mimeType: string; alt: string };
     /** Set when rewriting a page that is already live on WordPress. */
     wpPageId?: number | null;
+    /** For the "your page is live" notice. Omitted on a refresh: a rewrite
+     * of a page the owner already knows about is not news, and mailing on
+     * every refresh would train them to ignore the notices that matter. */
+    notify?: { keyword: string; auditScore: number; auditGrade: string; businessName: string };
   }
 ): Promise<StoredPagePublishResult> {
   const origin = siteOrigin(site.url);
@@ -157,6 +163,24 @@ export async function publishStoredPage(
     }
   } else {
     publishError = `No ${site.platform} credentials stored for this site — reconnect publishing in onboarding.`;
+  }
+
+  if (published && liveUrl && page.notify) {
+    // Fire and forget: a delivered email is not a condition of a
+    // successful publish, and a slow SMTP handshake must not eat into the
+    // cycle's 300s budget.
+    const owner = await getSiteOwnerEmail(site.id).catch(() => null);
+    if (owner) {
+      notifyPagePublished({
+        email: owner,
+        businessName: page.notify.businessName,
+        title: page.title,
+        keyword: page.notify.keyword,
+        liveUrl,
+        auditScore: page.notify.auditScore,
+        auditGrade: page.notify.auditGrade,
+      });
+    }
   }
 
   return { published, liveUrl, liveStatus, publishError, discoveryNote };

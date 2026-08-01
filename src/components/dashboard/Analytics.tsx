@@ -311,7 +311,49 @@ function ConnectCard({ googleReady, error }: { googleReady: boolean; error?: str
 
 /* --------------------------------- The tab ------------------------------- */
 
+/**
+ * Chooses which site the agent panels below report on.
+ *
+ * Only rendered for multi-site accounts: a single-site owner should not
+ * be asked to pick from a list of one. Search Console above is a separate
+ * concern — it reports on whichever property the account connected, which
+ * may not correspond to any one site here.
+ */
+function SitePicker({
+  sites,
+  value,
+  onChange,
+}: {
+  sites: { siteId: string; url: string }[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  if (sites.length < 2) return null;
+  return (
+    <label className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-line bg-white px-5 py-3.5">
+      <span className="text-[13px] font-medium">Site</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg border border-line bg-white px-3 py-1.5 text-[13px] text-ink outline-none transition-colors focus:border-ink/40"
+      >
+        {sites.map((s) => (
+          <option key={s.siteId} value={s.siteId}>
+            {s.url.replace(/^https?:\/\//, "")}
+          </option>
+        ))}
+      </select>
+      <span className="text-[12px] text-muted">
+        {sites.length} sites on this account
+      </span>
+    </label>
+  );
+}
+
 export function Analytics() {
+  const { sites: agentSites } = useAgentPages();
+  const [siteId, setSiteId] = useState<string>("");
+  const scopedId = siteId || agentSites[0]?.siteId || "";
   const [range, setRange] = useState<28 | 90>(28);
   const [data, setData] = useState<AnalyticsPayload | null>(null);
   // Starts true and is only toggled from async fetch callbacks and the
@@ -357,8 +399,9 @@ export function Analytics() {
           googleReady={data.googleReady}
           error={data.connected ? data.error || "No data returned." : data.error}
         />
-        <AgentStatus />
-        <PublishingCalendar />
+        <SitePicker sites={agentSites} value={scopedId} onChange={setSiteId} />
+        <AgentStatus siteId={scopedId} />
+        <PublishingCalendar siteId={scopedId} />
       </div>
     );
   }
@@ -525,8 +568,9 @@ export function Analytics() {
           )}
         </>
       )}
-      <AgentStatus />
-      <PublishingCalendar />
+      <SitePicker sites={agentSites} value={scopedId} onChange={setSiteId} />
+      <AgentStatus siteId={scopedId} />
+      <PublishingCalendar siteId={scopedId} />
     </div>
   );
 }
@@ -551,12 +595,15 @@ export function Analytics() {
  * the instruction; this panel is the outcome, and the two disagreeing is
  * exactly the thing an owner needs to be able to see.
  */
-function AgentStatus() {
+function AgentStatus({ siteId }: { siteId?: string }) {
   const { engine, sites } = useAgentPages();
   if (!engine || sites.length === 0) return null;
 
-  const site = sites[0];
-  const pages = sites.flatMap((s) => s.pages);
+  // Scoped to the selected site rather than assuming the first one: a
+  // second site used to be invisible here, its pages silently absent from
+  // every number on the panel.
+  const site = sites.find((s) => s.siteId === siteId) ?? sites[0];
+  const pages = site.pages;
   const published = pages.filter((p) => p.status === "published");
   const held = pages.filter((p) => p.status !== "published");
 
@@ -684,14 +731,14 @@ function AgentStatus() {
   );
 }
 
-function PublishingCalendar() {
+function PublishingCalendar({ siteId }: { siteId?: string }) {
   const { engine, sites } = useAgentPages();
   const [monthOffset, setMonthOffset] = useState(0);
 
   if (!engine || sites.length === 0) return null;
 
-  const site = sites[0];
-  const pages = sites.flatMap((s) => s.pages);
+  const site = sites.find((s) => s.siteId === siteId) ?? sites[0];
+  const pages = site.pages;
 
   const now = new Date();
   const view = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyStripeSignature } from "@/lib/stripe";
-import { setTenantPlanByEmail, setTenantPlanByCustomer } from "@/lib/engine/store";
+import { setTenantPlanByEmail, setTenantPlanByCustomer, getTenantEmailByCustomer } from "@/lib/engine/store";
+import { notifyPaymentFailed } from "@/lib/engine/notify";
 
 /**
  * Stripe webhook: the source of truth for who is paying. Point a Stripe
@@ -21,6 +22,7 @@ type StripeEvent = {
       customer_details?: { email?: string | null } | null;
       metadata?: Record<string, string> | null;
       status?: string;
+      hosted_invoice_url?: string | null;
     };
   };
 };
@@ -68,6 +70,22 @@ export async function POST(req: Request) {
       case "customer.subscription.deleted": {
         if (typeof obj.customer === "string") {
           await setTenantPlanByCustomer(obj.customer, "canceled");
+        }
+        break;
+      }
+      case "invoice.payment_failed": {
+        // Stripe dunning runs its own retries; this exists so the customer
+        // hears it from us too, with the true consequence spelled out —
+        // service continues during retries, and nothing already published
+        // is ever deleted over a billing problem.
+        if (typeof obj.customer === "string") {
+          const email = await getTenantEmailByCustomer(obj.customer);
+          if (email) {
+            notifyPaymentFailed(
+              email,
+              obj.hosted_invoice_url || "https://leadsmart-saas-up.vercel.app/dashboard"
+            );
+          }
         }
         break;
       }

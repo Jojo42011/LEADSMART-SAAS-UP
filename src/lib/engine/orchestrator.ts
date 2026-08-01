@@ -366,6 +366,12 @@ export async function runSiteCycle(
             mimeType: page.image.mimeType,
             alt: page.image.alt,
           },
+          notify: {
+            keyword: target.term,
+            auditScore: page.audit.score,
+            auditGrade: page.audit.grade,
+            businessName: site.business_name,
+          },
         }
       );
       published = res.published;
