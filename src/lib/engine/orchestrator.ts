@@ -1,6 +1,8 @@
 import {
   type SiteRow,
   claimRun,
+  recoverStuckRuns,
+  runningSince,
   updateRun,
   finishRun,
   touchSiteRun,
@@ -55,8 +57,27 @@ export async function runSiteCycle(
     keywordTerm?: string;
   }
 ): Promise<CycleResult> {
+  // Reap this site's dead runs before claiming. A serverless invocation
+  // killed at its 300s ceiling never reaches finishRun(), so the flight
+  // slot stays held by a process that no longer exists — and because only
+  // the hourly cron used to reap, pressing Generate returned "cycle
+  // already running" until the next tick happened to clear it. Every
+  // entry point claims through here, so self-healing belongs here.
+  await recoverStuckRuns(site.id);
+
   const runId = await claimRun(site.id);
-  if (!runId) return { siteId: site.id, ok: false, skipped: "cycle already running" };
+  if (!runId) {
+    const since = await runningSince(site.id);
+    const mins = since ? Math.max(0, Math.round((Date.now() - since.getTime()) / 60000)) : null;
+    return {
+      siteId: site.id,
+      ok: false,
+      skipped:
+        mins === null
+          ? "cycle already running"
+          : `a cycle started ${mins === 0 ? "moments" : `${mins} min`} ago is still running`,
+    };
+  }
 
   try {
     // Phase 1: research, when the keyword pool is thin.

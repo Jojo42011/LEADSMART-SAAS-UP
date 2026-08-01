@@ -353,11 +353,12 @@ export function Analytics() {
   if (!data.connected || data.error || !data.series) {
     return (
       <div className="grid gap-5">
-        <PublishingCalendar />
         <ConnectCard
           googleReady={data.googleReady}
           error={data.connected ? data.error || "No data returned." : data.error}
         />
+        <AgentStatus />
+        <PublishingCalendar />
       </div>
     );
   }
@@ -384,7 +385,9 @@ export function Analytics() {
 
   return (
     <div className="grid gap-5">
-      <PublishingCalendar />
+      {/* Search Console first, then the agent's own record of its work,
+          then the calendar — search data is what the tab is for, and the
+          calendar is the detail you scroll to rather than the headline. */}
       {/* Filter row */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -522,6 +525,8 @@ export function Analytics() {
           )}
         </>
       )}
+      <AgentStatus />
+      <PublishingCalendar />
     </div>
   );
 }
@@ -537,6 +542,148 @@ export function Analytics() {
  * finished work is the kind of thing that quietly misleads an owner about
  * what their site contains.
  */
+/**
+ * What the agent has actually been doing: whether it is running, how much
+ * it produces per day, and how long it has been operational.
+ *
+ * Every number here is derived from real rows — pages the engine wrote and
+ * runs it recorded — rather than from the configured cadence. Cadence is
+ * the instruction; this panel is the outcome, and the two disagreeing is
+ * exactly the thing an owner needs to be able to see.
+ */
+function AgentStatus() {
+  const { engine, sites } = useAgentPages();
+  if (!engine || sites.length === 0) return null;
+
+  const site = sites[0];
+  const pages = sites.flatMap((s) => s.pages);
+  const published = pages.filter((p) => p.status === "published");
+  const held = pages.filter((p) => p.status !== "published");
+
+  const stamps = pages
+    .map((p) => new Date(p.published_at || p.created_at).getTime())
+    .filter((t) => Number.isFinite(t));
+  const firstAt = stamps.length ? new Date(Math.min(...stamps)) : null;
+
+  // Pages per day over the span the agent has actually been operational,
+  // counted from its first page rather than from signup — a site that sat
+  // idle for a month before onboarding finished shouldn't have that month
+  // averaged into its rate. Same-day activity counts as one day, so the
+  // figure never divides by zero or reads as an implausible burst.
+  const daysLive = firstAt
+    ? Math.max(1, Math.round((Date.now() - firstAt.getTime()) / 86_400_000) || 1)
+    : 0;
+  const perDay = daysLive ? published.length / daysLive : 0;
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const today = published.filter(
+    (p) => new Date(p.published_at || p.created_at) >= startOfToday
+  ).length;
+
+  const lastRun = site.runs?.[0] ?? null;
+  const stepDays = site.cadence === "weekly" ? 7 : site.cadence === "every3days" ? 3 : 1;
+  const nextDue =
+    site.active && site.lastRunAt
+      ? new Date(new Date(site.lastRunAt).getTime() + stepDays * 86_400_000)
+      : null;
+
+  const fmtDate = (d: Date) =>
+    d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const fmtWhen = (d: Date) => {
+    const mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return `${mins} min ago`;
+    if (mins < 48 * 60) return `${Math.round(mins / 60)} h ago`;
+    return fmtDate(d);
+  };
+
+  const stats: { label: string; value: string; note?: string }[] = [
+    {
+      label: "Pages per day",
+      value: published.length === 0 ? "—" : perDay >= 1 ? perDay.toFixed(1) : perDay.toFixed(2),
+      note: `${published.length} published over ${daysLive} day${daysLive === 1 ? "" : "s"}`,
+    },
+    {
+      label: "Published today",
+      value: String(today),
+      note: site.active
+        ? `Target: ${stepDays === 1 ? "1 a day" : `1 every ${stepDays} days`}`
+        : "Agent paused",
+    },
+    {
+      label: "Held by the gate",
+      value: String(held.length),
+      note: held.length ? "Below 75 overall or 0.50 info gain" : "Nothing held",
+    },
+    {
+      label: "Operational since",
+      value: firstAt ? fmtDate(firstAt) : "—",
+      note: firstAt ? `${daysLive} day${daysLive === 1 ? "" : "s"} of production` : "No pages yet",
+    },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-medium">Agent status</h2>
+          <p className="mt-0.5 text-[12px] text-muted">
+            {site.url.replace(/^https?:\/\//, "")} · publishing{" "}
+            {site.publishMode === "auto" ? "automatically" : "on review"}
+          </p>
+        </div>
+        <span
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12.5px] ${
+            site.active ? "border-accent/40 bg-accent/[0.08] text-ink" : "border-line text-muted"
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className={`h-1.5 w-1.5 rounded-full ${
+              site.active ? "bg-accent animate-livepulse" : "bg-muted/50"
+            }`}
+          />
+          {site.active ? "Running" : "Paused"}
+        </span>
+      </div>
+
+      <dl className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {stats.map((s) => (
+          <div key={s.label} className="rounded-xl border border-line p-3.5">
+            <dt className="label-mono text-muted/70">{s.label}</dt>
+            <dd className="mt-1 text-[19px] font-medium tabular-nums tracking-tight">{s.value}</dd>
+            {s.note && <p className="mt-0.5 text-[11.5px] leading-snug text-muted">{s.note}</p>}
+          </div>
+        ))}
+      </dl>
+
+      <div className="mt-4 grid gap-1.5 border-t border-line pt-3 text-[12.5px] text-muted">
+        <p>
+          <span className="text-ink">Last cycle:</span>{" "}
+          {lastRun
+            ? `${fmtWhen(new Date(lastRun.started_at))} — ${
+                lastRun.status === "running"
+                  ? "running now"
+                  : lastRun.summary || lastRun.status
+              }`
+            : "no cycle has run yet"}
+        </p>
+        <p>
+          <span className="text-ink">Next cycle:</span>{" "}
+          {!site.active
+            ? "paused — resume the agent to schedule one"
+            : nextDue
+              ? nextDue.getTime() <= Date.now()
+                ? "due now"
+                : `${fmtDate(nextDue)}`
+              : "on the next scheduled check"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function PublishingCalendar() {
   const { engine, sites } = useAgentPages();
   const [monthOffset, setMonthOffset] = useState(0);
@@ -622,9 +769,12 @@ function PublishingCalendar() {
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-7 gap-1.5">
+      {/* Capped width: at the dashboard's full measure, square cells made a
+          seven-column grid nearly a thousand pixels tall for information
+          that reads fine at a glance. Fixed-height cells, not aspect-square. */}
+      <div className="mt-4 grid max-w-[24rem] grid-cols-7 gap-1">
         {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-          <div key={`${d}${i}`} className="pb-1 text-center text-[11px] font-medium text-muted/70">
+          <div key={`${d}${i}`} className="pb-0.5 text-center text-[10.5px] font-medium text-muted/70">
             {d}
           </div>
         ))}
@@ -645,7 +795,7 @@ function PublishingCalendar() {
             <div
               key={day}
               title={label}
-              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg border text-[12px] ${
+              className={`relative flex h-11 flex-col items-center justify-center rounded-md border text-[11.5px] ${
                 cell
                   ? "border-accent/40 bg-accent/[0.08] font-medium text-ink"
                   : projected

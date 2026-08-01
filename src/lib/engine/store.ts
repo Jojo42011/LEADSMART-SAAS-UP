@@ -183,14 +183,43 @@ export async function touchSiteRun(siteId: string): Promise<void> {
   await db().query(`update sites set last_run_at = now() where id = $1`, [siteId]);
 }
 
-/** Recovers cycles stuck in running for over 90 minutes. */
-export async function recoverStuckRuns(): Promise<number> {
+/**
+ * Recovers cycles whose process died before finishRun() could mark them
+ * done, so the single flight slot is never held by a run that no longer
+ * exists.
+ *
+ * The default window is derived from the real ceiling rather than picked
+ * for comfort: every route that runs a cycle declares maxDuration = 300,
+ * so a serverless invocation is killed at five minutes and a run still
+ * "running" at fifteen is dead with a wide margin for a slow publish. The
+ * old window was 90 minutes, which meant one timed-out cycle locked the
+ * owner out of their own Generate button for up to an hour and a half —
+ * and since only the cron reaped, it looked like the button was broken
+ * until the next hourly tick silently fixed it.
+ *
+ * Scoped to one site when a siteId is given, so claiming a slot can reap
+ * its own site's corpse without touching other tenants' live runs.
+ */
+export async function recoverStuckRuns(siteId?: string, minutes = 15): Promise<number> {
   if (!storeConfigured()) return 0;
   const res = await db().query(
-    `update runs set status = 'timeout', finished_at = now()
-     where status = 'running' and started_at < now() - interval '90 minutes'`
+    `update runs set status = 'timeout', finished_at = now(),
+            error = coalesce(error, 'the cycle process ended before it could report a result')
+     where status = 'running'
+       and started_at < now() - make_interval(mins => $1::int)
+       and ($2::uuid is null or site_id = $2::uuid)`,
+    [Math.max(1, Math.round(minutes)), siteId ?? null]
   );
   return res.rowCount ?? 0;
+}
+
+/** When the currently-held flight slot for a site was claimed, if any. */
+export async function runningSince(siteId: string): Promise<Date | null> {
+  const res = await db().query(
+    `select started_at from runs where site_id = $1 and status = 'running' limit 1`,
+    [siteId]
+  );
+  return (res.rows[0]?.started_at as Date) ?? null;
 }
 
 export async function getConnection(siteId: string): Promise<ConnectionRow | null> {
