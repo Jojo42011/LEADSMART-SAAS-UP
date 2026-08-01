@@ -13,7 +13,13 @@
 name: Agent cycle
 on:
   schedule:
-    - cron: "10 * * * *"
+    # Twice an hour, mid-hour. GitHub silently drops scheduled runs when
+    # its queue is busy, and the top-of-hour window is the busiest — on
+    # ":10" this workflow fired 39 to 107 minutes late and then missed
+    # three consecutive hours outright. Two off-peak attempts per hour
+    # means one dropped slot no longer costs a whole cycle, and firing
+    # when nothing is due is a no-op the engine answers with sitesDue: 0.
+    - cron: "23,53 * * * *"
   workflow_dispatch: {}
   # Fire-by-push: the session's GitHub integration cannot call the
   # workflow-dispatch API (403), but it can push. Touching the marker file
