@@ -366,17 +366,32 @@ export async function findOrCreateKeyword(
 export async function deletePageOwned(
   pageId: string,
   email: string
-): Promise<{ siteId: string; slug: string; folder: string; keyword: string } | null> {
+): Promise<{
+  siteId: string;
+  slug: string;
+  folder: string;
+  keyword: string;
+  /** The WordPress page to remove from the live site, when it published there. */
+  wpPageId: number | null;
+  liveUrl: string | null;
+} | null> {
   const res = await db().query(
     `delete from pages p using sites s, tenants t
      where p.id = $1 and p.site_id = s.id and s.tenant_id = t.id and t.email = $2
-     returning p.site_id as site_id, p.slug, p.folder, p.keyword`,
+     returning p.site_id as site_id, p.slug, p.folder, p.keyword, p.wp_page_id, p.live_url`,
     [pageId, email.toLowerCase()]
   );
   const row = res.rows[0];
   if (!row) return null;
   await db().query(`update keywords set covered_by = null where covered_by = $1`, [pageId]);
-  return { siteId: row.site_id, slug: row.slug, folder: row.folder, keyword: row.keyword };
+  return {
+    siteId: row.site_id,
+    slug: row.slug,
+    folder: row.folder,
+    keyword: row.keyword,
+    wpPageId: row.wp_page_id ?? null,
+    liveUrl: row.live_url ?? null,
+  };
 }
 
 /** Removes an uncovered keyword the owner dismissed from the queue. */

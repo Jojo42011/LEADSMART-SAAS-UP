@@ -821,6 +821,7 @@ function AgentPageRow({
   // to hit by accident.
   const [armed, setArmed] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [liveWarning, setLiveWarning] = useState<string | null>(null);
   const doDelete = async () => {
     if (!armed) {
       setArmed(true);
@@ -829,7 +830,19 @@ function AgentPageRow({
     }
     setDeleting(true);
     try {
-      await fetch(`/api/pages?id=${encodeURIComponent(page.id)}`, { method: "DELETE" });
+      const res = await fetch(`/api/pages?id=${encodeURIComponent(page.id)}`, { method: "DELETE" });
+      const json = (await res.json()) as { liveRemoved?: boolean | null; liveRemovalError?: string | null };
+      // Removed from the product but still serving to visitors is the one
+      // outcome the owner must never be left unaware of, so it is reported
+      // rather than folded into a silent refresh.
+      if (json.liveRemoved === false) {
+        setLiveWarning(
+          json.liveRemovalError ||
+            "The page was removed here, but could not be removed from your live site."
+        );
+        setDeleting(false);
+        return;
+      }
     } catch {
       // refresh shows the truth either way
     }
@@ -866,6 +879,14 @@ function AgentPageRow({
         </span>
         <StatusPill status={page.status} />
       </div>
+      {liveWarning && (
+        <p className="mt-3 rounded-lg border border-line bg-paper-warm p-3 text-[12px] leading-relaxed text-ink/80">
+          <span className="font-medium">Removed here, still live.</span> {liveWarning}{" "}
+          Ascent is no longer tracking this page, so it will not be cleaned up later —
+          delete it on your site directly, or it keeps serving to visitors and search
+          engines.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
         <a
           href={`/api/pages/preview?id=${page.id}`}

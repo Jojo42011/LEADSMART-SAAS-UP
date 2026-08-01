@@ -12,9 +12,11 @@ import {
 import {
   verifyLive,
   deleteGithubFile,
+  deleteWordpressPage,
   repoPagePrefix,
   publishGithubSupportFiles,
 } from "@/lib/engine/publish";
+import { siteOrigin } from "@/lib/url";
 import { pickAccent } from "@/lib/site-ingest";
 
 /**
@@ -116,21 +118,46 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "page not found" }, { status: 404 });
     }
 
-    // Best-effort repo cleanup: remove the file and shrink the sitemap.
-    // The row is already gone — an orphaned file is preferable to a
-    // deleted page still listed all over the product.
+    // Deleting here has to mean deleting from the live site. A page the
+    // owner removed that keeps serving to visitors and search engines is
+    // the worst of both worlds: gone from the product they manage it in,
+    // still published under their name.
     let repoCleaned = false;
+    let liveRemoved: boolean | null = null;
+    let liveRemovalError: string | null = null;
     const site = (await listSitesForEmail(auth.user.email)).find((s) => s.id === deleted.siteId);
     const conn = site ? await getConnection(site.id) : null;
+
+    if (site && site.platform === "wordpress" && conn?.wp_user && conn.wp_app_password) {
+      if (deleted.wpPageId) {
+        const res = await deleteWordpressPage({
+          site: siteOrigin(site.url),
+          user: conn.wp_user,
+          appPassword: conn.wp_app_password,
+          pageId: deleted.wpPageId,
+        });
+        liveRemoved = res.ok;
+        liveRemovalError = res.error ?? null;
+      } else {
+        // Never published there, so there is nothing live to remove —
+        // distinct from "we tried and failed", which the caller must be
+        // able to tell apart.
+        liveRemoved = null;
+      }
+    }
+
     if (site && site.platform === "github" && conn?.github_repo && conn.github_token) {
       const prefix = await repoPagePrefix(conn.github_token, conn.github_repo, conn.github_branch);
-      repoCleaned = await deleteGithubFile({
+      const removed = await deleteGithubFile({
         token: conn.github_token,
         repo: conn.github_repo,
         branch: conn.github_branch,
         path: `${prefix}${deleted.folder}/${deleted.slug}/index.html`,
         message: `Remove ${deleted.keyword}`,
       });
+      repoCleaned = removed;
+      liveRemoved = removed;
+      if (!removed) liveRemovalError = "The file could not be removed from the repository.";
       const remaining = (await listPages(site.id))
         .filter((p) => p.status === "published" && p.live_url)
         .map((p) => ({
@@ -155,7 +182,15 @@ export async function DELETE(req: NextRequest) {
       }).catch(() => {});
     }
 
-    return NextResponse.json({ ok: true, deleted: deleted.keyword, repoCleaned });
+    return NextResponse.json({
+      ok: true,
+      deleted: deleted.keyword,
+      repoCleaned,
+      /** True removed from the live site, false the attempt failed, null it was never live. */
+      liveRemoved,
+      liveRemovalError,
+      liveUrl: deleted.liveUrl,
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "delete failed" },

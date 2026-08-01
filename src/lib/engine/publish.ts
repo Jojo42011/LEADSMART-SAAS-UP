@@ -554,3 +554,35 @@ export async function publishWordpress(input: {
   const liveStatus = json.link ? await verifyLive(json.link) : null;
   return { ok: true, platform: "wordpress", pageId: json.id, liveUrl: json.link, liveStatus };
 }
+
+/**
+ * Removes a page from a live WordPress site.
+ *
+ * force: true skips the trash. A page left in the trash is still a row
+ * WordPress can restore and, on some configurations, still resolves at
+ * its URL — and "deleted" in our dashboard has to mean gone from the
+ * live site, not moved to a folder the owner never looks in.
+ *
+ * A 404 counts as success: the page is already absent, which is the
+ * state the caller asked for.
+ */
+export async function deleteWordpressPage(input: {
+  site: string;
+  user: string;
+  appPassword: string;
+  pageId: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  const site = siteOrigin(input.site);
+  const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
+  try {
+    const res = await fetch(`${site}/wp-json/wp/v2/pages/${input.pageId}?force=true`, {
+      method: "DELETE",
+      headers: { Authorization: `Basic ${auth}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (res.ok || res.status === 404) return { ok: true };
+    return { ok: false, error: `WordPress refused the delete (${res.status}): ${(await res.text()).slice(0, 200)}` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "network error" };
+  }
+}
