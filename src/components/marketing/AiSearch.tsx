@@ -68,7 +68,7 @@ export function AiSearch() {
 
         {/* AI answer card */}
         <Reveal delay={0.2}>
-          <div className="h-full rounded-2xl border border-line-dark bg-ink p-7 text-on-ink sm:p-8">
+          <div className="h-full rounded-2xl border border-line-dark bg-fill-strong p-7 text-on-ink sm:p-8">
             <div className="flex items-center justify-between">
               <span className="label-mono text-on-ink/75">AI answer</span>
               <span className="inline-flex items-center gap-1.5">

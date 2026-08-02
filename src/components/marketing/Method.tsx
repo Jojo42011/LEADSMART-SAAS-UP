@@ -68,7 +68,7 @@ export function Method() {
 
         {/* Information gain gate */}
         <Reveal delay={0.1}>
-          <div className="mt-5 overflow-hidden rounded-2xl border border-line-dark bg-ink p-8 text-on-ink sm:p-10">
+          <div className="mt-5 overflow-hidden rounded-2xl border border-line-dark bg-fill-strong p-8 text-on-ink sm:p-10">
             <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
               <div>
                 <span className="label-mono text-accent">The originality gate</span>

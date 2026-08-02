@@ -45,6 +45,19 @@
   --muted-on-ink: #a8a8a2;
   --accent-on-ink: #ff7a82;
   --line-on-ink: #2e2e33;
+  /* Large emphasis panels — the dark slabs the marketing pages and the
+     checkout are built around. Distinct from --ink because ink doubles as
+     the primary text colour and therefore has to invert in dark mode; a
+     full-width section that inverts with it turns into a blinding white
+     slab on a dark page. In light mode the two are the same value, which
+     is why the split was invisible until dark mode existed. */
+  --fill-strong: #0a0a0a;
+  --on-fill: #ffffff;
+  --fill-line: #262626;
+  --muted-on-fill: #a8a8a2;
+  --accent-on-fill: #ff7a82;
+  /* A box raised one step above the panel it sits in. */
+  --fill-soft: #1c1c1c;
 }
 
 [data-theme="dark"] {
@@ -78,6 +91,16 @@
   --muted-on-ink: #5c5c58;
   --accent-on-ink: #b81d28;
   --line-on-ink: #d5d5d1;
+  /* A raised dark surface rather than an inversion: the panel keeps its
+     role as the emphasised block without becoming the brightest thing on
+     a dark page. Its contents therefore use the ordinary dark-mode muted
+     and accent, not the inverted ones. */
+  --fill-strong: #17171d;
+  --on-fill: #f3f3f1;
+  --fill-line: #33333c;
+  --muted-on-fill: #a3a39d;
+  --accent-on-fill: #ff5f6a;
+  --fill-soft: #212129;
 }
 
 @theme inline {
@@ -92,6 +115,9 @@
   --color-accent: var(--accent);
   --color-accent-dim: var(--accent-dim);
   --color-on-ink: var(--on-ink);
+  --color-fill-strong: var(--fill-strong);
+  --color-on-fill: var(--on-fill);
+  --color-fill-line: var(--fill-line);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-instrument-serif);
@@ -254,4 +280,27 @@ body {
   --muted: var(--muted-on-ink);
   --accent: var(--accent-on-ink);
   --line: var(--line-on-ink);
+}
+
+/**
+ * Emphasis panels re-point the same tokens, including --on-ink itself.
+ * That last one is what keeps the change small: every `text-on-ink` child
+ * inside a panel resolves through the variable, so swapping the panel's
+ * own background class is enough and nothing inside it has to be touched.
+ */
+[class~="bg-fill-strong"] {
+  --on-ink: var(--on-fill);
+  /* --ink is deliberately NOT re-pointed. These panels contain nested
+     elements with their own light surfaces — the mocked search result in
+     the AI-search section, for one — and those rely on text-ink meaning
+     "dark text" regardless of what encloses them. Overriding it turned
+     their copy light-on-light. */
+  --muted: var(--muted-on-fill);
+  --accent: var(--accent-on-fill);
+  --line: var(--fill-line);
+  --line-dark: var(--fill-line);
+  /* Boxes nested inside a panel are raised relative to IT, not inverted
+     against the page. Without this the mocked answer-engine result inside
+     the AI-search panel came out light-on-light in dark mode. */
+  --ink-soft: var(--fill-soft);
 }

@@ -66,7 +66,7 @@ export function FirstNinetyDays() {
               ))}
 
               {/* The math */}
-              <StaggerItem className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-on-ink sm:p-8">
+              <StaggerItem className="overflow-hidden rounded-2xl border border-line-dark bg-fill-strong p-7 text-on-ink sm:p-8">
                 <span className="label-mono text-accent">The math</span>
                 <div className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-3">
                   {[

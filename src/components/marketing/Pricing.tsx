@@ -37,7 +37,7 @@ export function Pricing() {
         <Reveal delay={0.15} className="mx-auto mt-14 max-w-2xl">
           <div className="overflow-hidden rounded-2xl border border-ink bg-paper shadow-2xl shadow-black/[0.08]">
             <div className="grid sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-              <div className="flex flex-col justify-between bg-ink p-8 text-on-ink">
+              <div className="flex flex-col justify-between bg-fill-strong p-8 text-on-ink">
                 <div>
                   <span className="inline-flex items-center gap-2 rounded-full border border-on-ink/15 px-3 py-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />

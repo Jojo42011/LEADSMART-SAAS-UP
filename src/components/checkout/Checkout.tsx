@@ -134,7 +134,7 @@ export function Checkout() {
         <div className="mt-8 overflow-hidden rounded-2xl border border-line bg-paper shadow-xl shadow-black/[0.05]">
           <div className="grid md:grid-cols-[minmax(0,4fr)_minmax(0,5fr)]">
             {/* Order summary */}
-            <div className="flex flex-col bg-ink p-8 text-on-ink">
+            <div className="flex flex-col bg-fill-strong p-8 text-on-ink">
               <span className="label-mono text-on-ink/75">Your plan</span>
               <div className="mt-5 flex items-baseline gap-1.5">
                 <span className="font-display text-6xl tracking-tight">${total}</span>

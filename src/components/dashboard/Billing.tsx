@@ -210,8 +210,21 @@ export function Billing() {
       {/* Actions */}
       <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
         <h2 className="text-[15px] font-medium">Manage</h2>
+        {sub?.status === "past_due" && (
+          <p className="mt-2 rounded-xl border border-accent/40 bg-accent/[0.06] p-3.5 text-[12.5px] leading-relaxed text-ink">
+            <span className="font-medium">Your last payment did not go through.</span>{" "}
+            Update the card below and the agent keeps running — it only stops if the
+            retries run out.
+          </p>
+        )}
         <div className="mt-4 grid gap-3">
-          {state.mode === "stripe" && (
+          {/* Always present, never hidden.
+              Hiding this in demo mode meant the single thing a customer
+              most needs to find — "where do I update my card" — simply
+              was not on the page, and its absence looked like an
+              oversight rather than a deployment that has no Stripe yet.
+              It is shown either way and says which it is. */}
+          {state.mode === "stripe" ? (
             <button
               onClick={() => act("portal")}
               disabled={busy !== null}
@@ -219,14 +232,26 @@ export function Billing() {
             >
               <span>
                 <span className="block text-[13.5px] font-medium">
-                  {busy === "portal" ? "Opening Stripe…" : "Payment method & invoices"}
+                  {busy === "portal" ? "Opening Stripe…" : "Update payment method"}
                 </span>
                 <span className="block text-[12px] text-muted">
-                  Change your card, download invoices, update billing details — on Stripe&apos;s secure page.
+                  {sub?.paymentMethod
+                    ? `Currently ${sub.paymentMethod.brand} ···· ${sub.paymentMethod.last4}. Change your card, download invoices, or update billing details on Stripe's secure page.`
+                    : "Add a card, download invoices, or update billing details on Stripe's secure page."}
                 </span>
               </span>
               <span aria-hidden="true" className="text-muted">&rarr;</span>
             </button>
+          ) : (
+            <div className="rounded-xl border border-line p-4">
+              <p className="text-[13.5px] font-medium">Update payment method</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
+                Card details are handled entirely by Stripe and never reach Ascent&apos;s
+                servers. This deployment has no Stripe keys yet, so there is no card on
+                file and nothing to update — the button appears here the moment billing
+                is connected.
+              </p>
+            </div>
           )}
 
           {/* Cancel / resume */}

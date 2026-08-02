@@ -966,7 +966,7 @@ function LaunchStep({ data, update }: StepProps) {
           ))}
         </div>
 
-        <div className="mt-4 rounded-xl border border-line-dark bg-ink p-5 text-on-ink">
+        <div className="mt-4 rounded-xl border border-line-dark bg-fill-strong p-5 text-on-ink">
           <p className="label-mono text-on-ink/75">First cycle preview</p>
           {firstPage ? (
             <dl className="mt-3 grid gap-2">
@@ -1109,7 +1109,7 @@ function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => 
   }, [count, onDone, researchDone, launchLines.length]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-ink px-6 text-on-ink">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-fill-strong px-6 text-on-ink">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}

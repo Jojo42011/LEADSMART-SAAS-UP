@@ -367,7 +367,7 @@ function Overview({
   return (
     <>
       {/* Plan-ready banner */}
-      <div className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-on-ink sm:p-9">
+      <div className="overflow-hidden rounded-2xl border border-line-dark bg-fill-strong p-7 text-on-ink sm:p-9">
         <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <span className="label-mono text-accent">{hasPlan ? "Setup complete" : "Almost there"}</span>
@@ -694,7 +694,7 @@ function QueueRow({
             </span>
           </div>
           {openSchema && page.schemaJsonLd[openSchema] && (
-            <div className="mt-3 overflow-x-auto rounded-lg bg-ink p-4">
+            <div className="mt-3 overflow-x-auto rounded-lg bg-fill-strong p-4">
               <pre className="font-mono text-[11px] leading-relaxed text-on-ink/80">
                 {JSON.stringify(page.schemaJsonLd[openSchema], null, 2)}
               </pre>

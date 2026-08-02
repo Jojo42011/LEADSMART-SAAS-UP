@@ -5,7 +5,7 @@ import { Reveal } from "@/components/ui/Reveal";
 
 export function ClosingCta() {
   return (
-    <section className="relative overflow-hidden bg-ink text-on-ink">
+    <section className="relative overflow-hidden bg-fill-strong text-on-ink">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 [background-image:linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:56px_56px] [mask-image:radial-gradient(ellipse_60%_70%_at_50%_50%,black_20%,transparent_75%)]"

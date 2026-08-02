@@ -37,7 +37,7 @@ const phases = [
 
 export function Pipeline() {
   return (
-    <section id="how-it-works" className="bg-ink text-on-ink">
+    <section id="how-it-works" className="bg-fill-strong text-on-ink">
       <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
         <div className="grid gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
           {/* Sticky intro */}
