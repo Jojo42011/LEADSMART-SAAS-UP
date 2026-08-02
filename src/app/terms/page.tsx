@@ -38,7 +38,19 @@ const sections = [
     heading: "Billing",
     items: [
       "Subscriptions are billed monthly in advance through Stripe. Pricing is published on the homepage and may change with notice.",
+      "Free trials require a card up front. Cancel before the trial ends and you are not charged.",
+      "Websites are billed per site. Adding one mid-month is prorated, so you pay only for the remainder of that month; removing one takes effect at the end of the period you have paid for.",
       "You can cancel at any time; cancellation takes effect at the end of the current billing period, and no partial refunds are issued for unused time.",
+      "If a payment fails, the agent keeps working for a short grace period while the card is retried, then stops. Nothing already published is removed, and your data is kept so the agent resumes where it left off once billing is resolved.",
+      "If the Service fails to publish anything at all during a billing period because of a fault on our side, write to us and we will refund that period.",
+    ],
+  },
+  {
+    heading: "Ending the agreement",
+    items: [
+      "You can cancel or delete your account at any time from your dashboard.",
+      "We may suspend or end an account that breaches the acceptable-use section, that charges back a legitimate payment, or where required by law. Where circumstances allow we will give notice first.",
+      "On termination, pages already published to your own site remain yours and stay live. You can request an export or deletion of your account data as described in the Privacy Policy.",
     ],
   },
   {
@@ -71,7 +83,13 @@ const sections = [
   {
     heading: "Contact",
     items: [
-      "Questions about these terms can be sent through the contact channel listed on our homepage.",
+      `Questions about these terms, billing disputes and refund requests: ${site.supportEmail}.`,
+      ...(site.legalEntity ? [`The Service is operated by ${site.legalEntity}.`] : []),
+      // Omitted entirely rather than printed as a placeholder: naming the
+      // wrong jurisdiction in a contract is worse than naming none.
+      ...(site.governingLaw
+        ? [`These terms are governed by the laws of ${site.governingLaw}, and disputes are heard there.`]
+        : []),
     ],
   },
 ];
@@ -94,7 +112,7 @@ export default function TermsPage() {
           Terms of Service
         </h1>
         <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-muted">
-          Last updated July 31, 2026. The terms for using {site.name} on your
+          Last updated August 2, 2026. The terms for using {site.name} on your
           own website.
         </p>
 

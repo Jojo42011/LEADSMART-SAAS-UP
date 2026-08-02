@@ -58,6 +58,41 @@ const sections = [
     ],
   },
   {
+    // Google requires data obtained through sensitive scopes to be
+    // described SEPARATELY rather than folded into broad terms alongside
+    // everything else, and requires an explicit Limited Use affirmation.
+    // Verification is refused without both, so this section is deliberately
+    // its own heading naming the exact scope rather than a line in the
+    // general "what we collect" list above.
+    heading: "Google user data",
+    items: [
+      `Signing in with Google gives ${site.name} your name, email address and profile picture, used only to create and authenticate your account.`,
+      "Connecting Search Console is optional and separate from signing in. It requests one scope, https://www.googleapis.com/auth/webmasters.readonly, which is read-only: it cannot change, publish to, or delete anything in your Search Console account.",
+      "What we access with it: impressions, clicks, average position and the queries your own verified properties rank for. What we do with it: show your rankings in your dashboard, and let the agent prioritise keywords where you already have traction. Nothing else.",
+      "How it is stored: the refresh token is encrypted (AES-256-GCM) at rest and decrypted in memory only when fetching your data. Performance data is stored against your account and is readable only by your account.",
+      "Who it is shared with: nobody. Search Console data is never sold, never shared with advertisers or data brokers, never used for advertising, and never sent to an AI model — including the Gemini calls that draft your pages.",
+      "How to revoke it: disconnect Search Console from your dashboard at any time, which deletes our stored token, or revoke access directly at myaccount.google.com/permissions.",
+      `${site.name}'s use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.`,
+    ],
+  },
+  {
+    heading: "Cookies",
+    items: [
+      "We set one cookie: a signed, httpOnly session cookie that keeps you logged in. It cannot be read by scripts in your browser.",
+      "We do not use advertising, tracking, or third-party analytics cookies, and there is nothing here to opt out of because there is no cross-site tracking to disable.",
+      "Theme and which website you are viewing are stored in your browser's local storage, not sent to us.",
+    ],
+  },
+  {
+    heading: "How long we keep it",
+    items: [
+      "Account, site and page data is kept while your account is open, so the agent can build on its own history rather than restarting each cycle.",
+      "Publishing credentials and OAuth tokens are deleted when you disconnect the service they belong to.",
+      "On account deletion we remove your account, site configuration, credentials and generated page records within 30 days. Pages already published to your own site are yours and are unaffected.",
+      "Billing records are retained as long as tax and accounting law requires, which is separate from account deletion.",
+    ],
+  },
+  {
     heading: "How we store and protect it",
     items: [
       "Publishing credentials and OAuth refresh tokens are encrypted at rest (AES-256-GCM) and only decrypted in memory at the moment they are used.",
@@ -83,7 +118,10 @@ const sections = [
   {
     heading: "Contact",
     items: [
-      "Questions about this policy or your data can be sent through the contact channel listed on our homepage.",
+      // A reachable address, not a pointer to one. Google's reviewers and
+      // Stripe both check this, and "see our homepage" fails both.
+      `Questions about this policy, requests to access or delete your data, and privacy complaints: ${site.supportEmail}. A person reads it.`,
+      ...(site.legalEntity ? [`The Service is operated by ${site.legalEntity}.`] : []),
     ],
   },
 ];
@@ -106,7 +144,7 @@ export default function PrivacyPage() {
           Privacy Policy
         </h1>
         <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-muted">
-          Last updated July 31, 2026. Plain language, describing what {site.name}{" "}
+          Last updated August 2, 2026. Plain language, describing what {site.name}{" "}
           actually does with your data.
         </p>
 
