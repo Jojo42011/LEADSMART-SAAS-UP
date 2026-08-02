@@ -120,7 +120,14 @@ create table if not exists pages (
   title         text not null,
   meta_title    text not null default '',
   meta_description text not null default '',
-  html          text,                                -- cleared after publish for github targets
+  -- Retained after publish, not cleared. An earlier comment here claimed
+  -- github pages were cleared once committed; nothing ever did that, and
+  -- it turns out nothing should: the information-gain gate compares a new
+  -- page against its siblings' stored HTML, the refresh path does the
+  -- same, and the internal-link backfill rewrites it. Dropping it to save
+  -- ~16 KB a page would quietly weaken the duplicate-content check and
+  -- break forward linking, to reclaim ~0.6 GB a year against an 8 GB plan.
+  html          text,
   word_count    int not null default 0,
   audit_score   int not null default 0,
   audit_grade   text not null default '',
@@ -220,3 +227,23 @@ create table if not exists notifications (
 );
 create index if not exists notifications_tenant_idx on notifications(tenant_email, created_at desc);
 alter table notifications alter column id set default gen_random_uuid();
+
+-- ---------------------------------------------------------------------------
+-- Capacity work.
+--
+-- runs_running_idx: recoverStuckRuns filters on status alone and runs at the
+-- top of every cycle. Without this it is a full scan of a table that grows
+-- roughly 36,000 rows a year at a hundred customers. Partial, so it only
+-- indexes the few rows in flight at any moment.
+--
+-- rate_limits: shared counters for unauthenticated endpoints. In-memory
+-- counters are worthless on serverless — each instance keeps its own, so the
+-- effective limit rises with load, which is backwards.
+-- ---------------------------------------------------------------------------
+create index if not exists runs_running_idx on runs(started_at) where status = 'running';
+
+create table if not exists rate_limits (
+  key          text primary key,
+  count        int not null default 0,
+  window_start timestamptz not null default now()
+);

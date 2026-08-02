@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWordpress } from "@/lib/engine/publish";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Tests WordPress credentials against the live site before onboarding
@@ -16,6 +17,11 @@ import { verifyWordpress } from "@/lib/engine/publish";
  * already holds.
  */
 export async function POST(req: NextRequest) {
+  // Authenticates against a third-party site with caller-supplied
+  // credentials — unbounded, that is a password-spraying tool.
+  const limited = await enforceRateLimit(req, { bucket: "wp-test", limit: 15, windowSeconds: 600 });
+  if (limited) return limited;
+
   let body: { site?: string; user?: string; appPassword?: string };
   try {
     body = await req.json();

@@ -10,6 +10,7 @@ import {
 } from "@/lib/session";
 import { storeConfigured, findTenantByEmail } from "@/lib/engine/store";
 import { normalizeEmail, verifyPassword } from "@/lib/password";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Email sign-in.
@@ -20,6 +21,13 @@ import { normalizeEmail, verifyPassword } from "@/lib/password";
  * have accounts.
  */
 export async function POST(req: NextRequest) {
+  // Ten attempts in five minutes leaves room for a forgotten password
+  // and none for credential stuffing. Keyed by client rather than by
+  // account, so an attacker cannot lock a real user out by failing on
+  // their address.
+  const limited = await enforceRateLimit(req, { bucket: "signin", limit: 10, windowSeconds: 300 });
+  if (limited) return limited;
+
   if (!storeConfigured()) {
     return NextResponse.json(
       { ok: false, error: "Email accounts need the database. Use Google or GitHub sign-in." },

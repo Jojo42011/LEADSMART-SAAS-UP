@@ -15,6 +15,7 @@ import {
   normalizeEmail,
   passwordProblem,
 } from "@/lib/password";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Email account creation.
@@ -29,6 +30,12 @@ import {
  * account, and pretending otherwise is what caused the original hole.
  */
 export async function POST(req: NextRequest) {
+  // Every signup is a tenant row and, once billing is live, a Stripe
+  // customer. Five an hour per client is generous for a household and
+  // useless for scripted account creation.
+  const limited = await enforceRateLimit(req, { bucket: "signup", limit: 5, windowSeconds: 3600 });
+  if (limited) return limited;
+
   if (!storeConfigured()) {
     return NextResponse.json(
       { ok: false, error: "Email accounts need the database. Use Google or GitHub sign-in." },

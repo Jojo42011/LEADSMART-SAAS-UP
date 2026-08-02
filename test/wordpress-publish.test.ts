@@ -20,7 +20,8 @@ const PAGE_HTML = `<!doctype html><html><head><style>body{margin:0}.hero{min-hei
 <footer>f</footer></body></html>`;
 
 let mediaUploads: { contentType: string; disposition: string; bytes: number }[] = [];
-let pageBody: any = null;
+type PageBody = { title: string; slug: string; status: string; content: string };
+let pageBody: PageBody | null = null;
 let mediaShouldFail = false;
 
 const server = createServer((req, res) => {
@@ -54,7 +55,7 @@ async function main() {
   const base = { site: "http://127.0.0.1:8731", user: "u", appPassword: "p", slug: "my-slug", title: "T" };
 
   // --- 1. raster image: uploaded to the media library, src rewritten
-  let res: any = await publishWordpress({ ...base, html: PAGE_HTML,
+  let res: Awaited<ReturnType<typeof publishWordpress>> & { imageNote?: string | null; html?: string } = await publishWordpress({ ...base, html: PAGE_HTML,
     image: { filename: "hero-abc.png", base64: PNG_B64, mimeType: "image/png", alt: "Biz — kw" } });
   check("raster: publish ok", res.ok === true);
   check("raster: uploaded once", mediaUploads.length === 1, JSON.stringify(mediaUploads));

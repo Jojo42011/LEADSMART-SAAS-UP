@@ -14,11 +14,40 @@ export function storeConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
+/**
+ * Connections per instance.
+ *
+ * The ceiling that matters is Supabase's pooler, not this number: the free
+ * tier allows 200 client connections and every serverless instance opens
+ * its own pool, so `max` multiplied by peak concurrent instances must stay
+ * under it. At 3 that was 66 instances before "Max client connections
+ * reached" — which fails everything at once rather than degrading, and
+ * Vercel will scale past 66 during a spike.
+ *
+ * 6 is chosen against the work rather than by feel. A cron invocation now
+ * runs several cycles concurrently and each cycle holds one connection at
+ * a time, so a batch needs roughly as many connections as it has parallel
+ * cycles; request handlers use one or two. Six covers a batch without
+ * idling connections a web request will never use, and keeps the instance
+ * ceiling at ~33 concurrent — which is why POOL_MAX is settable: on a
+ * larger Supabase compute (or a bigger pooler allowance) this goes up
+ * without a deploy.
+ */
+const POOL_MAX = Math.max(1, Number(process.env.PG_POOL_MAX) || 6);
+
 function db(): Pool {
   if (!pool) {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      max: 3,
+      max: POOL_MAX,
+      // Reap idle connections quickly. A serverless instance can sit warm
+      // for minutes between requests, and every second it holds an idle
+      // connection is a second another instance cannot have one.
+      idleTimeoutMillis: 10_000,
+      // Fail fast instead of hanging the whole function on a saturated
+      // pooler: a request that cannot get a connection in 10s should
+      // surface that, not consume the 300s budget waiting.
+      connectionTimeoutMillis: 10_000,
       // Local Postgres usually has no TLS. Matching only the literal
       // "localhost" made a 127.0.0.1 URL fail with the unhelpful "server
       // does not support SSL connections".
@@ -58,6 +87,15 @@ const SCHEMA_REPAIRS = [
      name text, email text not null, subject text, message text not null,
      tenant_email text, delivered boolean not null default false,
      delivery_error text, created_at timestamptz not null default now())`,
+  // recoverStuckRuns filters on status alone, which had no index: a full
+  // scan of a table that grows ~36k rows a year at a hundred customers,
+  // run at the top of every cycle. Partial, so it indexes only the
+  // handful of rows that are ever in flight.
+  `create index if not exists runs_running_idx on runs(started_at) where status = 'running'`,
+  `create table if not exists rate_limits (
+     key text primary key,
+     count int not null default 0,
+     window_start timestamptz not null default now())`,
   `create table if not exists notifications (
      id uuid primary key default gen_random_uuid(),
      tenant_email text not null, kind text not null,
@@ -1082,4 +1120,84 @@ export async function wpPageIdFor(pageId: string): Promise<number | null> {
   if (!storeConfigured()) return null;
   const res = await sql(`select wp_page_id from pages where id = $1`, [pageId]);
   return (res.rows[0]?.wp_page_id as number) ?? null;
+}
+
+/* ------------------------------ Rate limits ------------------------------ */
+
+/**
+ * Counts one request against a fixed window, atomically.
+ *
+ * A single upsert does the whole job: insert the key, or — if the stored
+ * window has expired — reset it, otherwise increment. Doing this as a
+ * read-then-write would race under exactly the concurrency it exists to
+ * defend against, letting a burst through while every instance reads the
+ * same pre-increment count.
+ *
+ * Fails open. A store that cannot be reached returns "allowed" rather
+ * than locking every caller out, because these endpoints include the
+ * support form and a database outage is when people most need to write in.
+ */
+export async function consumeRateLimit(
+  key: string,
+  limit: number,
+  windowSeconds: number
+): Promise<{ allowed: boolean; retryAfterSeconds: number; degraded?: true }> {
+  if (!storeConfigured()) return { allowed: true, retryAfterSeconds: 0, degraded: true };
+  try {
+    const res = await sql(
+      `insert into rate_limits (key, count, window_start)
+       values ($1, 1, now())
+       on conflict (key) do update set
+         count = case
+                   when rate_limits.window_start < now() - make_interval(secs => $3::int)
+                   then 1
+                   else rate_limits.count + 1
+                 end,
+         window_start = case
+                          when rate_limits.window_start < now() - make_interval(secs => $3::int)
+                          then now()
+                          else rate_limits.window_start
+                        end
+       returning
+         -- The verdict is decided in SQL, in the same statement that does
+         -- the increment. Returning the raw count and comparing it in JS
+         -- also works, but it left $2 unreferenced, and Postgres rejects a
+         -- parameter whose type it cannot infer — "could not determine
+         -- data type of parameter $2". Every call threw, the catch below
+         -- failed open, and the limiter allowed 40 of 40 requests against
+         -- a limit of 5 while looking perfectly healthy.
+         count <= $2::int as allowed,
+         greatest(0, ceil(extract(epoch from (window_start + make_interval(secs => $3::int)) - now())))::int as retry_after`,
+      [key, Math.max(1, Math.round(limit)), Math.max(1, Math.round(windowSeconds))]
+    );
+    const row = res.rows[0];
+    return {
+      allowed: Boolean(row?.allowed),
+      retryAfterSeconds: row?.retry_after ?? windowSeconds,
+    };
+  } catch (e) {
+    // Fail open, but never quietly. An unreachable store must not lock
+    // people out of the support form during an outage — and a limiter
+    // that is failing open is indistinguishable from one that is working
+    // unless it says so, which is exactly how the bug above survived.
+    console.error(
+      `[rate-limit] failing open for ${key}: ${e instanceof Error ? e.message : "unknown error"}`
+    );
+    return { allowed: true, retryAfterSeconds: 0, degraded: true };
+  }
+}
+
+/**
+ * Drops expired counters. Called from the cron so the table cannot grow
+ * without bound on a busy deployment — one row per client per bucket
+ * would otherwise accumulate for the life of the database.
+ */
+export async function pruneRateLimits(): Promise<number> {
+  if (!storeConfigured()) return 0;
+  try {
+    const res = await sql(`delete from rate_limits where window_start < now() - interval '1 day'`);
+    return res.rowCount ?? 0;
+  } catch {
+    return 0;
+  }
 }

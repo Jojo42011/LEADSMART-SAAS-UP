@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "@/lib/session";
 import { insertSupportMessage, markSupportDelivered, storeConfigured } from "@/lib/engine/store";
 import { sendSupportMail, mailConfigured, probeMail, SUPPORT_INBOX } from "@/lib/mailer";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Receives a support enquiry: stores it, then tries to email it on.
@@ -16,6 +17,11 @@ import { sendSupportMail, mailConfigured, probeMail, SUPPORT_INBOX } from "@/lib
  * waiting on an answer to a message nobody was ever going to see.
  */
 export async function POST(req: NextRequest) {
+  // Writes a row and sends mail. Five in ten minutes is far more than a
+  // real person needs and far less than a spam run wants.
+  const limited = await enforceRateLimit(req, { bucket: "support", limit: 5, windowSeconds: 600 });
+  if (limited) return limited;
+
   let body: { name?: string; email?: string; subject?: string; message?: string };
   try {
     body = await req.json();
