@@ -35,26 +35,26 @@ export function Pricing() {
         </Reveal>
 
         <Reveal delay={0.15} className="mx-auto mt-14 max-w-2xl">
-          <div className="overflow-hidden rounded-2xl border border-ink bg-white shadow-2xl shadow-black/[0.08]">
+          <div className="overflow-hidden rounded-2xl border border-ink bg-paper shadow-2xl shadow-black/[0.08]">
             <div className="grid sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-              <div className="flex flex-col justify-between bg-ink p-8 text-white">
+              <div className="flex flex-col justify-between bg-ink p-8 text-on-ink">
                 <div>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-on-ink/15 px-3 py-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
-                    <span className="label-mono text-white/70">Per website</span>
+                    <span className="label-mono text-on-ink/75">Per website</span>
                   </span>
                   <div className="mt-6 flex items-baseline gap-1.5">
                     <span className="font-display text-7xl tracking-tight">$49</span>
-                    <span className="text-[14px] text-white/50">/month</span>
+                    <span className="text-[14px] text-on-ink/75">/month</span>
                   </div>
-                  <p className="mt-3 text-[13.5px] leading-relaxed text-white/55">
+                  <p className="mt-3 text-[13.5px] leading-relaxed text-on-ink/75">
                     Every website gets its own autonomous agent, its own
                     strategy and its own publishing schedule.
                   </p>
                 </div>
                 <Link
                   href="/signup"
-                  className="group mt-8 inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-[14.5px] font-medium text-ink transition-colors hover:bg-accent hover:text-white"
+                  className="group mt-8 inline-flex items-center justify-center gap-2 rounded-full bg-paper px-6 py-3.5 text-[14.5px] font-medium text-ink transition-colors hover:bg-accent hover:text-on-ink"
                 >
                   Get started
                   <span className="transition-transform duration-200 group-hover:translate-x-0.5">
@@ -64,7 +64,7 @@ export function Pricing() {
               </div>
 
               <div className="p-8">
-                <p className="label-mono text-muted/70">Everything included</p>
+                <p className="label-mono text-muted">Everything included</p>
                 <ul className="mt-5 grid gap-3">
                   {included.map((f) => (
                     <li key={f} className="flex items-start gap-2.5 text-[13.5px]">
@@ -87,7 +87,7 @@ export function Pricing() {
         </Reveal>
 
         <Reveal className="mt-10 text-center">
-          <p className="label-mono text-muted/70">
+          <p className="label-mono text-muted">
             Month to
             month, cancel anytime
           </p>

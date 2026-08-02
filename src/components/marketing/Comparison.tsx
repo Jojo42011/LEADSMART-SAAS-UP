@@ -47,7 +47,7 @@ const rows = [
 
 export function Comparison() {
   return (
-    <section id="compare" className="border-t border-line bg-white">
+    <section id="compare" className="border-t border-line bg-paper">
       <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="label-mono text-accent">The honest comparison</span>
@@ -69,7 +69,7 @@ export function Comparison() {
           {/* Header */}
           <StaggerItem className="hidden grid-cols-[minmax(0,4fr)_minmax(0,5fr)_minmax(0,5fr)] gap-4 px-6 pb-4 sm:grid">
             <span />
-            <span className="label-mono text-muted/60">Traditional agency</span>
+            <span className="label-mono text-muted">Traditional agency</span>
             <span className="label-mono text-accent">Ascent</span>
           </StaggerItem>
 
@@ -83,7 +83,7 @@ export function Comparison() {
                   its own attribution — otherwise the stacked mobile layout
                   reads as two unlabeled claims. */}
               <span className="flex items-center gap-2.5 text-[13.5px] text-muted">
-                <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-muted/40" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
                 </svg>
                 <span className="sr-only">Traditional agency: </span>
@@ -101,7 +101,7 @@ export function Comparison() {
         </Stagger>
 
         <Reveal className="mt-10 text-center">
-          <p className="mx-auto max-w-xl text-[13px] leading-relaxed text-muted/70">
+          <p className="mx-auto max-w-xl text-[13px] leading-relaxed text-muted">
             Agency figures reflect published retainer guidance from leading US
             SEO agencies: typical minimums run $1,500 to $6,000 a month, with
             12 month commitments recommended to start. If you have an agency

@@ -109,7 +109,7 @@ export function Billing() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-line bg-white p-6">
+      <div className="flex items-center gap-3 rounded-2xl border border-line bg-paper p-6">
         <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
         <p className="text-[13px] text-muted">Loading your subscription</p>
       </div>
@@ -117,7 +117,7 @@ export function Billing() {
   }
   if (!state) {
     return (
-      <div className="rounded-2xl border border-line bg-white p-6">
+      <div className="rounded-2xl border border-line bg-paper p-6">
         <p className="text-[14px]">Could not load billing. Refresh, or{" "}
           <Link href="/support" className="text-accent underline underline-offset-2">contact support</Link>.
         </p>
@@ -148,7 +148,7 @@ export function Billing() {
   return (
     <div className="grid gap-5">
       {/* Current plan */}
-      <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+      <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-[15px] font-medium">Your plan</h2>
@@ -173,7 +173,7 @@ export function Billing() {
 
         <dl className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
           <div className="rounded-xl border border-line p-3.5">
-            <dt className="label-mono text-muted/70">Price</dt>
+            <dt className="label-mono text-muted">Price</dt>
             <dd className="mt-1 text-[17px] font-medium tracking-tight">
               ${49 * (sub?.quantity ?? 1)}<span className="text-[12px] text-muted">/mo</span>
             </dd>
@@ -182,13 +182,13 @@ export function Billing() {
             </p>
           </div>
           <div className="rounded-xl border border-line p-3.5">
-            <dt className="label-mono text-muted/70">{inTrial ? "Trial ends" : ending ? "Service ends" : "Renews"}</dt>
+            <dt className="label-mono text-muted">{inTrial ? "Trial ends" : ending ? "Service ends" : "Renews"}</dt>
             <dd className="mt-1 text-[15px] font-medium tracking-tight">
               {inTrial && sub?.trialEnd ? fmtDate(sub.trialEnd) : endDate ?? "—"}
             </dd>
           </div>
           <div className="rounded-xl border border-line p-3.5">
-            <dt className="label-mono text-muted/70">Payment method</dt>
+            <dt className="label-mono text-muted">Payment method</dt>
             <dd className="mt-1 text-[15px] font-medium tracking-tight">
               {sub?.paymentMethod
                 ? `${sub.paymentMethod.brand} ···· ${sub.paymentMethod.last4}`
@@ -198,7 +198,7 @@ export function Billing() {
             </dd>
           </div>
           <div className="rounded-xl border border-line p-3.5">
-            <dt className="label-mono text-muted/70">Agent</dt>
+            <dt className="label-mono text-muted">Agent</dt>
             <dd className="mt-1 text-[15px] font-medium tracking-tight">
               {state.planStatus === "active" ? "Running" : "Stopped"}
             </dd>
@@ -208,7 +208,7 @@ export function Billing() {
       </div>
 
       {/* Actions */}
-      <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+      <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
         <h2 className="text-[15px] font-medium">Manage</h2>
         <div className="mt-4 grid gap-3">
           {state.mode === "stripe" && (
@@ -247,14 +247,14 @@ export function Billing() {
                   <button
                     onClick={() => act("cancel")}
                     disabled={busy !== null}
-                    className="rounded-full bg-ink px-4 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+                    className="rounded-full bg-ink px-4 py-2 text-[12.5px] font-medium text-on-ink transition-colors hover:bg-accent disabled:opacity-60"
                   >
                     {busy === "cancel" ? "Cancelling…" : inTrial ? "Yes, end my trial" : "Yes, cancel"}
                   </button>
                   <button
                     onClick={() => setConfirmingCancel(false)}
                     disabled={busy !== null}
-                    className="rounded-full border border-line bg-white px-4 py-2 text-[12.5px] font-medium transition-colors hover:border-ink/40"
+                    className="rounded-full border border-line bg-paper px-4 py-2 text-[12.5px] font-medium transition-colors hover:border-ink/40"
                   >
                     Keep my plan
                   </button>
@@ -320,7 +320,7 @@ export function Billing() {
                 >
                   <span
                     aria-hidden="true"
-                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-paper transition-all ${
                       notify.on ? "left-[22px]" : "left-0.5"
                     }`}
                   />
@@ -356,7 +356,7 @@ export function Billing() {
         )}
 
         {state.mode === "demo" && (
-          <p className="mt-4 text-[11.5px] leading-relaxed text-muted/80">
+          <p className="mt-4 text-[11.5px] leading-relaxed text-muted">
             This deployment is running in demo billing mode — activation is simulated and no card is
             ever charged. Payment methods and invoices appear here once Stripe is connected.
           </p>

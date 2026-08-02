@@ -41,7 +41,7 @@ export function FirstNinetyDays() {
                 and little else, invisible in every suburb they serve, losing
                 those jobs to whoever shows up first.
               </p>
-              <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-muted/70">
+              <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-muted">
                 Illustrative scenario using the agent&apos;s default
                 assumptions, not a client result. Your dashboard projects
                 these numbers from your own market and sale value.
@@ -54,11 +54,11 @@ export function FirstNinetyDays() {
               {phases.map((p) => (
                 <StaggerItem
                   key={p.period}
-                  className="rounded-2xl border border-line bg-white p-7"
+                  className="rounded-2xl border border-line bg-paper p-7"
                 >
                   <div className="flex items-center justify-between gap-4">
                     <span className="label-mono text-accent">{p.period}</span>
-                    <span className="label-mono text-muted/60">{p.stat}</span>
+                    <span className="label-mono text-muted">{p.stat}</span>
                   </div>
                   <h3 className="mt-3 text-xl font-medium tracking-tight">{p.title}</h3>
                   <p className="mt-2.5 text-[14.5px] leading-relaxed text-muted">{p.text}</p>
@@ -66,7 +66,7 @@ export function FirstNinetyDays() {
               ))}
 
               {/* The math */}
-              <StaggerItem className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-white sm:p-8">
+              <StaggerItem className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-on-ink sm:p-8">
                 <span className="label-mono text-accent">The math</span>
                 <div className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-3">
                   {[
@@ -76,11 +76,11 @@ export function FirstNinetyDays() {
                   ].map((m) => (
                     <div key={m.label}>
                       <p className="font-display text-3xl tracking-tight sm:text-4xl">{m.value}</p>
-                      <p className="mt-1.5 text-[12.5px] leading-snug text-white/50">{m.label}</p>
+                      <p className="mt-1.5 text-[12.5px] leading-snug text-on-ink/75">{m.label}</p>
                     </div>
                   ))}
                 </div>
-                <p className="mt-6 border-t border-line-dark pt-5 text-[13px] leading-relaxed text-white/55">
+                <p className="mt-6 border-t border-line-dark pt-5 text-[13px] leading-relaxed text-on-ink/75">
                   An agency would charge $9,000 for those three months and
                   publish a fraction of the pages. The agent costs less than
                   one of those weeks, and it doesn&apos;t stop at 90 days.

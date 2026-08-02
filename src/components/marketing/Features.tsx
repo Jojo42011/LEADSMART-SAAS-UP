@@ -86,7 +86,14 @@ export function Features() {
             key={f.title}
             className="group relative border-b border-r border-line p-8 transition-colors duration-300 hover:bg-paper-warm sm:p-10"
           >
-            <span className="label-mono absolute right-8 top-8 text-line transition-colors duration-300 group-hover:text-accent">
+            {/* A decorative index watermark, deliberately at the contrast of
+                a hairline. It carries no information the heading beside it
+                does not, so it is hidden from assistive tech rather than
+                darkened into something that competes with the content. */}
+            <span
+              aria-hidden="true"
+              className="label-mono absolute right-8 top-8 text-line transition-colors duration-300 group-hover:text-accent"
+            >
               0{i + 1}
             </span>
             <span className="block h-6 w-6 text-ink/70 [&>svg]:h-full [&>svg]:w-full">

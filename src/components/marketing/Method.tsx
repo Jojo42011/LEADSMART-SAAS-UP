@@ -25,7 +25,7 @@ const pillars = [
 
 export function Method() {
   return (
-    <section id="method" className="bg-white">
+    <section id="method" className="bg-paper">
       <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
         <Reveal className="max-w-2xl">
           <span className="label-mono text-accent">The Ascent Method</span>
@@ -48,7 +48,7 @@ export function Method() {
               key={p.name}
               className="flex flex-col rounded-2xl border border-line bg-paper-warm p-8"
             >
-              <span className="label-mono text-muted/60">0{i + 1}</span>
+              <span className="label-mono text-muted">0{i + 1}</span>
               <h3 className="font-display mt-4 text-2xl tracking-tight">{p.name}</h3>
               <p className="mt-1.5 text-[13.5px] font-medium text-accent">{p.question}</p>
               <p className="mt-4 text-[14px] leading-relaxed text-muted">{p.text}</p>
@@ -68,14 +68,14 @@ export function Method() {
 
         {/* Information gain gate */}
         <Reveal delay={0.1}>
-          <div className="mt-5 overflow-hidden rounded-2xl border border-line-dark bg-ink p-8 text-white sm:p-10">
+          <div className="mt-5 overflow-hidden rounded-2xl border border-line-dark bg-ink p-8 text-on-ink sm:p-10">
             <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
               <div>
                 <span className="label-mono text-accent">The originality gate</span>
                 <h3 className="font-display mt-3 text-2xl tracking-tight sm:text-3xl">
                   If it says nothing new, it doesn&apos;t ship.
                 </h3>
-                <p className="mt-4 max-w-lg text-[14.5px] leading-relaxed text-white/55">
+                <p className="mt-4 max-w-lg text-[14.5px] leading-relaxed text-on-ink/75">
                   Before publishing, every draft is compared against the pages
                   already ranking for its keyword. If it isn&apos;t measurably
                   different from what&apos;s out there, with new specifics, new
@@ -84,25 +84,25 @@ export function Method() {
                   not echoes.
                 </p>
               </div>
-              <div className="rounded-xl border border-line-dark bg-white/[0.03] p-6 font-mono text-[12.5px]">
-                <p className="text-white/40">{"// information gain check"}</p>
-                <p className="mt-3 text-white/70">
+              <div className="rounded-xl border border-line-dark bg-on-ink/[0.03] p-6 font-mono text-[12.5px]">
+                <p className="text-on-ink/75">{"// information gain check"}</p>
+                <p className="mt-3 text-on-ink/75">
                   draft vs. top 10 ranking pages
                 </p>
                 <div className="mt-4 flex items-center justify-between">
-                  <span className="text-white/50">similarity ceiling</span>
-                  <span className="text-white">0.32</span>
+                  <span className="text-on-ink/75">similarity ceiling</span>
+                  <span className="text-on-ink">0.32</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between">
-                  <span className="text-white/50">information gain</span>
+                  <span className="text-on-ink/75">information gain</span>
                   <span className="text-accent">0.68</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between">
-                  <span className="text-white/50">threshold</span>
-                  <span className="text-white/70">0.50</span>
+                  <span className="text-on-ink/75">threshold</span>
+                  <span className="text-on-ink/75">0.50</span>
                 </div>
                 <div className="mt-4 border-t border-line-dark pt-4">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.06] px-3 py-1.5 text-[11.5px] text-white">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-on-ink/[0.06] px-3 py-1.5 text-[11.5px] text-on-ink">
                     <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                     Cleared to publish
                   </span>

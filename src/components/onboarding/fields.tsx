@@ -24,7 +24,7 @@ export function Field({ label, hint, optional, id, name, ...props }: FieldProps)
       <span className="flex items-baseline justify-between">
         <span className="text-[13px] font-medium text-ink">{label}</span>
         {optional && (
-          <span className="label-mono text-[10px] text-muted/60">Optional</span>
+          <span className="label-mono text-[10px] text-muted">Optional</span>
         )}
       </span>
       <input
@@ -32,7 +32,7 @@ export function Field({ label, hint, optional, id, name, ...props }: FieldProps)
         id={fieldId}
         name={fieldName}
         aria-describedby={hintId}
-        className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all placeholder:text-muted/50 focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+        className="mt-2 w-full rounded-xl border border-line bg-paper px-4 py-3 text-[14.5px] text-ink outline-none transition-all placeholder:text-muted focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
       />
       {hint && (
         <span id={hintId} className="mt-1.5 block text-[12px] text-muted">
@@ -87,14 +87,14 @@ export function ChoiceCard({
       aria-pressed={selected}
       className={`flex w-full items-start gap-4 rounded-xl border p-5 text-left transition-all ${
         selected
-          ? "border-ink bg-ink text-white shadow-lg shadow-black/10"
-          : "border-line bg-white hover:border-ink/40"
+          ? "border-ink bg-ink text-on-ink shadow-lg shadow-black/10"
+          : "border-line bg-paper hover:border-ink/40"
       }`}
     >
       {icon && (
         <span
           className={`mt-0.5 block h-6 w-6 shrink-0 [&>svg]:h-full [&>svg]:w-full ${
-            selected ? "text-white" : "text-ink/70"
+            selected ? "text-on-ink" : "text-ink/70"
           }`}
         >
           {icon}
@@ -107,7 +107,7 @@ export function ChoiceCard({
         </span>
         <span
           className={`mt-1 block text-[13px] leading-relaxed ${
-            selected ? "text-white/60" : "text-muted"
+            selected ? "text-on-ink/75" : "text-muted"
           }`}
         >
           {text}

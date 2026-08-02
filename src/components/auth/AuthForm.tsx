@@ -149,7 +149,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
         <div className="flex justify-center">
           <Wordmark />
         </div>
-        <div className="mt-8 rounded-2xl border border-line bg-white p-8 shadow-xl shadow-black/[0.04]">
+        <div className="mt-8 rounded-2xl border border-line bg-paper p-8 shadow-xl shadow-black/[0.04]">
           <h1 className="font-display text-[26px] tracking-tight">
             {isSignup ? "Create your account" : "Welcome back"}
           </h1>
@@ -165,7 +165,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
                 // eslint-disable-next-line @next/next/no-img-element -- external avatar, no loader needed
                 <img src={existing.picture} alt="" className="h-9 w-9 rounded-full" />
               ) : (
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-[13px] font-medium text-white">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-[13px] font-medium text-on-ink">
                   {existing.name.slice(0, 1).toUpperCase()}
                 </span>
               )}
@@ -176,7 +176,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
               <button
                 type="button"
                 onClick={() => router.push("/dashboard")}
-                className="shrink-0 rounded-full bg-ink px-3.5 py-2 text-[12.5px] font-medium text-white transition-colors hover:bg-accent"
+                className="shrink-0 rounded-full bg-ink px-3.5 py-2 text-[12.5px] font-medium text-on-ink transition-colors hover:bg-accent"
               >
                 Continue
               </button>
@@ -193,14 +193,14 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
           <div className="mt-6 grid gap-2.5">
             <a
               href={ssoHref("google")}
-              className="inline-flex items-center justify-center gap-3 rounded-full border border-line bg-white px-6 py-3 text-[14px] font-medium text-ink transition-colors hover:border-ink/40 hover:bg-paper-warm"
+              className="inline-flex items-center justify-center gap-3 rounded-full border border-line bg-paper px-6 py-3 text-[14px] font-medium text-ink transition-colors hover:border-ink/40 hover:bg-paper-warm"
             >
               <GoogleGlyph />
               Continue with Google
             </a>
             <a
               href={ssoHref("github")}
-              className="inline-flex items-center justify-center gap-3 rounded-full border border-line bg-white px-6 py-3 text-[14px] font-medium text-ink transition-colors hover:border-ink/40 hover:bg-paper-warm"
+              className="inline-flex items-center justify-center gap-3 rounded-full border border-line bg-paper px-6 py-3 text-[14px] font-medium text-ink transition-colors hover:border-ink/40 hover:bg-paper-warm"
             >
               <GithubGlyph />
               Continue with GitHub
@@ -216,7 +216,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
 
           <div className="my-6 flex items-center gap-3">
             <span className="h-px flex-1 bg-line" />
-            <span className="label-mono text-[10px] text-muted/60">or with email</span>
+            <span className="label-mono text-[10px] text-muted">or with email</span>
             <span className="h-px flex-1 bg-line" />
           </div>
 
@@ -246,7 +246,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
             <button
               type="submit"
               disabled={busy || passwordDisabled}
-              className="mt-1 inline-flex items-center justify-center rounded-full bg-ink px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+              className="mt-1 inline-flex items-center justify-center rounded-full bg-ink px-6 py-3.5 text-[14.5px] font-medium text-on-ink transition-colors hover:bg-accent disabled:opacity-60"
             >
               {busy ? "One moment" : isSignup ? "Create account" : "Sign in"}
             </button>
@@ -277,7 +277,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
             )}
           </div>
         </div>
-        <p className="label-mono mt-6 text-center text-muted/60">
+        <p className="label-mono mt-6 text-center text-muted">
           Month to month &middot; Cancel anytime
         </p>
       </motion.div>

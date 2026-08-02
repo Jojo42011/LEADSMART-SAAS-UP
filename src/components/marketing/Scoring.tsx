@@ -43,7 +43,7 @@ export function Scoring() {
         </Reveal>
 
         <Reveal delay={0.15}>
-          <div className="rounded-2xl border border-line bg-white p-7 shadow-xl shadow-black/[0.04] sm:p-8">
+          <div className="rounded-2xl border border-line bg-paper p-7 shadow-xl shadow-black/[0.04] sm:p-8">
             <div className="flex items-start justify-between">
               <div>
                 <p className="label-mono text-muted">Page audit</p>
@@ -83,7 +83,7 @@ export function Scoring() {
 
             <div className="mt-7 flex items-center justify-between border-t border-line pt-5">
               <span className="label-mono text-muted">Verdict</span>
-              <span className="inline-flex items-center gap-2 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-white">
+              <span className="inline-flex items-center gap-2 rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-medium text-on-ink">
                 <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                 Cleared to publish
               </span>

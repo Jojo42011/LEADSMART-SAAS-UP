@@ -32,7 +32,7 @@ const columns = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-line bg-white">
+    <footer className="border-t border-line bg-paper">
       <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-[minmax(0,5fr)_repeat(3,minmax(0,2fr))]">
           <div>
@@ -44,7 +44,7 @@ export function Footer() {
           </div>
           {columns.map((col) => (
             <div key={col.title}>
-              <p className="label-mono text-muted/70">{col.title}</p>
+              <p className="label-mono text-muted">{col.title}</p>
               <ul className="mt-4 flex flex-col gap-2.5">
                 {col.links.map((l) => (
                   <li key={l.label}>
@@ -61,10 +61,10 @@ export function Footer() {
           ))}
         </div>
         <div className="mt-14 flex flex-col items-start justify-between gap-4 border-t border-line pt-7 sm:flex-row sm:items-center">
-          <p className="text-[12.5px] text-muted/70">
+          <p className="text-[12.5px] text-muted">
             &copy; {new Date().getFullYear()} {site.name}. All rights reserved.
           </p>
-          <p className="label-mono text-muted/50">Built to rank</p>
+          <p className="label-mono text-muted">Built to rank</p>
         </div>
       </div>
     </footer>

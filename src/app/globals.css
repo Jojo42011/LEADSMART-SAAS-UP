@@ -1,6 +1,21 @@
 @import "tailwindcss";
 
+/**
+ * Two themes over one set of semantic tokens.
+ *
+ * `--ink` means "strong": primary text on a page, and the fill of solid
+ * buttons and feature panels. `--paper` means "surface". In dark mode the
+ * two swap roles rather than each darkening independently, which is what
+ * lets the whole product theme from a dozen variables instead of a
+ * per-component rewrite.
+ *
+ * That swap creates one trap: text sitting ON an ink surface cannot be
+ * hardcoded white, because ink becomes near-white in dark mode. `--on-ink`
+ * exists for exactly that text — white in light mode, near-black in dark —
+ * so a solid button reads correctly in both without a conditional.
+ */
 :root {
+  color-scheme: light;
   --ink: #0a0a0a;
   --ink-soft: #1c1c1c;
   --paper: #ffffff;
@@ -9,8 +24,60 @@
   --line-dark: #262626;
   --muted: #6f6f6a;
   --muted-dark: #9a9a94;
-  --accent: #e12d39;
-  --accent-dim: rgba(225, 45, 57, 0.12);
+  --accent: #d3202c;
+  --accent-dim: rgba(211, 32, 44, 0.12);
+  --on-ink: #ffffff;
+  /* Chart series and delta colours. Tokens rather than literals because
+     the SVG charts must re-theme with everything else — validated for
+     CVD separation and for contrast against their own surface. */
+  --hue-clicks: #e12d39;
+  --hue-impressions: #2260dd;
+  --hue-position: #0d9488;
+  --grid: #ececea;
+  --crosshair: #c9c9c4;
+  --pos: #0d7a6d;
+  --neg: #c22532;
+  --serp-link: #1a0dab;
+  /* Colours for content sitting ON an ink fill. Ink is near-black here, so
+     these are the light end; in dark mode ink is near-white and they
+     invert. Without them, muted and accent text on a feature panel is
+     styled for the wrong ground in one of the two themes. */
+  --muted-on-ink: #a8a8a2;
+  --accent-on-ink: #ff7a82;
+  --line-on-ink: #2e2e33;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #f3f3f1;
+  --ink-soft: #dededa;
+  --paper: #0d0d10;
+  --paper-warm: #16161a;
+  --line: #2b2b31;
+  --line-dark: #3a3a42;
+  /* Lifted from the light-mode muted so it still clears 7:1 on a near
+     black surface; the light value would read as barely-there grey. */
+  --muted: #a3a39d;
+  --muted-dark: #7c7c76;
+  /* The brand red at full saturation vibrates against a dark ground and
+     fails contrast for small text. This is the same hue, lifted. */
+  --accent: #ff5f6a;
+  --accent-dim: rgba(255, 95, 106, 0.16);
+  --on-ink: #0d0d10;
+  /* Each lifted for a dark ground: the light-mode blue and teal fall
+     below 4.5:1 against #0d0d10 and read as near-black smudges. */
+  --hue-clicks: #ff6b74;
+  --hue-impressions: #7aa2ff;
+  --hue-position: #35c9b6;
+  --grid: #26262b;
+  --crosshair: #45454d;
+  --pos: #35c9b6;
+  --neg: #ff6b74;
+  /* Google's own dark-mode result-link colour, since this mocks a SERP. */
+  --serp-link: #8ab4f8;
+  --muted-on-ink: #5c5c58;
+  --accent-on-ink: #b81d28;
+  --line-on-ink: #d5d5d1;
 }
 
 @theme inline {
@@ -24,6 +91,7 @@
   --color-muted-dark: var(--muted-dark);
   --color-accent: var(--accent);
   --color-accent-dim: var(--accent-dim);
+  --color-on-ink: var(--on-ink);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-instrument-serif);
@@ -163,4 +231,27 @@ body {
     opacity: 1;
     transform: none;
   }
+}
+
+/**
+ * A mocked search-result link. Google's own light and dark link colours,
+ * because the surrounding component is imitating a results page and a
+ * hardcoded #1a0dab disappears against a dark ground.
+ */
+.serp-link {
+  color: var(--serp-link);
+}
+
+/**
+ * Panels filled with ink invert their ground relative to the page, so the
+ * tokens are re-pointed for everything inside them. `~=` matches the whole
+ * class token only, so a solid `bg-ink` panel matches while the subtle
+ * `bg-ink/[0.04]` tints — which sit on the page surface, not on ink — do
+ * not. That distinction is the whole reason this works automatically
+ * instead of needing a marker class on every panel.
+ */
+[class~="bg-ink"] {
+  --muted: var(--muted-on-ink);
+  --accent: var(--accent-on-ink);
+  --line: var(--line-on-ink);
 }

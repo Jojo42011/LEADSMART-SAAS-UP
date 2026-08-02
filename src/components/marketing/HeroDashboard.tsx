@@ -23,20 +23,20 @@ export function HeroDashboard() {
   const reduced = useReducedMotion();
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-2xl shadow-black/[0.10]">
+    <div className="overflow-hidden rounded-2xl border border-line bg-paper shadow-2xl shadow-black/[0.10]">
       {/* Window chrome */}
       <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-accent animate-livepulse" />
           <span className="label-mono text-muted">Agent active</span>
         </div>
-        <span className="label-mono text-muted/60">Last publish 2h ago</span>
+        <span className="label-mono text-muted">Last publish 2h ago</span>
       </div>
 
       <div className="grid gap-px bg-line sm:grid-cols-4">
         {kpis.map((k) => (
-          <div key={k.label} className="bg-white px-5 py-4">
-            <p className="label-mono text-muted/70">{k.label}</p>
+          <div key={k.label} className="bg-paper px-5 py-4">
+            <p className="label-mono text-muted">{k.label}</p>
             <p className="font-display mt-1 text-[28px] leading-none tracking-tight">
               <Counter to={k.value} suffix={k.suffix} />
             </p>
@@ -55,7 +55,7 @@ export function HeroDashboard() {
         <div className="p-5 sm:p-6">
           <div className="flex items-baseline justify-between">
             <p className="text-[13px] font-medium">Organic clicks</p>
-            <p className="label-mono text-muted/60">Six months</p>
+            <p className="label-mono text-muted">Six months</p>
           </div>
           <div className="mt-4">
             <svg viewBox="0 0 560 180" className="w-full" aria-hidden>
@@ -91,7 +91,7 @@ export function HeroDashboard() {
             </svg>
             <div className="mt-2 flex justify-between">
               {["Feb", "Mar", "Apr", "May", "Jun", "Jul"].map((m) => (
-                <span key={m} className="label-mono text-[9.5px] text-muted/50">{m}</span>
+                <span key={m} className="label-mono text-[9.5px] text-muted">{m}</span>
               ))}
             </div>
           </div>
@@ -101,7 +101,7 @@ export function HeroDashboard() {
         <div className="border-t border-line p-5 sm:p-6 lg:border-l lg:border-t-0">
           <div className="flex items-baseline justify-between">
             <p className="text-[13px] font-medium">Top pages</p>
-            <p className="label-mono text-muted/60">Published by agent</p>
+            <p className="label-mono text-muted">Published by agent</p>
           </div>
           <div className="mt-4 flex flex-col gap-2.5">
             {pages.map((p, i) => (
@@ -118,7 +118,7 @@ export function HeroDashboard() {
                     Position {p.pos} &middot; <span className="text-accent">{p.move}</span>
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-ink px-2 py-0.5 font-mono text-[10px] text-white">
+                <span className="shrink-0 rounded-full bg-ink px-2 py-0.5 font-mono text-[10px] text-on-ink">
                   {p.score}
                 </span>
               </motion.div>

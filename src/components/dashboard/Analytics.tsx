@@ -37,7 +37,12 @@ type AnalyticsPayload = {
   error?: string;
 };
 
-const HUES = { clicks: "#e12d39", impressions: "#2260dd", position: "#0d9488" } as const;
+// Read from CSS tokens so the charts re-theme with the rest of the app.
+const HUES = {
+  clicks: "var(--hue-clicks)",
+  impressions: "var(--hue-impressions)",
+  position: "var(--hue-position)",
+} as const;
 
 function compact(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
@@ -132,7 +137,7 @@ function TimeSeriesChart({
   const hovered = hover !== null ? points[hover] : null;
 
   return (
-    <div className="min-w-0 rounded-2xl border border-line bg-white p-5">
+    <div className="min-w-0 rounded-2xl border border-line bg-paper p-5">
       <div className="flex items-baseline justify-between gap-3">
         <div>
           <h3 className="text-[13.5px] font-medium text-ink">{title}</h3>
@@ -152,15 +157,15 @@ function TimeSeriesChart({
           {/* Gridlines: hairline, solid, recessive */}
           {ticks.map((t) => (
             <g key={t}>
-              <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="#ececea" strokeWidth="1" />
-              <text x={PAD.left - 8} y={y(t) + 3.5} textAnchor="end" fontSize="10" fill="#9a9a94" fontFamily="ui-monospace, monospace">
+              <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} style={{ stroke: "var(--grid)" }} strokeWidth="1" />
+              <text x={PAD.left - 8} y={y(t) + 3.5} textAnchor="end" fontSize="10" style={{ fill: "var(--muted)" }} fontFamily="ui-monospace, monospace">
                 {compact(t)}
               </text>
             </g>
           ))}
           {/* X ticks */}
           {xTickIdx.map((i) => (
-            <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="10" fill="#9a9a94" fontFamily="ui-monospace, monospace">
+            <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize="10" style={{ fill: "var(--muted)" }} fontFamily="ui-monospace, monospace">
               {fmtDate(points[i].date)}
             </text>
           ))}
@@ -170,20 +175,20 @@ function TimeSeriesChart({
           {/* Crosshair */}
           {hovered && hover !== null && (
             <g>
-              <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + ih} stroke="#c9c9c4" strokeWidth="1" />
-              <circle cx={x(hover)} cy={y(hovered.value)} r="5" fill={color} stroke="#ffffff" strokeWidth="2" />
+              <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + ih} style={{ stroke: "var(--crosshair)" }} strokeWidth="1" />
+              <circle cx={x(hover)} cy={y(hovered.value)} r="5" fill={color} style={{ stroke: "var(--paper)" }} strokeWidth="2" />
             </g>
           )}
           {/* End marker with surface ring + selective end label */}
           {last && hover === null && (
             <g>
-              <circle cx={x(points.length - 1)} cy={y(last.value)} r="4.5" fill={color} stroke="#ffffff" strokeWidth="2" />
+              <circle cx={x(points.length - 1)} cy={y(last.value)} r="4.5" fill={color} style={{ stroke: "var(--paper)" }} strokeWidth="2" />
               <text
                 x={x(points.length - 1) + 8}
                 y={y(last.value) + 3.5}
                 fontSize="11"
                 fontWeight="600"
-                fill="#0a0a0a"
+                style={{ fill: "var(--ink)" }}
                 fontFamily="ui-monospace, monospace"
               >
                 {fmt(last.value)}
@@ -193,7 +198,7 @@ function TimeSeriesChart({
         </svg>
         {hovered && (
           <div
-            className="pointer-events-none absolute -translate-x-1/2 rounded-lg border border-line bg-white px-3 py-1.5 shadow-lg shadow-black/[0.06]"
+            className="pointer-events-none absolute -translate-x-1/2 rounded-lg border border-line bg-paper px-3 py-1.5 shadow-lg shadow-black/[0.06]"
             style={{
               left: `${((x(hover as number) / W) * 100).toFixed(2)}%`,
               top: 0,
@@ -243,19 +248,19 @@ function StatTile({
   void fmtSpark;
 
   return (
-    <div className="min-w-0 rounded-2xl border border-line bg-white p-5">
+    <div className="min-w-0 rounded-2xl border border-line bg-paper p-5">
       <p className="text-[12px] text-muted">{label}</p>
       <div className="mt-1.5 flex items-end justify-between gap-3">
         <span className="text-[26px] font-semibold leading-none tracking-tight text-ink">{value}</span>
         {spark.length > 1 && (
           <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden="true" className="shrink-0">
-            <polyline points={pts} fill="none" stroke="#d9d9d4" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-            <circle cx={lastPt[0]} cy={lastPt[1]} r="3" fill={hue} stroke="#ffffff" strokeWidth="1.5" />
+            <polyline points={pts} fill="none" style={{ stroke: "var(--crosshair)" }} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+            <circle cx={lastPt[0]} cy={lastPt[1]} r="3" fill={hue} style={{ stroke: "var(--paper)" }} strokeWidth="1.5" />
           </svg>
         )}
       </div>
       {delta !== null && (
-        <p className="mt-2 text-[11.5px]" style={{ color: deltaGood === null ? "#6f6f6a" : deltaGood ? "#0d7a6d" : "#c22532" }}>
+        <p className="mt-2 text-[11.5px]" style={{ color: deltaGood === null ? "var(--muted)" : deltaGood ? "var(--pos)" : "var(--neg)" }}>
           {delta} vs previous period
         </p>
       )}
@@ -267,7 +272,7 @@ function StatTile({
 
 function ConnectCard({ googleReady, error }: { googleReady: boolean; error?: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-white p-8 sm:p-10">
+    <div className="rounded-2xl border border-line bg-paper p-8 sm:p-10">
       <div className="mx-auto max-w-md text-center">
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-paper-warm">
           <svg viewBox="0 0 24 24" className="h-6 w-6 text-ink" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
@@ -289,7 +294,7 @@ function ConnectCard({ googleReady, error }: { googleReady: boolean; error?: str
         {googleReady ? (
           <a
             href="/api/connect/gsc/start?flow=dashboard"
-            className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-ink px-7 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-accent"
+            className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-ink px-7 py-3.5 text-[14.5px] font-medium text-on-ink transition-colors hover:bg-accent"
           >
             Connect Search Console
             <span aria-hidden="true">&rarr;</span>
@@ -301,7 +306,7 @@ function ConnectCard({ googleReady, error }: { googleReady: boolean; error?: str
             GOOGLE_CLIENT_SECRET to enable it.
           </p>
         )}
-        <p className="mt-4 text-[11.5px] text-muted/70">
+        <p className="mt-4 text-[11.5px] text-muted">
           Read-only access. Ascent can see your search data, never change your site&apos;s settings.
         </p>
       </div>
@@ -330,12 +335,12 @@ function SitePicker({
 }) {
   if (sites.length < 2) return null;
   return (
-    <label className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-line bg-white px-5 py-3.5">
+    <label className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-line bg-paper px-5 py-3.5">
       <span className="text-[13px] font-medium">Site</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-line bg-white px-3 py-1.5 text-[13px] text-ink outline-none transition-colors focus:border-ink/40"
+        className="rounded-lg border border-line bg-paper px-3 py-1.5 text-[13px] text-ink outline-none transition-colors focus:border-ink/40"
       >
         {sites.map((s) => (
           <option key={s.siteId} value={s.siteId}>
@@ -380,7 +385,7 @@ export function Analytics() {
 
   if (loading && !data) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-line bg-white p-6">
+      <div className="flex items-center gap-3 rounded-2xl border border-line bg-paper p-6">
         <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
         <p className="text-[13px] text-muted">Loading Search Console data</p>
       </div>
@@ -439,7 +444,7 @@ export function Analytics() {
             {data.property} · {data.windowStart} to {data.windowEnd}{" — "}Google&apos;s data lags about two days
           </p>
         </div>
-        <div className="flex rounded-full border border-line bg-white p-1" role="group" aria-label="Date range">
+        <div className="flex rounded-full border border-line bg-paper p-1" role="group" aria-label="Date range">
           {([28, 90] as const).map((r) => (
             <button
               key={r}
@@ -449,7 +454,7 @@ export function Analytics() {
               }}
               aria-pressed={range === r}
               className={`rounded-full px-4 py-1.5 text-[12.5px] font-medium transition-colors ${
-                range === r ? "bg-ink text-white" : "text-muted hover:text-ink"
+                range === r ? "bg-ink text-on-ink" : "text-muted hover:text-ink"
               }`}
             >
               {r} days
@@ -459,7 +464,7 @@ export function Analytics() {
       </div>
 
       {!hasData ? (
-        <div className="rounded-2xl border border-line bg-white p-10 text-center">
+        <div className="rounded-2xl border border-line bg-paper p-10 text-center">
           <p className="text-[14.5px] font-medium">Connected — no impressions in this window yet</p>
           <p className="mx-auto mt-1.5 max-w-md text-[13px] leading-relaxed text-muted">
             Search Console is linked to {data.property}. New sites and new pages
@@ -535,7 +540,7 @@ export function Analytics() {
 
           {/* Top queries */}
           {topQueries && topQueries.length > 0 && (
-            <div className="min-w-0 overflow-hidden rounded-2xl border border-line bg-white">
+            <div className="min-w-0 overflow-hidden rounded-2xl border border-line bg-paper">
               <div className="border-b border-line px-5 py-4">
                 <h3 className="text-[13.5px] font-medium">Top queries</h3>
                 <p className="mt-0.5 text-[11.5px] text-muted">What people searched when they found you</p>
@@ -671,7 +676,7 @@ function AgentStatus({ siteId }: { siteId?: string }) {
   ];
 
   return (
-    <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+    <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-medium">Agent status</h2>
@@ -698,7 +703,7 @@ function AgentStatus({ siteId }: { siteId?: string }) {
       <dl className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {stats.map((s) => (
           <div key={s.label} className="rounded-xl border border-line p-3.5">
-            <dt className="label-mono text-muted/70">{s.label}</dt>
+            <dt className="label-mono text-muted">{s.label}</dt>
             <dd className="mt-1 text-[19px] font-medium tabular-nums tracking-tight">{s.value}</dd>
             {s.note && <p className="mt-0.5 text-[11.5px] leading-snug text-muted">{s.note}</p>}
           </div>
@@ -783,7 +788,7 @@ function PublishingCalendar({ siteId }: { siteId?: string }) {
   const heldTotal = [...byDay.values()].reduce((a, c) => a + c.held, 0);
 
   return (
-    <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+    <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-medium">Publishing calendar</h2>
@@ -821,7 +826,7 @@ function PublishingCalendar({ siteId }: { siteId?: string }) {
           that reads fine at a glance. Fixed-height cells, not aspect-square. */}
       <div className="mt-4 grid max-w-[24rem] grid-cols-7 gap-1">
         {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-          <div key={`${d}${i}`} className="pb-0.5 text-center text-[10.5px] font-medium text-muted/70">
+          <div key={`${d}${i}`} className="pb-0.5 text-center text-[10.5px] font-medium text-muted">
             {d}
           </div>
         ))}
@@ -846,8 +851,8 @@ function PublishingCalendar({ siteId }: { siteId?: string }) {
                 cell
                   ? "border-accent/40 bg-accent/[0.08] font-medium text-ink"
                   : projected
-                    ? "border-dashed border-line text-muted/70"
-                    : "border-line text-muted/60"
+                    ? "border-dashed border-line text-muted"
+                    : "border-line text-muted"
               } ${isToday ? "ring-2 ring-ink/70" : ""}`}
             >
               <span>{day}</span>

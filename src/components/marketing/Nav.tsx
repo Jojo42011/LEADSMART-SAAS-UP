@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Wordmark } from "@/components/ui/Wordmark";
+import { ThemeToggle } from "../ui/ThemeToggle";
 
 const links = [
   { href: "#how-it-works", label: "How it works" },
@@ -55,7 +56,7 @@ export function Nav() {
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
         scrolled
-          ? "bg-white/90 backdrop-blur-md border-b border-line"
+          ? "bg-paper/90 backdrop-blur-md border-b border-line"
           : "bg-transparent border-b border-transparent"
       }`}
     >
@@ -75,6 +76,7 @@ export function Nav() {
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
+          <ThemeToggle />
           <Link
             href="/signin"
             className="text-sm text-muted transition-colors hover:text-ink"
@@ -83,7 +85,7 @@ export function Nav() {
           </Link>
           <Link
             href="/signup"
-            className="group inline-flex items-center gap-1.5 rounded-full bg-ink px-4.5 py-2 text-sm font-medium text-white transition-colors hover:bg-accent"
+            className="group inline-flex items-center gap-1.5 rounded-full bg-ink px-4.5 py-2 text-sm font-medium text-on-ink transition-colors hover:bg-accent"
           >
             Get started
             <span className="transition-transform duration-200 group-hover:translate-x-0.5">
@@ -108,7 +110,7 @@ export function Nav() {
       </nav>
 
       {open && (
-        <div className="border-t border-line bg-white px-6 py-4 md:hidden">
+        <div className="border-t border-line bg-paper px-6 py-4 md:hidden">
           <div className="flex flex-col gap-4">
             {links.map((l) => (
               <a
@@ -124,9 +126,10 @@ export function Nav() {
               <Link href="/signin" className="text-sm text-muted">
                 Sign in
               </Link>
+              <ThemeToggle />
               <Link
                 href="/signup"
-                className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-white"
+                className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-on-ink"
               >
                 Get started
               </Link>

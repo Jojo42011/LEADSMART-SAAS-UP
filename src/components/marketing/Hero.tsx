@@ -60,7 +60,7 @@ export function Hero() {
           >
             <Link
               href="/signup"
-              className="group inline-flex items-center gap-2 rounded-full bg-ink px-7 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-accent"
+              className="group inline-flex items-center gap-2 rounded-full bg-ink px-7 py-3.5 text-[15px] font-medium text-on-ink transition-colors hover:bg-accent"
             >
               Get started
               <span className="transition-transform duration-200 group-hover:translate-x-1">
@@ -69,13 +69,13 @@ export function Hero() {
             </Link>
             <a
               href="#how-it-works"
-              className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-7 py-3.5 text-[15px] font-medium text-ink transition-colors hover:border-ink"
+              className="inline-flex items-center gap-2 rounded-full border border-line bg-paper px-7 py-3.5 text-[15px] font-medium text-ink transition-colors hover:border-ink"
             >
               See how it works
             </a>
           </div>
 
-          <p className="rise-in label-mono mt-6 text-muted/70" style={{ animationDelay: "0.4s" }}>
+          <p className="rise-in label-mono mt-6 text-muted" style={{ animationDelay: "0.4s" }}>
             Month to month &middot; Cancel anytime
           </p>
         </div>

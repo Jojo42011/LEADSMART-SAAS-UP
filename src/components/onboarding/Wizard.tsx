@@ -122,7 +122,7 @@ export function Wizard() {
   return (
     <div className="flex min-h-screen bg-paper-warm">
       {/* Progress rail */}
-      <aside className="hidden w-72 shrink-0 flex-col justify-between border-r border-line bg-white px-8 py-8 lg:flex">
+      <aside className="hidden w-72 shrink-0 flex-col justify-between border-r border-line bg-paper px-8 py-8 lg:flex">
         <div>
           <Wordmark />
           <nav aria-label="Setup steps" className="mt-14 flex flex-col gap-1">
@@ -143,10 +143,10 @@ export function Wizard() {
                   <span
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-medium transition-colors ${
                       done
-                        ? "border-ink bg-ink text-white"
+                        ? "border-ink bg-ink text-on-ink"
                         : active
                           ? "border-accent text-accent"
-                          : "border-line text-muted/60"
+                          : "border-line text-muted"
                     }`}
                   >
                     {done ? (
@@ -162,7 +162,7 @@ export function Wizard() {
                   </span>
                   <span
                     className={`text-[13.5px] ${
-                      active ? "font-medium text-ink" : done ? "text-ink/70" : "text-muted/60"
+                      active ? "font-medium text-ink" : done ? "text-ink/70" : "text-muted"
                     }`}
                   >
                     {s.label}
@@ -172,7 +172,7 @@ export function Wizard() {
             })}
           </nav>
         </div>
-        <p className="text-[12px] leading-relaxed text-muted/70">
+        <p className="text-[12px] leading-relaxed text-muted">
           Everything you enter here configures your agent. You can change any
           of it later in settings.
         </p>
@@ -181,7 +181,7 @@ export function Wizard() {
       {/* Step content */}
       <div className="flex min-h-screen flex-1 flex-col">
         {/* Mobile progress */}
-        <div className="flex items-center justify-between border-b border-line bg-white px-6 py-4 lg:hidden">
+        <div className="flex items-center justify-between border-b border-line bg-paper px-6 py-4 lg:hidden">
           <Wordmark />
           <span className="label-mono text-muted">
             {step + 1} / {steps.length}
@@ -224,7 +224,7 @@ export function Wizard() {
             {steps[step].key === "launch" ? (
               <button
                 onClick={() => setLaunching(true)}
-                className="group inline-flex items-center gap-2 rounded-full bg-accent px-7 py-3.5 text-[15px] font-medium text-white transition-colors hover:bg-ink"
+                className="group inline-flex items-center gap-2 rounded-full bg-accent px-7 py-3.5 text-[15px] font-medium text-on-ink transition-colors hover:bg-ink"
               >
                 Launch my agent
                 <span className="transition-transform duration-200 group-hover:translate-x-1">&rarr;</span>
@@ -233,7 +233,7 @@ export function Wizard() {
               <button
                 onClick={next}
                 disabled={!canContinue}
-                className="group inline-flex items-center gap-2 rounded-full bg-ink px-7 py-3 text-[14.5px] font-medium text-white transition-all hover:bg-accent disabled:cursor-not-allowed disabled:opacity-30"
+                className="group inline-flex items-center gap-2 rounded-full bg-ink px-7 py-3 text-[14.5px] font-medium text-on-ink transition-all hover:bg-accent disabled:cursor-not-allowed disabled:opacity-30"
               >
                 Continue
                 <span className="transition-transform duration-200 group-hover:translate-x-0.5">&rarr;</span>
@@ -364,14 +364,14 @@ function WebsiteStep({ data, update }: StepProps) {
         />
 
         {studying && (
-          <div className="flex items-center gap-3 rounded-xl border border-line bg-white p-4">
+          <div className="flex items-center gap-3 rounded-xl border border-line bg-paper p-4">
             <span className="h-4 w-4 shrink-0 rounded-full border-2 border-accent border-t-transparent animate-spin" />
             <p className="text-[13px] text-muted">Reading your site: brand, structure, platform</p>
           </div>
         )}
 
         {!studying && ingest?.ok && (
-          <div className="rounded-xl border border-line bg-white p-5">
+          <div className="rounded-xl border border-line bg-paper p-5">
             <p className="label-mono text-accent">Site studied</p>
             <div className="mt-3 grid gap-1.5 text-[13px]">
               {ingest.title && (
@@ -551,7 +551,7 @@ function PublishingStep({ data, update }: StepProps) {
                   type="button"
                   onClick={testWordpress}
                   disabled={wpTest.state === "busy"}
-                  className="rounded-full border border-line bg-white px-4 py-2 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-60"
+                  className="rounded-full border border-line bg-paper px-4 py-2 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-60"
                 >
                   {wpTest.state === "busy" ? "Testing…" : "Test the connection"}
                 </button>
@@ -565,7 +565,7 @@ function PublishingStep({ data, update }: StepProps) {
                 type="button"
                 onClick={connectWordpress}
                 disabled={!data.website.url.trim()}
-                className="group flex w-full items-center justify-between rounded-xl border border-ink bg-ink p-5 text-left text-white transition-colors hover:bg-accent hover:border-accent disabled:opacity-40"
+                className="group flex w-full items-center justify-between rounded-xl border border-ink bg-ink p-5 text-left text-on-ink transition-colors hover:bg-accent hover:border-accent disabled:opacity-40"
               >
                 <span className="flex items-center gap-3.5">
                   <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
@@ -573,7 +573,7 @@ function PublishingStep({ data, update }: StepProps) {
                   </svg>
                   <span>
                     <span className="block text-[15px] font-medium">Connect WordPress</span>
-                    <span className="block text-[12.5px] text-white/60">
+                    <span className="block text-[12.5px] text-on-ink/75">
                       Opens {data.website.url.replace(/^https?:\/\//, "") || "your site"} to approve access
                     </span>
                   </span>
@@ -608,7 +608,7 @@ function PublishingStep({ data, update }: StepProps) {
                       type="button"
                       onClick={testWordpress}
                       disabled={wpTest.state === "busy" || !p.wpUser.trim() || !p.wpAppPassword.trim()}
-                      className="rounded-full border border-line bg-white px-4 py-2 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-60"
+                      className="rounded-full border border-line bg-paper px-4 py-2 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-60"
                     >
                       {wpTest.state === "busy" ? "Testing…" : "Test the connection"}
                     </button>
@@ -642,7 +642,7 @@ function PublishingStep({ data, update }: StepProps) {
                   setBranches([]);
                   set({ githubRepo: fullName, githubBranch: chosen?.defaultBranch || "" });
                 }}
-                className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+                className="mt-2 w-full rounded-xl border border-line bg-paper px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
               >
                 <option value="">Choose the repository</option>
                 {repos.map((r) => (
@@ -661,7 +661,7 @@ function PublishingStep({ data, update }: StepProps) {
                 <select
                   value={p.githubBranch}
                   onChange={(e) => set({ githubBranch: e.target.value })}
-                  className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+                  className="mt-2 w-full rounded-xl border border-line bg-paper px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
                 >
                   {branches.length === 0 && (
                     <option value={p.githubBranch}>{p.githubBranch || "default branch"}</option>
@@ -684,7 +684,7 @@ function PublishingStep({ data, update }: StepProps) {
               type="button"
               onClick={connectGithub}
               disabled={connecting}
-              className="group flex w-full items-center justify-between rounded-xl border border-ink bg-ink p-5 text-left text-white transition-colors hover:bg-accent hover:border-accent disabled:opacity-60"
+              className="group flex w-full items-center justify-between rounded-xl border border-ink bg-ink p-5 text-left text-on-ink transition-colors hover:bg-accent hover:border-accent disabled:opacity-60"
             >
               <span className="flex items-center gap-3.5">
                 <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
@@ -694,7 +694,7 @@ function PublishingStep({ data, update }: StepProps) {
                   <span className="block text-[15px] font-medium">
                     {connecting ? "Opening GitHub" : "Sign in with GitHub"}
                   </span>
-                  <span className="block text-[12.5px] text-white/60">
+                  <span className="block text-[12.5px] text-on-ink/75">
                     Approve once, then pick your repository from a list
                   </span>
                 </span>
@@ -739,7 +739,7 @@ function PublishingStep({ data, update }: StepProps) {
             )}
           </>
         )}
-        <div className="rounded-xl border border-line bg-white p-4">
+        <div className="rounded-xl border border-line bg-paper p-4">
           <p className="flex items-start gap-2.5 text-[12.5px] leading-relaxed text-muted">
             <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-ink/60" fill="none" stroke="currentColor" strokeWidth="1.6">
               <rect x="5" y="10" width="14" height="10" rx="2" />
@@ -765,10 +765,10 @@ function ConnectedCard({
   onDisconnect: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-white p-5">
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-paper p-5">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink">
-          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 text-on-ink" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
@@ -966,33 +966,33 @@ function LaunchStep({ data, update }: StepProps) {
           ))}
         </div>
 
-        <div className="mt-4 rounded-xl border border-line-dark bg-ink p-5 text-white">
-          <p className="label-mono text-white/50">First cycle preview</p>
+        <div className="mt-4 rounded-xl border border-line-dark bg-ink p-5 text-on-ink">
+          <p className="label-mono text-on-ink/75">First cycle preview</p>
           {firstPage ? (
             <dl className="mt-3 grid gap-2">
               <div className="flex justify-between gap-6 text-[13px]">
-                <dt className="text-white/50">First page</dt>
+                <dt className="text-on-ink/75">First page</dt>
                 <dd className="truncate font-medium">{firstPage.title}</dd>
               </div>
               <div className="flex justify-between gap-6 text-[13px]">
-                <dt className="text-white/50">Keyword queue</dt>
+                <dt className="text-on-ink/75">Keyword queue</dt>
                 <dd className="font-medium">
                   {queuedCount} queued of {plan.keywords.length} tracked
                 </dd>
               </div>
               <div className="flex justify-between gap-6 text-[13px]">
-                <dt className="text-white/50">First 30 days</dt>
+                <dt className="text-on-ink/75">First 30 days</dt>
                 <dd className="font-medium">{plan.roadmap[0]?.pages ?? 0} pages planned</dd>
               </div>
               {totalGaps > 0 && (
                 <div className="flex justify-between gap-6 text-[13px]">
-                  <dt className="text-white/50">Competitor gaps</dt>
+                  <dt className="text-on-ink/75">Competitor gaps</dt>
                   <dd className="font-medium">{totalGaps} mapped, feeding the queue</dd>
                 </div>
               )}
               {plan.projection && (
                 <div className="flex justify-between gap-6 text-[13px]">
-                  <dt className="text-white/50">Projected value</dt>
+                  <dt className="text-on-ink/75">Projected value</dt>
                   <dd className="font-medium text-accent">
                     ${plan.projection.monthlyValue.toLocaleString()}/mo at month 6
                   </dd>
@@ -1000,15 +1000,15 @@ function LaunchStep({ data, update }: StepProps) {
               )}
             </dl>
           ) : (
-            <p className="mt-3 text-[13px] text-white/60">
+            <p className="mt-3 text-[13px] text-on-ink/75">
               Add services and locations in the Market step and the agent will
               draft its first-cycle plan here.
             </p>
           )}
         </div>
 
-        <div className="mt-1 rounded-xl border border-line bg-white p-5">
-          <p className="label-mono text-muted/70">Configuration</p>
+        <div className="mt-1 rounded-xl border border-line bg-paper p-5">
+          <p className="label-mono text-muted">Configuration</p>
           <dl className="mt-3 grid gap-2">
             {summary.map((s) => (
               <div key={s.label} className="flex justify-between gap-6 text-[13px]">
@@ -1109,7 +1109,7 @@ function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => 
   }, [count, onDone, researchDone, launchLines.length]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-ink px-6 text-white">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-ink px-6 text-on-ink">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1118,7 +1118,7 @@ function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => 
       >
         <div className="flex items-center gap-2.5">
           <span className="h-2 w-2 rounded-full bg-accent animate-livepulse" />
-          <span className="label-mono text-white/60">{site.name} is starting</span>
+          <span className="label-mono text-on-ink/75">{site.name} is starting</span>
         </div>
         <div className="mt-8 flex flex-col gap-4">
           {launchLines.map((line, i) => (
@@ -1134,9 +1134,9 @@ function LaunchSequence({ data, onDone }: { data: OnboardingData; onDone: () => 
                   <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               ) : (
-                <span className="h-4 w-4 rounded-full border border-white/20" />
+                <span className="h-4 w-4 rounded-full border border-on-ink/20" />
               )}
-              <span className={i < count ? "text-white" : "text-white/40"}>{line}</span>
+              <span className={i < count ? "text-on-ink" : "text-on-ink/75"}>{line}</span>
             </motion.div>
           ))}
         </div>

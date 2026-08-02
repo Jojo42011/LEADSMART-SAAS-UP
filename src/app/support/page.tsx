@@ -40,7 +40,7 @@ const answers = [
 export default function SupportPage() {
   return (
     <div className="flex min-h-screen flex-col bg-paper-warm">
-      <header className="border-b border-line bg-white">
+      <header className="border-b border-line bg-paper">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-6">
           <Wordmark />
           <Link href="/" className="text-sm text-muted transition-colors hover:text-ink">
@@ -77,7 +77,7 @@ export default function SupportPage() {
           </p>
           <ul className="mt-5 grid gap-3">
             {answers.map((item) => (
-              <li key={item.q} className="rounded-xl border border-line bg-white p-4">
+              <li key={item.q} className="rounded-xl border border-line bg-paper p-4">
                 <p className="text-[14px] font-medium">{item.q}</p>
                 <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink/70">{item.a}</p>
               </li>

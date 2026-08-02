@@ -113,7 +113,7 @@ export function Checkout() {
   };
 
   const inputClass =
-    "mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all placeholder:text-muted/50 focus:border-ink focus:ring-4 focus:ring-ink/[0.06]";
+    "mt-2 w-full rounded-xl border border-line bg-paper px-4 py-3 text-[14.5px] text-ink outline-none transition-all placeholder:text-muted focus:border-ink focus:ring-4 focus:ring-ink/[0.06]";
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-paper-warm px-6 py-12">
@@ -131,26 +131,26 @@ export function Checkout() {
           <Wordmark />
         </div>
 
-        <div className="mt-8 overflow-hidden rounded-2xl border border-line bg-white shadow-xl shadow-black/[0.05]">
+        <div className="mt-8 overflow-hidden rounded-2xl border border-line bg-paper shadow-xl shadow-black/[0.05]">
           <div className="grid md:grid-cols-[minmax(0,4fr)_minmax(0,5fr)]">
             {/* Order summary */}
-            <div className="flex flex-col bg-ink p-8 text-white">
-              <span className="label-mono text-white/50">Your plan</span>
+            <div className="flex flex-col bg-ink p-8 text-on-ink">
+              <span className="label-mono text-on-ink/75">Your plan</span>
               <div className="mt-5 flex items-baseline gap-1.5">
                 <span className="font-display text-6xl tracking-tight">${total}</span>
-                <span className="text-[13px] text-white/50">/month</span>
+                <span className="text-[13px] text-on-ink/75">/month</span>
               </div>
 
-              <div className="mt-6 flex items-center justify-between rounded-xl border border-white/12 px-4 py-3">
+              <div className="mt-6 flex items-center justify-between rounded-xl border border-on-ink/12 px-4 py-3">
                 <div>
                   <p className="text-[13.5px] font-medium">Websites</p>
-                  <p className="text-[11.5px] text-white/50">${PRICE} each, one agent per site</p>
+                  <p className="text-[11.5px] text-on-ink/75">${PRICE} each, one agent per site</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={() => setSites((s) => Math.max(1, s - 1))}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-white/20 text-white/80 transition-colors hover:border-white"
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-on-ink/20 text-on-ink/80 transition-colors hover:border-on-ink"
                     aria-label="Fewer websites"
                   >
                     &minus;
@@ -159,7 +159,7 @@ export function Checkout() {
                   <button
                     type="button"
                     onClick={() => setSites((s) => Math.min(20, s + 1))}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-white/20 text-white/80 transition-colors hover:border-white"
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-on-ink/20 text-on-ink/80 transition-colors hover:border-on-ink"
                     aria-label="More websites"
                   >
                     +
@@ -169,7 +169,7 @@ export function Checkout() {
 
               <ul className="mt-6 grid gap-2.5">
                 {included.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5 text-[12.5px] text-white/70">
+                  <li key={f} className="flex items-start gap-2.5 text-[12.5px] text-on-ink/75">
                     <svg viewBox="0 0 16 16" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="m3 8.5 3.5 3.5L13 4" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -178,7 +178,7 @@ export function Checkout() {
                 ))}
               </ul>
 
-              <p className="mt-auto pt-6 text-[11.5px] leading-relaxed text-white/40">
+              <p className="mt-auto pt-6 text-[11.5px] leading-relaxed text-on-ink/75">
                 Month to month. Cancel anytime. Every page ever published
                 stays on your site.
               </p>
@@ -193,7 +193,7 @@ export function Checkout() {
                   className="flex h-full flex-col items-center justify-center py-12 text-center"
                 >
                   <span className="flex h-12 w-12 items-center justify-center rounded-full bg-ink">
-                    <svg viewBox="0 0 16 16" className="h-6 w-6 text-white" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg viewBox="0 0 16 16" className="h-6 w-6 text-on-ink" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
@@ -291,11 +291,11 @@ export function Checkout() {
                     <button
                       type="submit"
                       disabled={paying || stripeReady === null}
-                      className="mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-ink px-6 py-3.5 text-[14.5px] font-medium text-white transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-30"
+                      className="mt-2 inline-flex items-center justify-center gap-2 rounded-full bg-ink px-6 py-3.5 text-[14.5px] font-medium text-on-ink transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-30"
                     >
                       {paying ? (
                         <>
-                          <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                          <span className="h-4 w-4 rounded-full border-2 border-on-ink/40 border-t-white animate-spin" />
                           {stripeReady ? "Opening Stripe" : "Processing"}
                         </>
                       ) : (
@@ -303,7 +303,7 @@ export function Checkout() {
                       )}
                     </button>
 
-                    <p className="flex items-center justify-center gap-1.5 text-center text-[11.5px] text-muted/70">
+                    <p className="flex items-center justify-center gap-1.5 text-center text-[11.5px] text-muted">
                       <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
                         <rect x="5" y="10" width="14" height="10" rx="2" />
                         <path d="M8 10V7a4 4 0 1 1 8 0v3" />

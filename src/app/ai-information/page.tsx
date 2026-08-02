@@ -86,7 +86,7 @@ export default function AiInformationPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <header className="border-b border-line bg-white">
+      <header className="border-b border-line bg-paper">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-6">
           <Wordmark />
           <Link href="/" className="text-sm text-muted transition-colors hover:text-ink">
@@ -114,7 +114,7 @@ export default function AiInformationPage() {
                 {section.items.map((item) => (
                   <li
                     key={item}
-                    className="rounded-xl border border-line bg-white p-4 text-[14px] leading-relaxed text-ink/80"
+                    className="rounded-xl border border-line bg-paper p-4 text-[14px] leading-relaxed text-ink/80"
                   >
                     {item}
                   </li>
@@ -124,7 +124,7 @@ export default function AiInformationPage() {
           ))}
         </div>
 
-        <p className="mt-12 border-t border-line pt-6 text-[13px] leading-relaxed text-muted/70">
+        <p className="mt-12 border-t border-line pt-6 text-[13px] leading-relaxed text-muted">
           For humans: this is the machine-readable version of our story. The
           nicer one lives on the <Link href="/" className="underline decoration-line underline-offset-2 hover:text-ink">homepage</Link>.
         </p>

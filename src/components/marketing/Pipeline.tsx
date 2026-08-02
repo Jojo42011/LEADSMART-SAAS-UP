@@ -37,7 +37,7 @@ const phases = [
 
 export function Pipeline() {
   return (
-    <section id="how-it-works" className="bg-ink text-white">
+    <section id="how-it-works" className="bg-ink text-on-ink">
       <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
         <div className="grid gap-14 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20">
           {/* Sticky intro */}
@@ -49,9 +49,9 @@ export function Pipeline() {
                 <br />
                 Every day.
                 <br />
-                <em className="text-white/50">While you sleep.</em>
+                <em className="text-on-ink/75">While you sleep.</em>
               </h2>
-              <p className="mt-6 max-w-sm text-[15.5px] leading-relaxed text-white/55">
+              <p className="mt-6 max-w-sm text-[15.5px] leading-relaxed text-on-ink/75">
                 Most SEO work dies in the handoff between strategy, writing,
                 and publishing. Here there is no handoff. One agent owns the
                 entire loop and closes it daily.
@@ -67,14 +67,14 @@ export function Pipeline() {
                 className="group border-t border-line-dark py-9 first:border-t-0 first:pt-0 last:pb-0"
               >
                 <div className="flex gap-6 sm:gap-10">
-                  <span className="label-mono pt-1.5 text-white/30 transition-colors duration-300 group-hover:text-accent">
+                  <span className="label-mono pt-1.5 text-on-ink/75 transition-colors duration-300 group-hover:text-accent">
                     {p.num}
                   </span>
                   <div>
                     <h3 className="text-xl font-medium tracking-tight sm:text-2xl">
                       {p.title}
                     </h3>
-                    <p className="mt-2.5 max-w-lg text-[15px] leading-relaxed text-white/55">
+                    <p className="mt-2.5 max-w-lg text-[15px] leading-relaxed text-on-ink/75">
                       {p.text}
                     </p>
                   </div>

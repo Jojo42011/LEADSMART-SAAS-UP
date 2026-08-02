@@ -18,6 +18,7 @@ import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-se
 import { useAgentPages, allPages, type AgentPage } from "@/lib/agent-pages";
 import { Billing } from "./Billing";
 import { ContactForm } from "../support/ContactForm";
+import { ThemeToggle } from "../ui/ThemeToggle";
 import { Analytics } from "./Analytics";
 
 // Billing is a Tab but not a navItem: it is entered through the Plan card
@@ -86,8 +87,8 @@ const statusStyles: Record<string, string> = {
   Drafting: "bg-accent/10 text-accent",
   Queued: "bg-ink/[0.06] text-ink/70",
   Researching: "bg-ink/[0.04] text-muted",
-  Rewriting: "bg-ink text-white",
-  Held: "bg-ink text-white",
+  Rewriting: "bg-ink text-on-ink",
+  Held: "bg-ink text-on-ink",
   Tracking: "bg-ink/[0.06] text-ink/70",
   // Reconciled statuses when the engine is connected: real page states
   // replace the simulated preview labels.
@@ -98,12 +99,12 @@ const statusStyles: Record<string, string> = {
   published: "bg-accent/10 text-accent",
   approved: "bg-ink/[0.06] text-ink/70",
   pending: "bg-ink/[0.04] text-muted",
-  held: "bg-ink text-white",
-  failed: "bg-ink text-white",
+  held: "bg-ink text-on-ink",
+  failed: "bg-ink text-on-ink",
 };
 
 const threatStyles: Record<string, string> = {
-  High: "bg-ink text-white",
+  High: "bg-ink text-on-ink",
   Moderate: "bg-accent/10 text-accent",
   Low: "bg-ink/[0.06] text-muted",
 };
@@ -112,7 +113,7 @@ const gapTypeStyles: Record<string, string> = {
   Core: "bg-accent/10 text-accent",
   Differentiator: "bg-ink/[0.08] text-ink/80",
   Commodity: "bg-ink/[0.04] text-muted",
-  Opportunity: "bg-ink text-white",
+  Opportunity: "bg-ink text-on-ink",
 };
 
 function StatusPill({ status }: { status: string }) {
@@ -131,7 +132,7 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   // min-w-0 stops grid/flex blowout: without it, a card with unbreakable
   // content (long labels, mono numbers) can force its grid track wider than
   // the viewport, since grid items default to min-width: auto.
-  return <div className={`min-w-0 rounded-2xl border border-line bg-white ${className}`}>{children}</div>;
+  return <div className={`min-w-0 rounded-2xl border border-line bg-paper ${className}`}>{children}</div>;
 }
 
 function EmptyState({ title, sub }: { title: string; sub: string }) {
@@ -168,7 +169,7 @@ export function Dashboard() {
   return (
     <div className="flex min-h-screen bg-paper-warm">
       {/* Sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-white px-5 py-7 md:flex">
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-paper px-5 py-7 md:flex">
         <div className="px-2">
           <Wordmark href="/" />
         </div>
@@ -229,7 +230,7 @@ export function Dashboard() {
             tab === "Billing" ? "border-ink/40 bg-paper-warm" : "border-line hover:border-ink/40 hover:bg-paper-warm"
           }`}
         >
-          <p className="label-mono text-muted/70">Plan</p>
+          <p className="label-mono text-muted">Plan</p>
           <p className="mt-1 text-[13.5px] font-medium">Active</p>
           <p className="mt-0.5 text-[12px] text-muted">$49 per website, monthly</p>
           <p className="mt-2 text-[12px] font-medium text-accent">Manage billing &rarr;</p>
@@ -238,12 +239,13 @@ export function Dashboard() {
 
       {/* Main */}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-3 border-b border-line bg-white px-4 py-4 sm:px-6">
+        <header className="flex items-center justify-between gap-3 border-b border-line bg-paper px-4 py-4 sm:px-6">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-[16px] font-medium tracking-tight">{siteName}</h1>
             {siteUrl && <p className="truncate text-[12.5px] text-muted">{siteUrl}</p>}
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <ThemeToggle />
             <AgentSwitch />
             {/* Mobile tab switcher */}
             <select
@@ -254,7 +256,7 @@ export function Dashboard() {
                 // than switching sections.
                 setTab(e.target.value as Tab);
               }}
-              className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[13px] md:hidden"
+              className="rounded-lg border border-line bg-paper px-2.5 py-1.5 text-[13px] md:hidden"
             >
               {navItems.map((item) => (
                 <option key={item.label}>{item.label}</option>
@@ -364,14 +366,14 @@ function Overview({
   return (
     <>
       {/* Plan-ready banner */}
-      <div className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-white sm:p-9">
+      <div className="overflow-hidden rounded-2xl border border-line-dark bg-ink p-7 text-on-ink sm:p-9">
         <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <span className="label-mono text-accent">{hasPlan ? "Setup complete" : "Almost there"}</span>
             <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">
               {hasPlan ? "Your 90 day roadmap is ready." : "Tell the agent about your market."}
             </h2>
-            <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-white/55">
+            <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-on-ink/75">
               {hasPlan ? (
                 <>
                   The agent mapped {plan.keywords.length} keywords across your
@@ -395,9 +397,9 @@ function Overview({
                     <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 ) : (
-                  <span className="h-4 w-4 shrink-0 rounded-full border border-white/25" />
+                  <span className="h-4 w-4 shrink-0 rounded-full border border-on-ink/25" />
                 )}
-                <span className={t.done ? "text-white" : "text-white/45"}>{t.label}</span>
+                <span className={t.done ? "text-on-ink" : "text-on-ink/75"}>{t.label}</span>
               </div>
             ))}
           </div>
@@ -408,7 +410,7 @@ function Overview({
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
           <Card key={kpi.label} className="p-6">
-            <p className="label-mono text-muted/70">{kpi.label}</p>
+            <p className="label-mono text-muted">{kpi.label}</p>
             <p className="font-display mt-2 text-[27px] leading-tight tracking-tight sm:text-3xl">{kpi.value}</p>
             <p className="mt-1.5 text-[12.5px] text-muted">{kpi.note}</p>
           </Card>
@@ -451,7 +453,7 @@ function Overview({
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <h2 className="text-[14.5px] font-medium">90 day roadmap</h2>
-            <span className="label-mono text-muted/60">Rebuilds every cycle</span>
+            <span className="label-mono text-muted">Rebuilds every cycle</span>
           </div>
           {plan.roadmap.length === 0 && (
             <p className="mt-4 text-[13px] leading-relaxed text-muted">
@@ -484,7 +486,7 @@ function Overview({
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <h2 className="text-[14.5px] font-medium">This cycle</h2>
-            <span className="label-mono text-muted/60">Written by your agent</span>
+            <span className="label-mono text-muted">Written by your agent</span>
           </div>
           <p className="mt-3 text-[13.5px] leading-relaxed text-ink/80">{plan.digest.summary}</p>
           <div className="mt-4 grid gap-2 border-t border-line pt-4">
@@ -502,7 +504,7 @@ function Overview({
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <h2 className="text-[14.5px] font-medium">AI visibility</h2>
-            <span className="label-mono text-muted/60">Retrievability {plan.retrievability || "—"}/100</span>
+            <span className="label-mono text-muted">Retrievability {plan.retrievability || "—"}/100</span>
           </div>
           <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
             Every page is structured so AI answer engines can cite it: direct
@@ -529,7 +531,7 @@ function Overview({
       <Card className="mt-6 p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-[14.5px] font-medium">Content queue</h2>
-          <button onClick={() => goTo("Content")} className="label-mono text-muted/60 transition-colors hover:text-ink">
+          <button onClick={() => goTo("Content")} className="label-mono text-muted transition-colors hover:text-ink">
             View all &rarr;
           </button>
         </div>
@@ -539,7 +541,7 @@ function Overview({
           ))}
         </div>
         {plan.pages.length === 0 && (
-          <p className="mt-2 text-center text-[12.5px] text-muted/70">
+          <p className="mt-2 text-center text-[12.5px] text-muted">
             Add services and locations in Settings to build your queue.
           </p>
         )}
@@ -579,7 +581,7 @@ function QueueRow({
               {page.role}
             </span>
             {page.veto.triggered && !override?.suppressVeto && (
-              <span className="shrink-0 rounded-full bg-ink px-2 py-0.5 text-[10px] font-normal text-white">
+              <span className="shrink-0 rounded-full bg-ink px-2 py-0.5 text-[10px] font-normal text-on-ink">
                 Held: critical check
                 {/* The reason was previously title-only, unreachable by keyboard. */}
                 {page.veto.reason && <span className="sr-only">. {page.veto.reason}</span>}
@@ -592,7 +594,7 @@ function QueueRow({
         </div>
         <span
           className={`hidden shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] sm:inline-flex ${
-            page.infoGain < 0.5 ? "bg-ink text-white" : "bg-ink/[0.04] text-muted"
+            page.infoGain < 0.5 ? "bg-ink text-on-ink" : "bg-ink/[0.04] text-muted"
           }`}
           title="Information gain vs. current top-ranking pages. Must clear 0.50 to publish."
         >
@@ -653,7 +655,7 @@ function QueueRow({
                 key={t.key}
                 title={`${t.description} ${page.geo.tactics[t.key] ? "(satisfied)" : "(not satisfied)"}`}
                 className={`rounded-full px-2.5 py-1 text-[11px] ${
-                  page.geo.tactics[t.key] ? "bg-ink/[0.06] text-ink/70" : "bg-ink/[0.03] text-muted/40 line-through"
+                  page.geo.tactics[t.key] ? "bg-ink/[0.06] text-ink/70" : "bg-ink/[0.03] text-muted line-through"
                 }`}
               >
                 <span className="sr-only">{page.geo.tactics[t.key] ? "Satisfied: " : "Not satisfied: "}</span>
@@ -663,7 +665,7 @@ function QueueRow({
             {page.geo.negativeSignals
               .filter((n) => n.triggered)
               .map((n) => (
-                <span key={n.key} className="rounded-full bg-ink px-2.5 py-1 text-[11px] text-white">
+                <span key={n.key} className="rounded-full bg-ink px-2.5 py-1 text-[11px] text-on-ink">
                   &minus; {n.label}
                 </span>
               ))}
@@ -681,7 +683,7 @@ function QueueRow({
                   onClick={() => setOpenSchema(openSchema === s ? null : s)}
                   aria-expanded={openSchema === s}
                   className={`rounded-full px-2.5 py-1 font-mono text-[10.5px] transition-colors ${
-                    openSchema === s ? "bg-ink text-white" : "bg-ink/[0.04] text-muted hover:bg-ink/[0.08]"
+                    openSchema === s ? "bg-ink text-on-ink" : "bg-ink/[0.04] text-muted hover:bg-ink/[0.08]"
                   }`}
                 >
                   {s}
@@ -692,7 +694,7 @@ function QueueRow({
           </div>
           {openSchema && page.schemaJsonLd[openSchema] && (
             <div className="mt-3 overflow-x-auto rounded-lg bg-ink p-4">
-              <pre className="font-mono text-[11px] leading-relaxed text-white/80">
+              <pre className="font-mono text-[11px] leading-relaxed text-on-ink/80">
                 {JSON.stringify(page.schemaJsonLd[openSchema], null, 2)}
               </pre>
             </div>
@@ -798,7 +800,7 @@ function AgentPages() {
           <button
             onClick={generateNow}
             disabled={generating}
-            className="rounded-full bg-ink px-3.5 py-1 text-[12px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+            className="rounded-full bg-ink px-3.5 py-1 text-[12px] font-medium text-on-ink transition-colors hover:bg-accent disabled:opacity-60"
           >
             {generating ? "Writing… (up to 5 min)" : "Generate a page now"}
           </button>
@@ -948,7 +950,7 @@ function AgentPageRow({
         title={armed ? "Click again to permanently delete this page" : "Delete this page"}
         className={`absolute right-2.5 top-2.5 z-10 inline-flex h-6 items-center justify-center rounded-full text-[11px] transition-colors ${
           armed
-            ? "bg-ink px-2.5 font-medium text-white"
+            ? "bg-ink px-2.5 font-medium text-on-ink"
             : "w-6 text-muted hover:bg-ink/[0.06] hover:text-ink"
         } disabled:opacity-50`}
       >
@@ -1004,7 +1006,7 @@ function AgentPageRow({
           <button
             onClick={doPublish}
             disabled={publishing}
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-[12.5px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-[12.5px] font-medium text-on-ink transition-colors hover:bg-accent disabled:opacity-60"
           >
             {publishing ? "Publishing…" : page.status === "pending" ? "Approve & publish" : "Publish now"}
           </button>
@@ -1044,7 +1046,7 @@ function AgentPageRow({
           {page.live_status && (
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] ${
-                reachable ? "bg-accent/10 text-accent" : "bg-ink text-white"
+                reachable ? "bg-accent/10 text-accent" : "bg-ink text-on-ink"
               }`}
               title="Result of fetching the published URL to confirm it is really there."
             >
@@ -1168,7 +1170,7 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
     <Card className="p-6">
       <div className="flex items-center justify-between">
         <h2 className="text-[14.5px] font-medium">Planned queue</h2>
-        <span className="label-mono text-muted/60">{plan.pages.length} pages this cycle</span>
+        <span className="label-mono text-muted">{plan.pages.length} pages this cycle</span>
       </div>
       <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
         {engine ? (
@@ -1213,7 +1215,7 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
                     <button
                       onClick={() => generateKeyword(page.keyword)}
                       disabled={writingTerm !== null}
-                      className="rounded-full bg-ink px-3.5 py-1 text-[12px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+                      className="rounded-full bg-ink px-3.5 py-1 text-[12px] font-medium text-on-ink transition-colors hover:bg-accent disabled:opacity-60"
                     >
                       {writingTerm === page.keyword ? "Writing… (up to 5 min)" : "Publish now"}
                     </button>
@@ -1231,7 +1233,7 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
           );
         })}
         {visiblePages.length === 0 && (
-          <p className="text-center text-[12.5px] text-muted/70">
+          <p className="text-center text-[12.5px] text-muted">
             Every planned page has been removed. Add services or locations in Settings to plan more.
           </p>
         )}
@@ -1255,7 +1257,7 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between px-6 pt-6">
         <h2 className="text-[14.5px] font-medium">Tracked keywords</h2>
-        <span className="label-mono text-muted/60">{plan.keywords.length} keywords</span>
+        <span className="label-mono text-muted">{plan.keywords.length} keywords</span>
       </div>
       <p className="mt-1 px-6 text-[12.5px] text-muted">
         Ordered by business potential: how likely a searcher is to become a
@@ -1361,7 +1363,7 @@ function Competitors({
         </p>
         <button
           onClick={() => goTo("Settings")}
-          className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-medium text-white transition-colors hover:bg-accent"
+          className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-medium text-on-ink transition-colors hover:bg-accent"
         >
           Add competitors in Settings &rarr;
         </button>
@@ -1414,7 +1416,7 @@ function Competitors({
                 <>
                   <div className="flex items-center justify-between text-[12px] text-muted">
                     <span title="Estimated from your keyword set until Search Console data is connected.">
-                      Keyword overlap <span className="text-muted/50">(est.)</span>
+                      Keyword overlap <span className="text-muted">(est.)</span>
                     </span>
                     <span className="font-medium text-ink">{c.overlap}%</span>
                   </div>
@@ -1423,7 +1425,7 @@ function Competitors({
                   </div>
                 </>
               )}
-              <p className="mt-2 text-[11.5px] text-muted/70">
+              <p className="mt-2 text-[11.5px] text-muted">
                 {c.referringDomains} referring domains (est.)
               </p>
             </div>
@@ -1612,7 +1614,7 @@ function Settings({
               onChange={(e) =>
                 update({ launch: { ...data.launch, cadence: e.target.value as Cadence } })
               }
-              className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+              className="mt-2 w-full rounded-xl border border-line bg-paper px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
             >
               <option value="daily">Daily</option>
               <option value="every3days">Every 3 days</option>
@@ -1626,7 +1628,7 @@ function Settings({
               onChange={(e) =>
                 update({ launch: { ...data.launch, mode: e.target.value as PublishMode } })
               }
-              className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+              className="mt-2 w-full rounded-xl border border-line bg-paper px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
             >
               <option value="autopilot">Autopilot &mdash; publish automatically</option>
               <option value="review">Review &mdash; approve before publishing</option>
@@ -1640,12 +1642,12 @@ function Settings({
           <button
             onClick={save}
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-[14px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full bg-ink px-6 py-3 text-[14px] font-medium text-on-ink transition-colors hover:bg-accent disabled:opacity-60"
           >
             {busy && (
               <span
                 aria-hidden="true"
-                className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-on-ink/30 border-t-white"
               />
             )}
             {busy ? stageLabel[stage] : "Save changes"}
@@ -1693,7 +1695,7 @@ function LiveResearch({ intel, mode }: { intel: Intel; mode: "keywords" | "compe
             Live research findings
             <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
           </p>
-          <span className="label-mono text-muted/60">
+          <span className="label-mono text-muted">
             {research.source === "live" ? "From live search" : "First pass"}
           </span>
         </div>
@@ -1725,7 +1727,7 @@ function LiveResearch({ intel, mode }: { intel: Intel; mode: "keywords" | "compe
             Live keyword targets
             <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
           </p>
-          <span className="label-mono text-muted/60">
+          <span className="label-mono text-muted">
             {research.keywords.length} found {research.source === "live" ? "via live search" : "from your profile"}
           </span>
         </div>
@@ -1737,7 +1739,7 @@ function LiveResearch({ intel, mode }: { intel: Intel; mode: "keywords" | "compe
               className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[12px]"
             >
               {k.keyword}
-              <span className={`font-mono text-[10.5px] ${k.opportunity >= 70 ? "text-accent" : "text-muted/60"}`}>
+              <span className={`font-mono text-[10.5px] ${k.opportunity >= 70 ? "text-accent" : "text-muted"}`}>
                 {k.opportunity}
               </span>
             </span>
@@ -1823,7 +1825,7 @@ function AgentSwitch() {
         }
         className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors disabled:opacity-60 ${
           paused
-            ? "bg-ink text-white hover:bg-accent"
+            ? "bg-ink text-on-ink hover:bg-accent"
             : "border border-line text-ink hover:border-ink/40 hover:bg-paper-warm"
         }`}
       >
@@ -1859,7 +1861,7 @@ function SupportPanel() {
   ];
   return (
     <div className="grid gap-5">
-      <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+      <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
         <h2 className="text-[15px] font-medium">Talk to us</h2>
         <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
           Questions about your account, your agent, or a page it published — send them
@@ -1869,7 +1871,7 @@ function SupportPanel() {
           <ContactForm inbox="toolascent@gmail.com" />
         </div>
       </div>
-      <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+      <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
         <h2 className="text-[15px] font-medium">Before you write in</h2>
         <ul className="mt-4 grid gap-3">
           {answers.map((item) => (

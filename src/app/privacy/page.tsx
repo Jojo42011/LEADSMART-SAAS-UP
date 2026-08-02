@@ -91,7 +91,7 @@ const sections = [
 export default function PrivacyPage() {
   return (
     <div className="flex min-h-screen flex-col bg-paper-warm">
-      <header className="border-b border-line bg-white">
+      <header className="border-b border-line bg-paper">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-6">
           <Wordmark />
           <Link href="/" className="text-sm text-muted transition-colors hover:text-ink">
@@ -118,7 +118,7 @@ export default function PrivacyPage() {
                 {section.items.map((item) => (
                   <li
                     key={item}
-                    className="rounded-xl border border-line bg-white p-4 text-[14px] leading-relaxed text-ink/80"
+                    className="rounded-xl border border-line bg-paper p-4 text-[14px] leading-relaxed text-ink/80"
                   >
                     {item}
                   </li>

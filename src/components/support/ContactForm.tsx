@@ -81,7 +81,7 @@ export function ContactForm({ inbox }: { inbox: string }) {
   };
 
   const field =
-    "mt-1.5 w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors placeholder:text-muted/60 focus:border-ink/40";
+    "mt-1.5 w-full rounded-xl border border-line bg-paper px-3.5 py-2.5 text-[14px] text-ink outline-none transition-colors placeholder:text-muted focus:border-ink/40";
 
   if (result?.kind === "sent") {
     return (
@@ -93,7 +93,7 @@ export function ContactForm({ inbox }: { inbox: string }) {
         </p>
         <button
           onClick={() => setResult(null)}
-          className="mt-4 rounded-full border border-line bg-white px-4 py-2 text-[13px] font-medium transition-colors hover:border-ink/40"
+          className="mt-4 rounded-full border border-line bg-paper px-4 py-2 text-[13px] font-medium transition-colors hover:border-ink/40"
         >
           Send another
         </button>
@@ -102,7 +102,7 @@ export function ContactForm({ inbox }: { inbox: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-4 rounded-2xl border border-line bg-white p-5 sm:p-6">
+    <form onSubmit={submit} className="grid gap-4 rounded-2xl border border-line bg-paper p-5 sm:p-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-[13px] font-medium">
           Your name
@@ -175,7 +175,7 @@ export function ContactForm({ inbox }: { inbox: string }) {
         <button
           type="submit"
           disabled={busy}
-          className="rounded-full bg-ink px-5 py-2.5 text-[13.5px] font-medium text-white transition-colors hover:bg-accent disabled:opacity-60"
+          className="rounded-full bg-ink px-5 py-2.5 text-[13.5px] font-medium text-on-ink transition-colors hover:bg-accent disabled:opacity-60"
         >
           {busy ? "Sending…" : "Send message"}
         </button>

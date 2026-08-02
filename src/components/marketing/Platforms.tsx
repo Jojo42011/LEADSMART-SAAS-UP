@@ -50,7 +50,7 @@ export function Platforms() {
 
       <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-3">
         {targets.map((t, i) => (
-          <Reveal key={t.name} delay={i * 0.1} className="bg-white p-8">
+          <Reveal key={t.name} delay={i * 0.1} className="bg-paper p-8">
             <span className="block h-7 w-7 text-ink [&>svg]:h-full [&>svg]:w-full">
               {t.icon}
             </span>
