@@ -247,7 +247,7 @@ export function Dashboard() {
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <ThemeToggle />
-            <AgentSwitch />
+            <AgentSwitch onManageBilling={() => setTab("Billing")} />
             {/* Mobile tab switcher */}
             <select
               value={tab}
@@ -1765,8 +1765,8 @@ function LiveResearch({ intel, mode }: { intel: Intel; mode: "keywords" | "compe
  * button, because a control that only says "Stop" leaves you guessing
  * whether you already pressed it.
  */
-function AgentSwitch() {
-  const { engine, sites, refresh } = useAgentPages();
+function AgentSwitch({ onManageBilling }: { onManageBilling: () => void }) {
+  const { engine, sites, entitlement, refresh } = useAgentPages();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1782,6 +1782,28 @@ function AgentSwitch() {
     );
   }
   const paused = sites.every((s) => !s.active);
+
+  // Billing outranks the switch. An owner whose agent stopped for a failed
+  // payment needs to see that, not a Resume button that will not work —
+  // "paused" and "suspended" look identical from the outside, and only one
+  // of them is fixed by pressing anything here.
+  if (entitlement && !entitlement.allowed) {
+    return (
+      <span className="flex items-center gap-2">
+        <span className="hidden items-center gap-1.5 text-[12.5px] text-ink sm:inline-flex" title={entitlement.reason}>
+          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-ink" />
+          Agent stopped
+        </span>
+        <button
+          onClick={onManageBilling}
+          title={entitlement.reason}
+          className="rounded-full bg-ink px-3.5 py-1.5 text-[12.5px] font-medium text-on-ink transition-colors hover:bg-accent"
+        >
+          Fix billing
+        </button>
+      </span>
+    );
+  }
 
   const toggle = async () => {
     if (busy) return;

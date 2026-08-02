@@ -18,6 +18,7 @@ import {
 } from "@/lib/engine/publish";
 import { siteOrigin } from "@/lib/url";
 import { pickAccent } from "@/lib/site-ingest";
+import { entitlementForEmail } from "@/lib/engine/store";
 
 /**
  * What the agent has actually written, for the signed-in owner.
@@ -87,7 +88,11 @@ export async function GET(req: NextRequest) {
         };
       })
     );
-    return NextResponse.json({ ok: true, engine: true, sites: detailed });
+    // Carried alongside the sites so the dashboard can say WHY the agent
+    // is not working — "paused" and "unpaid" look identical otherwise, and
+    // one of them the owner can fix in thirty seconds.
+    const entitlement = await entitlementForEmail(auth.user.email).catch(() => null);
+    return NextResponse.json({ ok: true, engine: true, sites: detailed, entitlement });
   } catch (e) {
     // Degrade to the site list rather than to nothing. A read that fails
     // partway used to return zero sites, which the dashboard cannot tell

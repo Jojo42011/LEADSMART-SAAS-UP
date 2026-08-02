@@ -247,3 +247,22 @@ create table if not exists rate_limits (
   count        int not null default 0,
   window_start timestamptz not null default now()
 );
+
+-- ---------------------------------------------------------------------------
+-- Billing entitlement.
+--
+-- plan_status_since records when plan_status last CHANGED, which is what the
+-- grace window for a failed payment is measured from. It must not be
+-- restamped by the repeated past_due webhooks Stripe sends during dunning:
+-- doing so rolls the window forward on every retry and it never expires, so a
+-- customer whose card keeps failing would keep the agent indefinitely. The
+-- writers in store.ts stamp it only on a genuine transition, and
+-- test/entitlement.live.test.ts asserts that property against real Postgres.
+--
+-- plan_status now uses Stripe's own vocabulary (trialing, active, past_due,
+-- unpaid, canceled, incomplete, incomplete_expired, paused) plus 'inactive'
+-- for tenants who never subscribed. Entitlement is decided in exactly one
+-- place, src/lib/engine/entitlement.ts, which supplies both the TypeScript
+-- predicate and the SQL fragment the scheduler uses.
+-- ---------------------------------------------------------------------------
+alter table tenants add column if not exists plan_status_since timestamptz default now();

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { storeConfigured, getDueSites, recoverStuckRuns, pruneRateLimits } from "@/lib/engine/store";
 import { runSiteCycle, type CycleResult } from "@/lib/engine/orchestrator";
+import { reconcileBilling } from "@/lib/engine/reconcile-billing";
 
 /**
  * The daily heartbeat, fired by the Vercel cron in vercel.json.
@@ -63,6 +64,14 @@ export async function GET(req: Request) {
   // Housekeeping on the heartbeat: one row per client per bucket would
   // otherwise accumulate for the life of the database.
   await pruneRateLimits();
+
+  // Bring plan status back in line with Stripe before choosing who to
+  // work for. Webhooks are the fast path but not a guarantee — a missed
+  // one silently resolves as either free service for someone who
+  // cancelled, or a paying customer suspended for no visible reason.
+  // Running it first means a correction applies to this batch, not the
+  // next one.
+  const billing = await reconcileBilling().catch(() => null);
   const due = await getDueSites(BATCH_SIZE);
 
   // Concurrent, not serial. A cycle is almost entirely waiting — on the
@@ -96,6 +105,9 @@ export async function GET(req: Request) {
     ok: true,
     ranAt: new Date().toISOString(),
     recoveredStuckRuns: recovered,
+    billing: billing
+      ? { checked: billing.checked, corrected: billing.corrected, trialWarnings: billing.trialWarnings, errors: billing.errors }
+      : null,
     sitesDue: due.length,
     batchSize: BATCH_SIZE,
     elapsedMs,

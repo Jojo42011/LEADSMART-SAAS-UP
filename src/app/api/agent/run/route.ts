@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/api-auth";
 import { storeConfigured, listSitesForEmail } from "@/lib/engine/store";
 import { runSiteCycle } from "@/lib/engine/orchestrator";
+import { requireEntitlement } from "@/lib/api-entitlement";
 
 // A full cycle researches, writes with the LLM, audits, and publishes —
 // the same budget the cron route gets.
@@ -32,6 +33,11 @@ export async function POST(req: NextRequest) {
 
   const auth = requireSession(req);
   if (auth.response) return auth.response;
+
+  // Generating a page spends model budget on a customer's behalf, so
+  // entitlement is checked before anything is claimed or written.
+  const blocked = await requireEntitlement(auth.user.email);
+  if (blocked) return blocked;
 
   // Optional: generate a specific keyword (a planned-queue card's button)
   // instead of the queue's next pick.

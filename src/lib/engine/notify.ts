@@ -1,6 +1,7 @@
 import { sendCustomerMail, customerMailReady } from "../mailer";
-import { getTenantNotifyPrefs, recordNotification } from "./store";
+import { getTenantNotifyPrefs, recordNotification, notificationSentWithin } from "./store";
 import { site } from "../site";
+import { PLAN_GRACE_DAYS } from "./entitlement";
 
 /**
  * Customer notices: welcome, page published, payment failed.
@@ -25,8 +26,13 @@ async function deliver(input: {
   text: string;
   /** Notices the owner can switch off. Transactional mail ignores this. */
   optional?: boolean;
+  /** Suppress if one of this kind already went out inside this window. */
+  onceWithinHours?: number;
 }): Promise<void> {
   try {
+    if (input.onceWithinHours && (await notificationSentWithin(input.tenantEmail, input.kind, input.onceWithinHours))) {
+      return;
+    }
     if (input.optional) {
       const prefs = await getTenantNotifyPrefs(input.tenantEmail);
       if (prefs && !prefs.notifyPublishes) return;
@@ -102,6 +108,12 @@ export function notifyPagePublished(input: {
 }
 
 export function notifyPaymentFailed(email: string, updateUrl: string): void {
+  // The number comes from the entitlement rule rather than being written
+  // into the prose. An earlier version of this email promised the agent
+  // "keeps running" while the scheduler cut service on the first decline —
+  // the copy and the code disagreed, and the customer would have believed
+  // the copy.
+  const graceDays = PLAN_GRACE_DAYS;
   void deliver({
     tenantEmail: email,
     kind: "payment_failed",
@@ -109,11 +121,86 @@ export function notifyPaymentFailed(email: string, updateUrl: string): void {
     text: [
       "We could not charge the card on file for your subscription.",
       "",
-      "Your agent keeps running for now. Stripe will retry over the next few days, and if the payment still does not clear, production stops and your published pages stay exactly where they are — nothing is deleted.",
+      `Your agent keeps running for ${graceDays} more day${graceDays === 1 ? "" : "s"} while Stripe retries the card. If the payment still has not cleared by then, production stops — your published pages stay exactly where they are, and nothing is deleted.`,
       "",
       `Update your payment method: ${updateUrl}`,
       "",
       "If you think this is a mistake, or the card is fine and something else is going on, reply to this email.",
+    ].join("\n"),
+  });
+}
+
+/**
+ * The agent has stopped because of billing.
+ *
+ * Transactional, so it ignores the publish-notice preference: this is the
+ * product ceasing to do the thing it is paid for, and somebody who
+ * switched off "tell me when a page goes live" has not consented to
+ * silence about that.
+ *
+ * The copy is explicit that nothing is deleted. The fear on receiving
+ * this mail is that a billing lapse costs you the work already done, and
+ * leaving that unanswered is how a recoverable card problem turns into a
+ * cancellation.
+ */
+export function notifyAgentSuspended(email: string, reason: string): void {
+  void deliver({
+    tenantEmail: email,
+    kind: "agent_suspended",
+    // Webhook and reconciliation can both notice the same suspension.
+    onceWithinHours: 24,
+    subject: "Your Ascent agent has paused",
+    text: [
+      reason,
+      "",
+      "What this means:",
+      "· The agent has stopped researching and publishing new pages.",
+      "· Every page it already published stays exactly where it is. Nothing is deleted, and nothing is removed from your site.",
+      "· Your keyword plan, settings and history are kept — the agent picks up where it left off the moment billing is sorted.",
+      "",
+      "Update your payment method from the Plan panel in your dashboard, and the agent restarts on the next cycle.",
+      "",
+      "If you think this is a mistake, reply to this email.",
+    ].join("\n"),
+  });
+}
+
+/** Billing recovered and production has restarted. */
+export function notifyAgentResumed(email: string): void {
+  void deliver({
+    tenantEmail: email,
+    kind: "agent_resumed",
+    onceWithinHours: 24,
+    subject: "Your Ascent agent is running again",
+    text: [
+      "Your payment went through and the agent is back at work.",
+      "",
+      "It resumes from where it stopped — the keyword plan and everything already published are intact, and the next page goes out on your normal cadence.",
+    ].join("\n"),
+  });
+}
+
+/**
+ * A trial ending within a few days, sent once.
+ *
+ * Sent because the alternative is a customer discovering the end of their
+ * trial as a charge they did not expect, or as an agent that stopped for
+ * no reason they can see. Both are avoidable with three days' notice.
+ */
+export function notifyTrialEnding(email: string, daysLeft: number, amount: string): void {
+  void deliver({
+    tenantEmail: email,
+    kind: "trial_ending",
+    // Recomputed from the trial date on every heartbeat, so without this
+    // it would send once a day through the whole warning window.
+    onceWithinHours: 72,
+    subject: `Your Ascent trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}`,
+    text: [
+      `Your free trial ends in ${daysLeft} day${daysLeft === 1 ? "" : "s"}, and the card on file will be charged ${amount}.`,
+      "",
+      "Nothing changes if you do nothing — the agent keeps publishing on your cadence.",
+      "",
+      "If you would rather not continue, cancel from the Plan panel in your dashboard before then and you will not be charged. Pages already published stay on your site either way.",
     ].join("\n"),
   });
 }

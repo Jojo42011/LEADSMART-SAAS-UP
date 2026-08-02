@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/api-auth";
 import { storeConfigured, listSitesForEmail, getPageWithSiteOwned } from "@/lib/engine/store";
 import { refreshPageNow } from "@/lib/engine/orchestrator";
+import { requireEntitlement } from "@/lib/api-entitlement";
 
 // A refresh regenerates with the LLM, audits, and republishes — the same
 // budget a full cycle gets.
@@ -26,6 +27,11 @@ export async function POST(req: NextRequest) {
   }
   const auth = requireSession(req);
   if (auth.response) return auth.response;
+
+  // A refresh is a full generation plus a republish — the most expensive
+  // single action in the product.
+  const blocked = await requireEntitlement(auth.user.email);
+  if (blocked) return blocked;
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ ok: false, error: "id required" }, { status: 400 });

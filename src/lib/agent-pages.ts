@@ -54,6 +54,13 @@ export type AgentSite = {
   runs: AgentRun[];
 };
 
+export type Entitlement = {
+  allowed: boolean;
+  state: "trialing" | "active" | "grace" | "suspended" | "none";
+  reason: string;
+  graceEndsAt: string | null;
+};
+
 export type AgentState = {
   loading: boolean;
   /** True during a manual refresh, so the button can say so — a refetch
@@ -62,6 +69,8 @@ export type AgentState = {
   /** False when DATABASE_URL is unset: no engine, so the preview is all there is. */
   engine: boolean;
   sites: AgentSite[];
+  /** Why the agent may or may not work, from billing. Null without a store. */
+  entitlement: Entitlement | null;
   error: string | null;
 };
 
@@ -71,6 +80,7 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
     refreshing: false,
     engine: false,
     sites: [],
+    entitlement: null,
     error: null,
   });
   const [tick, setTick] = useState(0);
@@ -79,7 +89,7 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
     let cancelled = false;
     fetch("/api/pages")
       .then((r) => r.json())
-      .then((j: { ok?: boolean; engine?: boolean; sites?: AgentSite[]; error?: string }) => {
+      .then((j: { ok?: boolean; engine?: boolean; sites?: AgentSite[]; entitlement?: Entitlement | null; error?: string }) => {
         if (cancelled) return;
         // Sites can arrive alongside an error: a failed pages read still
         // returns the site list so the agent controls survive it.
@@ -88,12 +98,13 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
           refreshing: false,
           engine: Boolean(j.engine),
           sites: j.sites ?? [],
+          entitlement: j.entitlement ?? null,
           error: j.ok === false ? j.error ?? "Could not read pages" : null,
         });
       })
       .catch(() => {
         if (!cancelled) {
-          setState({ loading: false, refreshing: false, engine: false, sites: [], error: null });
+          setState({ loading: false, refreshing: false, engine: false, sites: [], entitlement: null, error: null });
         }
       });
     return () => {

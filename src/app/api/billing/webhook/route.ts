@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { verifyStripeSignature } from "@/lib/stripe";
 import { setTenantPlanByEmail, setTenantPlanByCustomer, getTenantEmailByCustomer } from "@/lib/engine/store";
-import { notifyPaymentFailed } from "@/lib/engine/notify";
+import { notifyPaymentFailed, notifyAgentSuspended, notifyAgentResumed } from "@/lib/engine/notify";
+import { planStatusFromStripe, entitlementFor } from "@/lib/engine/entitlement";
 
 /**
  * Stripe webhook: the source of truth for who is paying. Point a Stripe
@@ -16,6 +17,7 @@ import { notifyPaymentFailed } from "@/lib/engine/notify";
 type StripeEvent = {
   type: string;
   data: {
+    previous_attributes?: { status?: string } | null;
     object: {
       customer?: string;
       customer_email?: string | null;
@@ -23,9 +25,20 @@ type StripeEvent = {
       metadata?: Record<string, string> | null;
       status?: string;
       hosted_invoice_url?: string | null;
+      /** Stripe reports what changed; used to tell a transition from a repeat. */
+      previous_attributes?: { status?: string } | null;
     };
   };
 };
+
+/**
+ * The status this subscription held before the event, when Stripe says so.
+ * Falls back to "active" — the assumption that errs toward notifying on a
+ * genuine suspension rather than staying silent through one.
+ */
+function previousStatusOf(previous: { status?: string } | null): string {
+  return previous?.status ?? "active";
+}
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -43,6 +56,7 @@ export async function POST(req: Request) {
   }
 
   const obj = event.data?.object ?? {};
+  const previousAttributes = event.data?.previous_attributes ?? null;
 
   try {
     switch (event.type) {
@@ -54,22 +68,40 @@ export async function POST(req: Request) {
         break;
       }
       case "customer.subscription.updated": {
+        // Every Stripe status is mapped, including the ones the first
+        // version dropped. `incomplete` in particular is what a trial
+        // becomes when it ends without a usable card: it fell through the
+        // old mapping, nothing was written, and the tenant stayed
+        // "active" — the agent working indefinitely for free on a
+        // subscription that never started paying.
         if (typeof obj.customer === "string" && obj.status) {
-          const status =
-            obj.status === "active" || obj.status === "trialing"
-              ? "active"
-              : obj.status === "past_due" || obj.status === "unpaid"
-                ? "past_due"
-                : obj.status === "canceled"
-                  ? "canceled"
-                  : null;
-          if (status) await setTenantPlanByCustomer(obj.customer, status);
+          const status = planStatusFromStripe(obj.status);
+          const before = entitlementFor(previousStatusOf(previousAttributes), null);
+          const result = await setTenantPlanByCustomer(obj.customer, status);
+          if (result.email && result.changed) {
+            const now = entitlementFor(status, new Date());
+            // Notify on the transition that changes whether the agent
+            // works, not on every status write — Stripe emits an event per
+            // dunning retry and mailing each one trains people to ignore
+            // all of them.
+            if (!now.allowed && before.allowed !== false) {
+              notifyAgentSuspended(result.email, now.reason);
+            } else if (now.allowed && now.state !== "grace" && before.allowed === false) {
+              notifyAgentResumed(result.email);
+            }
+          }
         }
         break;
       }
       case "customer.subscription.deleted": {
         if (typeof obj.customer === "string") {
-          await setTenantPlanByCustomer(obj.customer, "canceled");
+          const result = await setTenantPlanByCustomer(obj.customer, "canceled");
+          if (result.email && result.changed) {
+            notifyAgentSuspended(
+              result.email,
+              "Your subscription has ended. Published pages stay on your site; the agent has stopped."
+            );
+          }
         }
         break;
       }

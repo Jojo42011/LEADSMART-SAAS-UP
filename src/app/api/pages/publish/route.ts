@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/api-auth";
 import { storeConfigured, getPageWithSiteOwned } from "@/lib/engine/store";
 import { publishStoredPage } from "@/lib/engine/publish-page";
+import { requireEntitlement } from "@/lib/api-entitlement";
 
 // Publishing includes a live-URL verification fetch and, on GitHub,
 // sitemap and index commits — comfortably inside this, but not inside
@@ -26,6 +27,10 @@ export async function POST(req: NextRequest) {
   }
   const auth = requireSession(req);
   if (auth.response) return auth.response;
+
+  // Publishing pushes content to a customer's live site under our name.
+  const blocked = await requireEntitlement(auth.user.email);
+  if (blocked) return blocked;
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ ok: false, error: "id required" }, { status: 400 });

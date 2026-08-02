@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { decryptSecret, encryptSecret } from "../secrets";
+import { type PlanStatus, type Entitlement, entitlementFor, entitledSqlFragment } from "./entitlement";
 
 /**
  * Multi tenant data access. Activates when DATABASE_URL is set (Neon,
@@ -82,6 +83,10 @@ const SCHEMA_REPAIRS = [
   `alter table pages add column if not exists refreshed_at timestamptz`,
   `alter table pages add column if not exists refresh_count int not null default 0`,
   `alter table tenants add column if not exists notify_publishes boolean not null default true`,
+  // When plan_status last CHANGED. The grace window for a failed payment
+  // is measured from here, so it must not be restamped by the repeated
+  // webhooks Stripe sends during dunning — see setTenantPlan*.
+  `alter table tenants add column if not exists plan_status_since timestamptz default now()`,
   `create table if not exists support_messages (
      id uuid primary key default gen_random_uuid(),
      name text, email text not null, subject text, message text not null,
@@ -233,7 +238,7 @@ export async function getDueSites(limit = 3): Promise<SiteRow[]> {
   const res = await sql(
     `select s.* from sites s
      join tenants t on t.id = s.tenant_id
-     where s.active and t.plan_status = 'active'
+     where s.active and ${entitledSqlFragment("t")}
        and (s.last_run_at is null
             or s.last_run_at < now() - make_interval(mins =>
               -- Integer minutes on purpose: make_interval only accepts
@@ -699,19 +704,39 @@ export async function provisionSite(
  * activation works even if payment lands before onboarding created the
  * tenant row.
  */
+/**
+ * Sets a tenant's plan status, stamping plan_status_since only when the
+ * status actually changes.
+ *
+ * That condition carries the whole grace period. Stripe emits an event
+ * per dunning retry, all of them reporting past_due, so restamping on
+ * every write would roll the seven-day window forward each time and it
+ * would never expire — a customer whose card kept failing would get the
+ * agent forever. Returns the previous status so callers can tell a real
+ * transition from a repeat and notify only on the former.
+ */
 export async function setTenantPlanByEmail(
   email: string,
-  status: "active" | "past_due" | "canceled",
+  status: PlanStatus,
   stripeCustomerId?: string
-): Promise<void> {
-  if (!storeConfigured()) return;
+): Promise<{ previous: string | null; changed: boolean }> {
+  if (!storeConfigured()) return { previous: null, changed: false };
+  const before = await sql(`select plan_status from tenants where email = $1`, [email.toLowerCase()]);
+  const previous = (before.rows[0]?.plan_status as string) ?? null;
   await sql(
-    `insert into tenants (email, plan_status, stripe_customer_id) values ($1, $2, $3)
+    `insert into tenants (email, plan_status, stripe_customer_id, plan_status_since)
+     values ($1, $2, $3, now())
      on conflict (email) do update set
        plan_status = excluded.plan_status,
-       stripe_customer_id = coalesce(excluded.stripe_customer_id, tenants.stripe_customer_id)`,
+       stripe_customer_id = coalesce(excluded.stripe_customer_id, tenants.stripe_customer_id),
+       plan_status_since = case
+                             when tenants.plan_status is distinct from excluded.plan_status
+                             then now()
+                             else tenants.plan_status_since
+                           end`,
     [email.toLowerCase(), status, stripeCustomerId ?? null]
   );
+  return { previous, changed: previous !== status };
 }
 
 /**
@@ -827,13 +852,34 @@ export async function createPasswordTenant(
 /** Plan changes keyed by Stripe customer (subscription updated/canceled events). */
 export async function setTenantPlanByCustomer(
   stripeCustomerId: string,
-  status: "active" | "past_due" | "canceled"
-): Promise<void> {
-  if (!storeConfigured()) return;
-  await sql(`update tenants set plan_status = $2 where stripe_customer_id = $1`, [
-    stripeCustomerId,
-    status,
-  ]);
+  status: PlanStatus
+): Promise<{ email: string | null; previous: string | null; changed: boolean }> {
+  if (!storeConfigured()) return { email: null, previous: null, changed: false };
+  const res = await sql(
+    `update tenants set
+       plan_status = $2,
+       plan_status_since = case
+                             when plan_status is distinct from $2 then now()
+                             else plan_status_since
+                           end
+     where stripe_customer_id = $1
+     returning email, plan_status`,
+    [stripeCustomerId, status]
+  );
+  const row = res.rows[0];
+  if (!row) return { email: null, previous: null, changed: false };
+  // plan_status is already the new value here, so the transition is
+  // inferred from whether plan_status_since was just moved.
+  const sinceRes = await sql(
+    `select plan_status_since > now() - interval '5 seconds' as just_changed
+       from tenants where stripe_customer_id = $1`,
+    [stripeCustomerId]
+  );
+  return {
+    email: row.email as string,
+    previous: null,
+    changed: Boolean(sinceRes.rows[0]?.just_changed),
+  };
 }
 
 /**
@@ -1084,6 +1130,37 @@ export async function setTenantNotifyPrefs(email: string, notifyPublishes: boole
   ]);
 }
 
+/**
+ * Whether a notice of this kind already went to this tenant recently.
+ *
+ * Some notices are recomputed from state on every heartbeat rather than
+ * fired by a one-shot event — the trial-ending warning is derived from
+ * the trial date each run, which is what makes it recoverable if a single
+ * send fails. That same property would mail it every day of the warning
+ * window without this check.
+ */
+export async function notificationSentWithin(
+  email: string,
+  kind: string,
+  hours: number
+): Promise<boolean> {
+  if (!storeConfigured()) return false;
+  try {
+    const res = await sql(
+      `select 1 from notifications
+       where tenant_email = $1 and kind = $2
+         and created_at > now() - make_interval(hours => $3::int)
+       limit 1`,
+      [email.toLowerCase(), kind, Math.max(1, Math.round(hours))]
+    );
+    return res.rowCount ? res.rowCount > 0 : false;
+  } catch {
+    // Unknown means "not sent": a duplicate notice is a smaller failure
+    // than a suppressed one.
+    return false;
+  }
+}
+
 /** Records what was sent and whether it actually left — never just that it was attempted. */
 export async function recordNotification(
   email: string,
@@ -1200,4 +1277,41 @@ export async function pruneRateLimits(): Promise<number> {
   } catch {
     return 0;
   }
+}
+
+/**
+ * A tenant's entitlement, resolved from stored plan state.
+ *
+ * The one read every on-demand action uses. Returns null when there is no
+ * store — a keyless local deployment stays fully usable, since there is no
+ * billing to enforce there.
+ */
+export async function entitlementForEmail(email: string): Promise<Entitlement | null> {
+  if (!storeConfigured()) return null;
+  const res = await sql(
+    `select plan_status, plan_status_since from tenants where email = $1`,
+    [email.toLowerCase()]
+  );
+  const row = res.rows[0];
+  if (!row) return entitlementFor("inactive", null);
+  return entitlementFor(row.plan_status as string, row.plan_status_since as Date);
+}
+
+/** Tenants with a Stripe customer, for reconciling drift against Stripe. */
+export async function listBillableTenants(
+  limit = 200
+): Promise<{ email: string; stripeCustomerId: string; planStatus: string }[]> {
+  if (!storeConfigured()) return [];
+  const res = await sql(
+    `select email, stripe_customer_id, plan_status from tenants
+     where stripe_customer_id is not null
+     order by plan_status_since asc nulls first
+     limit $1`,
+    [limit]
+  );
+  return res.rows.map((r) => ({
+    email: r.email as string,
+    stripeCustomerId: r.stripe_customer_id as string,
+    planStatus: r.plan_status as string,
+  }));
 }
