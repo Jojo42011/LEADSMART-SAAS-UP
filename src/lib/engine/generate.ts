@@ -83,6 +83,37 @@ function esc(s: string): string {
 }
 
 /**
+ * Serialises a schema object for embedding in a <script> tag.
+ *
+ * JSON.stringify does not escape "<", so any string in the schema
+ * containing "</script>" closes the tag early and everything after it
+ * becomes live markup on the customer's published page. A business name
+ * is enough to trigger it, and the values here are not all typed by the
+ * owner: FAQ answers and descriptions are written by the model from
+ * ingested competitor pages, so this is a path from a third party's HTML
+ * to a customer's live site.
+ *
+ * HTML-escaping is not the fix — it would corrupt the JSON. Escaping the
+ * three characters as \u sequences leaves the JSON byte-identical once
+ * parsed, so the schema search engines read is unchanged.
+ */
+function jsonLd(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    // U+2028/U+2029 are literal line terminators in JavaScript source but
+    // legal inside a JSON string, which breaks any parser reading the tag
+    // as script rather than as JSON.
+    // Written as \u escapes rather than literal characters: pasted
+    // literally they are invisible in an editor and indistinguishable
+    // from a space — and a plain space here replaces every space in the
+    // document, which is exactly what happened on the first attempt.
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+/**
  * Escapes prose while keeping the model's internal links as real links.
  *
  * The generation prompt asks for internal links, and the model supplies
@@ -291,7 +322,7 @@ function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: 
 <meta property="og:url" content="${canonical}">
 <meta name="robots" content="index, follow">
 <meta property="article:modified_time" content="${today}">
-${schemas.map((s) => `<script type="application/ld+json">${JSON.stringify(s)}</script>`).join("\n")}
+${schemas.map((s) => `<script type="application/ld+json">${jsonLd(s)}</script>`).join("\n")}
 <style>
 :root{--accent:${accent};--ink:#16181d;--muted:#5c6270;--line:#e7e8ec;--soft:#f6f7f9;--tint:${tint}}
 *{margin:0;padding:0;box-sizing:border-box}
