@@ -31,6 +31,70 @@ function db(): Pool {
 }
 
 /**
+ * Additive schema repairs, applied automatically on first use.
+ *
+ * This exists because of a real outage. Refresh cycles added
+ * pages.refreshed_at and started selecting it, the code deployed, and
+ * db/schema.sql had not been re-run against the live database — so every
+ * read of the pages table failed with `column "refreshed_at" does not
+ * exist`. The dashboard lost its page list AND its agent controls, since
+ * a site list that fails to load is indistinguishable from an account
+ * with no sites.
+ *
+ * "Remember to run the SQL after deploying" is not a safeguard, it is a
+ * landmine with a delay on it. Every statement here is idempotent and
+ * additive — add column if not exists, create table if not exists — so
+ * running them on every cold start is safe and costs one round trip.
+ * Destructive or data-shaping migrations deliberately do NOT belong here;
+ * those stay in db/schema.sql for a human to run deliberately.
+ */
+const SCHEMA_REPAIRS = [
+  `create extension if not exists pgcrypto`,
+  `alter table pages add column if not exists refreshed_at timestamptz`,
+  `alter table pages add column if not exists refresh_count int not null default 0`,
+  `alter table tenants add column if not exists notify_publishes boolean not null default true`,
+  `create table if not exists support_messages (
+     id uuid primary key default gen_random_uuid(),
+     name text, email text not null, subject text, message text not null,
+     tenant_email text, delivered boolean not null default false,
+     delivery_error text, created_at timestamptz not null default now())`,
+  `create table if not exists notifications (
+     id uuid primary key default gen_random_uuid(),
+     tenant_email text not null, kind text not null,
+     delivered boolean not null default false, error text,
+     created_at timestamptz not null default now())`,
+];
+
+let schemaReady: Promise<void> | null = null;
+
+function ensureSchema(): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      for (const stmt of SCHEMA_REPAIRS) {
+        // Each statement stands alone: one failing (a permissions quirk,
+        // a table that genuinely is not there yet) must not stop the rest
+        // from applying, and none of them are required for the queries
+        // that do not touch their columns.
+        // The raw pool, never sql(): routing these through the wrapper
+        // would await the very promise this function is creating.
+        await db().query(stmt).catch(() => {});
+      }
+    })();
+  }
+  return schemaReady;
+}
+
+/**
+ * Every query goes through here so the schema repairs above are applied
+ * before the first read, once per process. Bypassing this is how the
+ * outage above happened; there is no second path to the database.
+ */
+async function sql(text: string, params?: unknown[]) {
+  await ensureSchema();
+  return db().query(text, params);
+}
+
+/**
  * Actually connects and runs `select 1`, translating the common failure
  * codes into instructions. Diagnostics used to report the database healthy
  * whenever DATABASE_URL existed — which is how a deployment sat at
@@ -40,6 +104,9 @@ function db(): Pool {
 export async function probeStore(): Promise<{ ok: boolean; error: string | null }> {
   if (!storeConfigured()) return { ok: false, error: "DATABASE_URL is not set" };
   try {
+    // Deliberately the raw pool: this probe reports on the connection
+    // itself, and routing it through the migration path would mask a
+    // connection failure as a migration failure.
     await db().query("select 1");
     return { ok: true, error: null };
   } catch (e) {
@@ -125,7 +192,7 @@ const CADENCE_HOURS: Record<string, number> = { continuous: 0.1, daily: 24, ever
 /** Sites whose cadence interval has elapsed, on an active tenant plan. */
 export async function getDueSites(limit = 3): Promise<SiteRow[]> {
   if (!storeConfigured()) return [];
-  const res = await db().query(
+  const res = await sql(
     `select s.* from sites s
      join tenants t on t.id = s.tenant_id
      where s.active and t.plan_status = 'active'
@@ -150,7 +217,7 @@ export function cadenceHours(cadence: string): number {
 /** Claims the single flight slot for a site. Returns run id, or null if a cycle is already running. */
 export async function claimRun(siteId: string): Promise<string | null> {
   try {
-    const res = await db().query(
+    const res = await sql(
       `insert into runs (site_id, status, phase) values ($1, 'running', 'start') returning id`,
       [siteId]
     );
@@ -167,7 +234,7 @@ export async function updateRun(
   const keys = Object.keys(patch);
   if (keys.length === 0) return;
   const sets = keys.map((k, i) => `${k} = $${i + 2}`).join(", ");
-  await db().query(`update runs set ${sets} where id = $1`, [runId, ...Object.values(patch)]);
+  await sql(`update runs set ${sets} where id = $1`, [runId, ...Object.values(patch)]);
 }
 
 export async function finishRun(
@@ -176,14 +243,14 @@ export async function finishRun(
   summary: string,
   error?: string
 ): Promise<void> {
-  await db().query(
+  await sql(
     `update runs set status = $2, summary = $3, error = $4, finished_at = now() where id = $1`,
     [runId, status, summary, error ?? null]
   );
 }
 
 export async function touchSiteRun(siteId: string): Promise<void> {
-  await db().query(`update sites set last_run_at = now() where id = $1`, [siteId]);
+  await sql(`update sites set last_run_at = now() where id = $1`, [siteId]);
 }
 
 /**
@@ -205,7 +272,7 @@ export async function touchSiteRun(siteId: string): Promise<void> {
  */
 export async function recoverStuckRuns(siteId?: string, minutes = 15): Promise<number> {
   if (!storeConfigured()) return 0;
-  const res = await db().query(
+  const res = await sql(
     `update runs set status = 'timeout', finished_at = now(),
             error = coalesce(error, 'the cycle process ended before it could report a result')
      where status = 'running'
@@ -218,7 +285,7 @@ export async function recoverStuckRuns(siteId?: string, minutes = 15): Promise<n
 
 /** When the currently-held flight slot for a site was claimed, if any. */
 export async function runningSince(siteId: string): Promise<Date | null> {
-  const res = await db().query(
+  const res = await sql(
     `select started_at from runs where site_id = $1 and status = 'running' limit 1`,
     [siteId]
   );
@@ -226,7 +293,7 @@ export async function runningSince(siteId: string): Promise<Date | null> {
 }
 
 export async function getConnection(siteId: string): Promise<ConnectionRow | null> {
-  const res = await db().query(`select * from connections where site_id = $1`, [siteId]);
+  const res = await sql(`select * from connections where site_id = $1`, [siteId]);
   const row = (res.rows[0] as ConnectionRow) ?? null;
   if (!row) return null;
   // Decrypt at the point of use. Rows written before encryption existed are
@@ -246,7 +313,7 @@ export async function getConnection(siteId: string): Promise<ConnectionRow | nul
  */
 export async function upsertTenant(email: string, name?: string): Promise<string | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(
+  const res = await sql(
     `insert into tenants (email, name) values ($1, $2)
      on conflict (email) do update set name = coalesce(nullif(excluded.name, ''), tenants.name)
      returning id`,
@@ -261,7 +328,7 @@ export async function getPageForEmail(
   email: string
 ): Promise<{ id: string; title: string; html: string | null; live_url: string | null; status: string } | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(
+  const res = await sql(
     `select p.id, p.title, p.html, p.live_url, p.status
      from pages p
      join sites s on s.id = p.site_id
@@ -282,7 +349,7 @@ export async function saveGscTokenForEmail(email: string, encryptedToken: string
   const sites = await listSitesForEmail(email);
   const site = sites[0];
   if (!site) return false;
-  await db().query(
+  await sql(
     `insert into connections (site_id, gsc_refresh_token, updated_at) values ($1, $2, now())
      on conflict (site_id) do update set gsc_refresh_token = excluded.gsc_refresh_token, updated_at = now()`,
     [site.id, encryptedToken]
@@ -295,7 +362,7 @@ export async function upsertKeywords(
   keywords: { keyword: string; intent: string; difficulty: string; opportunity: number; reason: string }[]
 ): Promise<void> {
   for (const k of keywords) {
-    await db().query(
+    await sql(
       `insert into keywords (site_id, term, intent, difficulty, opportunity, reason)
        values ($1, $2, $3, $4, $5, $6)
        on conflict (site_id, term) do update set opportunity = excluded.opportunity, reason = excluded.reason`,
@@ -309,7 +376,7 @@ export async function upsertCompetitors(
   competitors: { domain: string; strength: string; weakness: string }[]
 ): Promise<void> {
   for (const c of competitors) {
-    await db().query(
+    await sql(
       `insert into competitors (site_id, domain, strength, weakness) values ($1, $2, $3, $4)
        on conflict (site_id, domain) do update set strength = excluded.strength, weakness = excluded.weakness`,
       [siteId, c.domain, c.strength, c.weakness]
@@ -318,7 +385,7 @@ export async function upsertCompetitors(
 }
 
 export async function countKeywords(siteId: string): Promise<number> {
-  const res = await db().query(`select count(*)::int as n from keywords where site_id = $1`, [siteId]);
+  const res = await sql(`select count(*)::int as n from keywords where site_id = $1`, [siteId]);
   return res.rows[0].n as number;
 }
 
@@ -326,7 +393,7 @@ export async function countKeywords(siteId: string): Promise<number> {
 export async function nextTarget(
   siteId: string
 ): Promise<{ id: string; term: string; intent: string } | null> {
-  const res = await db().query(
+  const res = await sql(
     `select id, term, intent from keywords
      where site_id = $1 and covered_by is null
      order by opportunity desc limit 1`,
@@ -347,12 +414,12 @@ export async function findOrCreateKeyword(
   term: string
 ): Promise<{ id: string; term: string; intent: string }> {
   const normalized = term.trim().toLowerCase();
-  const existing = await db().query(
+  const existing = await sql(
     `select id, term, intent from keywords where site_id = $1 and lower(term) = $2 limit 1`,
     [siteId, normalized]
   );
   if (existing.rows[0]) return existing.rows[0];
-  const created = await db().query(
+  const created = await sql(
     `insert into keywords (site_id, term, intent, opportunity) values ($1, $2, 'informational', 50)
      returning id, term, intent`,
     [siteId, normalized]
@@ -378,7 +445,7 @@ export async function deletePageOwned(
   wpPageId: number | null;
   liveUrl: string | null;
 } | null> {
-  const res = await db().query(
+  const res = await sql(
     `delete from pages p using sites s, tenants t
      where p.id = $1 and p.site_id = s.id and s.tenant_id = t.id and t.email = $2
      returning p.site_id as site_id, p.slug, p.folder, p.keyword, p.wp_page_id, p.live_url`,
@@ -386,7 +453,7 @@ export async function deletePageOwned(
   );
   const row = res.rows[0];
   if (!row) return null;
-  await db().query(`update keywords set covered_by = null where covered_by = $1`, [pageId]);
+  await sql(`update keywords set covered_by = null where covered_by = $1`, [pageId]);
   return {
     siteId: row.site_id,
     slug: row.slug,
@@ -399,7 +466,7 @@ export async function deletePageOwned(
 
 /** Removes an uncovered keyword the owner dismissed from the queue. */
 export async function deleteKeywordOwned(siteId: string, term: string, email: string): Promise<boolean> {
-  const res = await db().query(
+  const res = await sql(
     `delete from keywords k using sites s, tenants t
      where k.site_id = $1 and lower(k.term) = $2 and k.covered_by is null
        and k.site_id = s.id and s.tenant_id = t.id and t.email = $3`,
@@ -409,7 +476,7 @@ export async function deleteKeywordOwned(siteId: string, term: string, email: st
 }
 
 export async function listPages(siteId: string, withHtml = false): Promise<PageSummary[]> {
-  const res = await db().query(
+  const res = await sql(
     `select id, keyword, slug, folder, title, status,
             live_url, live_status, audit_score, audit_grade, held_reason,
             word_count, published_at, refreshed_at, refresh_count, created_at,
@@ -437,7 +504,7 @@ export async function insertPage(page: {
   status: string;
   heldReason?: string;
 }): Promise<string> {
-  const res = await db().query(
+  const res = await sql(
     `insert into pages (site_id, keyword, page_type, slug, folder, title, meta_title,
        meta_description, html, word_count, audit_score, audit_grade, audit_report, status, held_reason)
      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
@@ -455,7 +522,7 @@ export async function insertPage(page: {
 }
 
 export async function markKeywordCovered(keywordId: string, pageId: string): Promise<void> {
-  await db().query(`update keywords set covered_by = $2 where id = $1`, [keywordId, pageId]);
+  await sql(`update keywords set covered_by = $2 where id = $1`, [keywordId, pageId]);
 }
 
 /* ------------------------- Tenant provisioning ------------------------- */
@@ -503,7 +570,7 @@ export async function provisionSite(
 ): Promise<{ tenantId: string; siteId: string; created: boolean } | null> {
   if (!storeConfigured()) return null;
 
-  const tenantRes = await db().query(
+  const tenantRes = await sql(
     `insert into tenants (email, name) values ($1, $2)
      on conflict (email) do update set name = coalesce(nullif(excluded.name, ''), tenants.name)
      returning id`,
@@ -512,7 +579,7 @@ export async function provisionSite(
   const tenantId = tenantRes.rows[0].id as string;
 
   const s = input.site;
-  const existing = await db().query(`select id from sites where tenant_id = $1 and url = $2`, [
+  const existing = await sql(`select id from sites where tenant_id = $1 and url = $2`, [
     tenantId,
     s.url,
   ]);
@@ -531,7 +598,7 @@ export async function provisionSite(
     // carry no brand snapshot (a Settings save, a replayed onboarding)
     // used to blank it, and every page generated after that rendered in
     // default black-and-white instead of the site's own colors.
-    await db().query(
+    await sql(
       `update sites set platform=$2, cadence=$3, publish_mode=$4, business_name=$5, phone=$6,
          address=$7, city=$8, region=$9, service_area=$10, industry=$11, services=$12,
          target_locations=$13, seed_competitors=$14, avg_sale_value=$15,
@@ -544,7 +611,7 @@ export async function provisionSite(
       ]
     );
   } else {
-    const siteRes = await db().query(
+    const siteRes = await sql(
       `insert into sites (tenant_id, url, platform, cadence, publish_mode, business_name, phone,
          address, city, region, service_area, industry, services, target_locations,
          seed_competitors, avg_sale_value, brand)
@@ -561,7 +628,7 @@ export async function provisionSite(
   }
 
   const c = input.connection;
-  await db().query(
+  await sql(
     `insert into connections (site_id, wp_user, wp_app_password, github_repo, github_token, github_branch, gsc_refresh_token, updated_at)
      values ($1,$2,$3,$4,$5,$6,$7, now())
      on conflict (site_id) do update set
@@ -600,7 +667,7 @@ export async function setTenantPlanByEmail(
   stripeCustomerId?: string
 ): Promise<void> {
   if (!storeConfigured()) return;
-  await db().query(
+  await sql(
     `insert into tenants (email, plan_status, stripe_customer_id) values ($1, $2, $3)
      on conflict (email) do update set
        plan_status = excluded.plan_status,
@@ -630,14 +697,14 @@ export async function resetSitePlanning(
 ): Promise<{ keywords: number; competitors: number; drafts: number }> {
   if (!storeConfigured()) return { keywords: 0, competitors: 0, drafts: 0 };
 
-  const drafts = await db().query(
+  const drafts = await sql(
     `delete from pages where site_id = $1 and status <> 'published'`,
     [siteId]
   );
-  const keywords = await db().query(`delete from keywords where site_id = $1`, [siteId]);
-  const competitors = await db().query(`delete from competitors where site_id = $1`, [siteId]);
+  const keywords = await sql(`delete from keywords where site_id = $1`, [siteId]);
+  const competitors = await sql(`delete from competitors where site_id = $1`, [siteId]);
   // Null last_run_at so the cadence check treats the site as due immediately.
-  await db().query(`update sites set last_run_at = null where id = $1`, [siteId]);
+  await sql(`update sites set last_run_at = null where id = $1`, [siteId]);
 
   return {
     keywords: keywords.rowCount ?? 0,
@@ -652,7 +719,7 @@ export async function resetSitePlanning(
  */
 export async function listSitesForEmail(email: string): Promise<SiteRow[]> {
   if (!storeConfigured()) return [];
-  const res = await db().query(
+  const res = await sql(
     `select s.* from sites s
      join tenants t on t.id = s.tenant_id
      where t.email = $1
@@ -668,7 +735,7 @@ export async function listRuns(siteId: string, limit = 5): Promise<{
   started_at: string; finished_at: string | null;
 }[]> {
   if (!storeConfigured()) return [];
-  const res = await db().query(
+  const res = await sql(
     `select id, phase, status, summary, started_at, finished_at
      from runs where site_id = $1 order by started_at desc limit $2`,
     [siteId, limit]
@@ -688,7 +755,7 @@ export type TenantAccount = {
 /** Looks up an email account. Returns null when the store is unconfigured. */
 export async function findTenantByEmail(email: string): Promise<TenantAccount | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(
+  const res = await sql(
     `select id, email, name, password_hash from tenants where email = $1`,
     [email.toLowerCase()]
   );
@@ -707,7 +774,7 @@ export async function createPasswordTenant(
   name: string | null
 ): Promise<TenantAccount | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(
+  const res = await sql(
     `insert into tenants (email, name, password_hash) values ($1, $2, $3)
      on conflict (email) do update set
        password_hash = excluded.password_hash,
@@ -725,7 +792,7 @@ export async function setTenantPlanByCustomer(
   status: "active" | "past_due" | "canceled"
 ): Promise<void> {
   if (!storeConfigured()) return;
-  await db().query(`update tenants set plan_status = $2 where stripe_customer_id = $1`, [
+  await sql(`update tenants set plan_status = $2 where stripe_customer_id = $1`, [
     stripeCustomerId,
     status,
   ]);
@@ -742,7 +809,7 @@ export async function setTenantPlanByCustomer(
  */
 export async function setAgentActive(email: string, active: boolean): Promise<number> {
   if (!storeConfigured()) return 0;
-  const res = await db().query(
+  const res = await sql(
     `update sites s set active = $2
      from tenants t
      where s.tenant_id = t.id and t.email = $1`,
@@ -753,7 +820,7 @@ export async function setAgentActive(email: string, active: boolean): Promise<nu
 
 /** Stores a recovered brand snapshot (see the orchestrator's self-heal). */
 export async function updateSiteBrand(siteId: string, brand: Record<string, unknown>): Promise<void> {
-  await db().query(`update sites set brand = $2 where id = $1`, [siteId, JSON.stringify(brand)]);
+  await sql(`update sites set brand = $2 where id = $1`, [siteId, JSON.stringify(brand)]);
 }
 
 /**
@@ -763,14 +830,14 @@ export async function updateSiteBrand(siteId: string, brand: Record<string, unkn
  * while the page was actually live a minute later.
  */
 export async function updateLiveStatus(pageId: string, liveStatus: string): Promise<void> {
-  await db().query(`update pages set live_status = $2 where id = $1`, [pageId, liveStatus]);
+  await sql(`update pages set live_status = $2 where id = $1`, [pageId, liveStatus]);
 }
 
 export async function markPagePublished(
   pageId: string,
   patch: { liveUrl?: string; liveStatus?: string; wpPageId?: number; githubSha?: string }
 ): Promise<void> {
-  await db().query(
+  await sql(
     `update pages set status = 'published', published_at = now(),
        live_url = coalesce($2, live_url), live_status = coalesce($3, live_status),
        wp_page_id = coalesce($4, wp_page_id), github_sha = coalesce($5, github_sha)
@@ -799,7 +866,7 @@ export type SupportMessage = {
  */
 export async function insertSupportMessage(m: SupportMessage): Promise<string | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(
+  const res = await sql(
     `insert into support_messages (name, email, subject, message, tenant_email)
      values ($1, $2, $3, $4, $5) returning id`,
     [m.name ?? null, m.email, m.subject ?? null, m.message, m.tenantEmail ?? null]
@@ -813,7 +880,7 @@ export async function markSupportDelivered(
   error?: string
 ): Promise<void> {
   if (!storeConfigured()) return;
-  await db().query(
+  await sql(
     `update support_messages set delivered = $2, delivery_error = $3 where id = $1`,
     [id, delivered, error ?? null]
   );
@@ -831,7 +898,7 @@ export async function getPageWithSiteOwned(
   page: { id: string; slug: string; folder: string; title: string; keyword: string; status: string; html: string | null; live_url: string | null };
   site: SiteRow;
 } | null> {
-  const res = await db().query(
+  const res = await sql(
     `select p.id, p.slug, p.folder, p.title, p.keyword, p.status, p.html, p.live_url,
             row_to_json(s.*) as site
      from pages p
@@ -851,7 +918,7 @@ export async function getTenantBillingByEmail(
   email: string
 ): Promise<{ planStatus: string; stripeCustomerId: string | null } | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(
+  const res = await sql(
     `select plan_status, stripe_customer_id from tenants where email = $1`,
     [email.toLowerCase()]
   );
@@ -871,7 +938,7 @@ export async function getTenantBillingByEmail(
  */
 export async function updatePageHtml(pageId: string, html: string): Promise<void> {
   if (!storeConfigured()) return;
-  await db().query(`update pages set html = $2 where id = $1`, [pageId, html]);
+  await sql(`update pages set html = $2 where id = $1`, [pageId, html]);
 }
 
 /* -------------------------------- Refresh -------------------------------- */
@@ -904,7 +971,7 @@ export async function getRefreshCandidate(
   olderThanDays: number
 ): Promise<RefreshCandidate | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(
+  const res = await sql(
     `select id, keyword, slug, folder, page_type, title, audit_score, live_url, wp_page_id,
             floor(extract(epoch from now() - coalesce(refreshed_at, published_at)) / 86400)::int as stale_days
      from pages
@@ -922,7 +989,7 @@ export async function getRefreshCandidate(
 /** How many published pages this site has — the library the agent maintains. */
 export async function countPublishedPages(siteId: string): Promise<number> {
   if (!storeConfigured()) return 0;
-  const res = await db().query(
+  const res = await sql(
     `select count(*)::int as n from pages where site_id = $1 and status = 'published'`,
     [siteId]
   );
@@ -934,7 +1001,7 @@ export async function markPageRefreshed(
   pageId: string,
   patch: { html: string; auditScore: number; auditGrade: string; auditReport: unknown; wordCount: number; liveStatus?: string }
 ): Promise<void> {
-  await db().query(
+  await sql(
     `update pages set html = $2, audit_score = $3, audit_grade = $4, audit_report = $5,
             word_count = $6, live_status = coalesce($7, live_status),
             refreshed_at = now(), refresh_count = refresh_count + 1
@@ -949,7 +1016,7 @@ export async function getPageAsRefreshCandidate(
   pageId: string
 ): Promise<RefreshCandidate | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(
+  const res = await sql(
     `select id, keyword, slug, folder, page_type, title, audit_score, live_url, wp_page_id,
             coalesce(floor(extract(epoch from now() - coalesce(refreshed_at, published_at)) / 86400)::int, 0) as stale_days
      from pages where id = $1 and site_id = $2 and status = 'published'`,
@@ -964,7 +1031,7 @@ export async function getTenantNotifyPrefs(
   email: string
 ): Promise<{ notifyPublishes: boolean } | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(`select notify_publishes from tenants where email = $1`, [
+  const res = await sql(`select notify_publishes from tenants where email = $1`, [
     email.toLowerCase(),
   ]);
   const row = res.rows[0];
@@ -973,7 +1040,7 @@ export async function getTenantNotifyPrefs(
 
 export async function setTenantNotifyPrefs(email: string, notifyPublishes: boolean): Promise<void> {
   if (!storeConfigured()) return;
-  await db().query(`update tenants set notify_publishes = $2 where email = $1`, [
+  await sql(`update tenants set notify_publishes = $2 where email = $1`, [
     email.toLowerCase(),
     notifyPublishes,
   ]);
@@ -987,7 +1054,7 @@ export async function recordNotification(
   error?: string | null
 ): Promise<void> {
   if (!storeConfigured()) return;
-  await db().query(
+  await sql(
     `insert into notifications (tenant_email, kind, delivered, error) values ($1, $2, $3, $4)`,
     [email.toLowerCase(), kind, delivered, error ?? null]
   );
@@ -996,7 +1063,7 @@ export async function recordNotification(
 /** The tenant email that owns a site — the address customer notices go to. */
 export async function getSiteOwnerEmail(siteId: string): Promise<string | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(
+  const res = await sql(
     `select t.email from sites s join tenants t on t.id = s.tenant_id where s.id = $1`,
     [siteId]
   );
@@ -1006,13 +1073,13 @@ export async function getSiteOwnerEmail(siteId: string): Promise<string | null> 
 /** The tenant behind a Stripe customer id, for billing notices. */
 export async function getTenantEmailByCustomer(customerId: string): Promise<string | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(`select email from tenants where stripe_customer_id = $1`, [customerId]);
+  const res = await sql(`select email from tenants where stripe_customer_id = $1`, [customerId]);
   return (res.rows[0]?.email as string) ?? null;
 }
 
 /** The WordPress page id for a stored page, so a rewrite updates in place. */
 export async function wpPageIdFor(pageId: string): Promise<number | null> {
   if (!storeConfigured()) return null;
-  const res = await db().query(`select wp_page_id from pages where id = $1`, [pageId]);
+  const res = await sql(`select wp_page_id from pages where id = $1`, [pageId]);
   return (res.rows[0]?.wp_page_id as number) ?? null;
 }

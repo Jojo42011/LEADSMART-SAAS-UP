@@ -89,10 +89,36 @@ export async function GET(req: NextRequest) {
     );
     return NextResponse.json({ ok: true, engine: true, sites: detailed });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, engine: true, error: e instanceof Error ? e.message : "could not read pages" },
-      { status: 500 }
-    );
+    // Degrade to the site list rather than to nothing. A read that fails
+    // partway used to return zero sites, which the dashboard cannot tell
+    // apart from "this account has no sites" — so a broken pages query
+    // also removed the agent stop/resume control and the whole billing
+    // context. The sites themselves come from a different, simpler query;
+    // if that still works, the owner keeps their controls and sees an
+    // honest error about the part that did not load.
+    const error = e instanceof Error ? e.message : "could not read pages";
+    try {
+      const sites = await listSitesForEmail(auth.user.email);
+      return NextResponse.json({
+        ok: false,
+        engine: true,
+        error,
+        degraded: true,
+        sites: sites.map((site) => ({
+          siteId: site.id,
+          url: site.url,
+          platform: site.platform,
+          cadence: site.cadence,
+          publishMode: site.publish_mode,
+          active: site.active,
+          lastRunAt: site.last_run_at,
+          pages: [],
+          runs: [],
+        })),
+      });
+    } catch {
+      return NextResponse.json({ ok: false, engine: true, error }, { status: 500 });
+    }
   }
 }
 

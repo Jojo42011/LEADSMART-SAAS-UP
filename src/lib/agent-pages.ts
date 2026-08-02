@@ -84,6 +84,8 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
       .then((r) => r.json())
       .then((j: { ok?: boolean; engine?: boolean; sites?: AgentSite[]; error?: string }) => {
         if (cancelled) return;
+        // Sites can arrive alongside an error: a failed pages read still
+        // returns the site list so the agent controls survive it.
         setState({
           loading: false,
           refreshing: false,

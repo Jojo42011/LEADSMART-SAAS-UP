@@ -17,11 +17,12 @@ import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
 import { useAgentPages, allPages, type AgentPage } from "@/lib/agent-pages";
 import { Billing } from "./Billing";
+import { ContactForm } from "../support/ContactForm";
 import { Analytics } from "./Analytics";
 
 // Billing is a Tab but not a navItem: it is entered through the Plan card
 // (and the mobile switcher), not the section list.
-type Tab = "Overview" | "Content" | "Analytics" | "Keywords" | "Competitors" | "Settings" | "Billing";
+type Tab = "Overview" | "Content" | "Analytics" | "Keywords" | "Competitors" | "Settings" | "Billing" | "Support";
 
 const navItems: { label: Tab; icon: React.ReactNode }[] = [
   {
@@ -193,9 +194,20 @@ export function Dashboard() {
               public site, which is where people already look for it. Two
               controls doing the same job made the nav read as a list of
               sections with one item that wasn't one. */}
-          <Link
-            href="/support"
-            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] text-muted transition-colors hover:bg-paper-warm hover:text-ink"
+          {/* A tab, not a link to /support. Sending a signed-in owner to a
+              standalone page stripped every other tab from the screen, and
+              the only way back was the public site — which for anyone whose
+              session had lapsed meant signing in again just to return to
+              their dashboard. The public page still exists for people who
+              are not signed in. */}
+          <button
+            onClick={() => setTab("Support")}
+            aria-current={tab === "Support" ? "page" : undefined}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13.5px] transition-colors ${
+              tab === "Support"
+                ? "bg-paper-warm font-medium text-ink"
+                : "text-muted hover:bg-paper-warm hover:text-ink"
+            }`}
           >
             <span aria-hidden="true" className="h-4.5 w-4.5 [&>svg]:h-full [&>svg]:w-full">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -207,7 +219,7 @@ export function Dashboard() {
               </svg>
             </span>
             Support
-          </Link>
+          </button>
         </nav>
         <button
           type="button"
@@ -240,10 +252,6 @@ export function Dashboard() {
               onChange={(e) => {
                 // Support is a page, not a tab, so it navigates rather
                 // than switching sections.
-                if (e.target.value === "__support") {
-                  window.location.href = "/support";
-                  return;
-                }
                 setTab(e.target.value as Tab);
               }}
               className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-[13px] md:hidden"
@@ -251,8 +259,8 @@ export function Dashboard() {
               {navItems.map((item) => (
                 <option key={item.label}>{item.label}</option>
               ))}
-              <option value="__support">Support</option>
               <option value="Billing">Billing</option>
+              <option value="Support">Support</option>
             </select>
           </div>
         </header>
@@ -280,6 +288,7 @@ export function Dashboard() {
               </div>
             )}
             {tab === "Billing" && <Billing />}
+            {tab === "Support" && <SupportPanel />}
             {tab === "Settings" && (
               <Settings data={data} update={update} onApplied={() => setIntel(loadIntel())} />
             )}
@@ -1821,5 +1830,56 @@ function AgentSwitch() {
         {busy ? "…" : paused ? "Resume agent" : "Stop agent"}
       </button>
     </span>
+  );
+}
+
+/**
+ * Support, inside the dashboard.
+ *
+ * Reuses the same ContactForm the public /support page renders, so there
+ * is one contact form in the product rather than two that drift. The
+ * public page stays for people who cannot sign in — which is exactly who
+ * needs it most — while a signed-in owner never has to leave their
+ * dashboard, and never has to sign back in to return to it.
+ */
+function SupportPanel() {
+  const answers = [
+    {
+      q: "A page the agent published looks wrong",
+      a: "Paste the page URL in your message. Every page carries its audit score and the run that produced it, so we can trace exactly what was generated and why it passed the gate.",
+    },
+    {
+      q: "The agent has stopped producing pages",
+      a: "Check the agent switch at the top of this page first — if it reads Paused, resume it. The Analytics tab shows the last cycle and when the next one is due.",
+    },
+    {
+      q: "Billing, plan changes, or cancelling",
+      a: "The Plan card in the sidebar opens billing, where you can change your card, cancel, or resume. Write in if anything there does not do what you expect.",
+    },
+  ];
+  return (
+    <div className="grid gap-5">
+      <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+        <h2 className="text-[15px] font-medium">Talk to us</h2>
+        <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">
+          Questions about your account, your agent, or a page it published — send them
+          here and they reach a person, usually within one business day.
+        </p>
+        <div className="mt-5">
+          <ContactForm inbox="toolascent@gmail.com" />
+        </div>
+      </div>
+      <div className="rounded-2xl border border-line bg-white p-5 sm:p-6">
+        <h2 className="text-[15px] font-medium">Before you write in</h2>
+        <ul className="mt-4 grid gap-3">
+          {answers.map((item) => (
+            <li key={item.q} className="rounded-xl border border-line p-3.5">
+              <p className="text-[13.5px] font-medium">{item.q}</p>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-ink/70">{item.a}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
   );
 }
