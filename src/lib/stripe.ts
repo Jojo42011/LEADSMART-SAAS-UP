@@ -382,3 +382,33 @@ export async function setSubscriptionSites(
     return { error: e instanceof Error ? e.message : "stripe unreachable" };
   }
 }
+
+/**
+ * End a subscription now rather than at the end of the period.
+ *
+ * Used only by account deletion. Everywhere else cancellation is
+ * `cancel_at_period_end`, because a customer who cancels has paid for the
+ * rest of the month and should keep it. Deletion is different: the account
+ * is going away, so leaving a live subscription attached to it would keep
+ * charging a card for a service that no longer exists.
+ */
+export async function cancelSubscriptionNow(
+  subscriptionId: string
+): Promise<{ ok: true } | { error: string }> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return { error: "not_configured" };
+  try {
+    const res = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: { message?: string } };
+      return { error: json.error?.message || `stripe error ${res.status}` };
+    }
+    return { ok: true };
+  } catch {
+    return { error: "stripe unreachable" };
+  }
+}

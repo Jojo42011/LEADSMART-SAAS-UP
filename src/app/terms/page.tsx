@@ -48,7 +48,7 @@ const sections = [
   {
     heading: "Ending the agreement",
     items: [
-      "You can cancel or delete your account at any time from your dashboard.",
+      "You can cancel from the Plan panel, or delete your account outright from Settings, at any time. Deletion is immediate, removes your stored data, and cancels the subscription with it.",
       "We may suspend or end an account that breaches the acceptable-use section, that charges back a legitimate payment, or where required by law. Where circumstances allow we will give notice first.",
       "On termination, pages already published to your own site remain yours and stay live. You can request an export or deletion of your account data as described in the Privacy Policy.",
     ],

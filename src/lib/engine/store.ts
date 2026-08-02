@@ -1364,3 +1364,123 @@ export async function setSiteAllowanceByCustomer(
     Math.max(1, Math.floor(allowance) || 1),
   ]);
 }
+
+/**
+ * Erase an account and everything belonging to it.
+ *
+ * The privacy policy promises this and the terms say it can be done from
+ * the dashboard, so it has to be real rather than a support ticket. It is
+ * also the one operation in the product with no undo, which is why it
+ * reports what it removed instead of returning void: "we deleted your
+ * account" is a claim, and the caller should be able to show the counts
+ * behind it.
+ *
+ * Most tables hang off tenants or sites with `on delete cascade`, so
+ * deleting the tenant row takes sites, connections, runs, keywords,
+ * keyword_history, competitors and pages with it. Two tables do NOT:
+ * notifications and support_messages key off the email as plain text
+ * rather than a foreign key, so a cascade leaves rows behind that still
+ * name the person. Those are deleted explicitly — a "deleted" account
+ * that leaves the email address in two tables has not been deleted.
+ *
+ * Published pages on the customer's own website are deliberately NOT
+ * touched. They are the customer's property and the policy says so; a
+ * deletion request is about our records, not about vandalising a site we
+ * were paid to build.
+ */
+export type AccountDeletion = {
+  tenants: number;
+  sites: number;
+  pages: number;
+  notifications: number;
+  supportMessages: number;
+};
+
+export async function deleteAccount(email: string): Promise<AccountDeletion> {
+  if (!storeConfigured()) {
+    return { tenants: 0, sites: 0, pages: 0, notifications: 0, supportMessages: 0 };
+  }
+  const key = email.trim().toLowerCase();
+
+  // Counted before the delete: afterwards there is nothing left to count,
+  // and the numbers are what the confirmation screen reports back.
+  const counts = await sql(
+    `select
+       (select count(*) from sites s join tenants t on t.id = s.tenant_id where lower(t.email) = $1) as sites,
+       (select count(*) from pages p
+          join sites s on s.id = p.site_id
+          join tenants t on t.id = s.tenant_id
+         where lower(t.email) = $1) as pages`,
+    [key]
+  );
+
+  const notifications = await sql(`delete from notifications where lower(tenant_email) = $1`, [key]);
+  const support = await sql(
+    `delete from support_messages where lower(tenant_email) = $1 or lower(email) = $1`,
+    [key]
+  );
+  // Rate-limit counters are keyed by an opaque string that embeds the
+  // identifier, so they are cleared by prefix rather than by equality.
+  await sql(`delete from rate_limits where key like $1`, [`%${key}%`]);
+
+  const tenant = await sql(`delete from tenants where lower(email) = $1`, [key]);
+
+  return {
+    tenants: tenant.rowCount ?? 0,
+    sites: Number(counts.rows[0]?.sites ?? 0),
+    pages: Number(counts.rows[0]?.pages ?? 0),
+    notifications: notifications.rowCount ?? 0,
+    supportMessages: support.rowCount ?? 0,
+  };
+}
+
+/**
+ * Drop the stored credentials for one connected service.
+ *
+ * The privacy policy tells customers they can disconnect Google, GitHub
+ * or Search Console from the dashboard and that doing so revokes our
+ * stored token. Google's OAuth reviewers check that claim, and it was not
+ * true until this existed.
+ *
+ * Scoped through the tenant join so an id from another account clears
+ * nothing, and returns whether a row actually changed so the caller can
+ * distinguish "disconnected" from "there was nothing connected".
+ */
+export type ConnectedService = "wordpress" | "github" | "gsc";
+
+export async function disconnectService(
+  email: string,
+  siteId: string,
+  service: ConnectedService
+): Promise<boolean> {
+  if (!storeConfigured()) return false;
+  const columns: Record<ConnectedService, string> = {
+    wordpress: "wp_user = null, wp_app_password = null",
+    github: "github_token = null, github_repo = null, github_branch = null",
+    gsc: "gsc_refresh_token = null",
+  };
+  const res = await sql(
+    `update connections c
+        set ${columns[service]}, updated_at = now()
+      from sites s
+      join tenants t on t.id = s.tenant_id
+     where c.site_id = s.id
+       and s.id = $2
+       and lower(t.email) = $1`,
+    [email.trim().toLowerCase(), siteId]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+/** The stored Google refresh token, so it can be revoked at Google too. */
+export async function getGscRefreshToken(email: string, siteId: string): Promise<string | null> {
+  if (!storeConfigured()) return null;
+  const res = await sql(
+    `select c.gsc_refresh_token from connections c
+      join sites s on s.id = c.site_id
+      join tenants t on t.id = s.tenant_id
+     where s.id = $2 and lower(t.email) = $1`,
+    [email.trim().toLowerCase(), siteId]
+  );
+  return (res.rows[0]?.gsc_refresh_token as string | null) ?? null;
+}

@@ -104,8 +104,8 @@ const sections = [
   {
     heading: "Your choices",
     items: [
-      "You can disconnect Google, GitHub, or Search Console access at any time from your dashboard; this revokes our stored token.",
-      "You can request deletion of your account and associated data by contacting us (see below). Pages already published to your live site are yours and are not affected by account deletion.",
+      "You can disconnect WordPress, GitHub or Search Console at any time from Settings in your dashboard. For Search Console this revokes the token at Google as well as deleting it here.",
+      "You can delete your account and everything stored with it from Settings in your dashboard. It is immediate and cannot be undone; your subscription is cancelled at the same time. Pages already published to your live site are yours and are not affected.",
       "You can cancel your subscription at any time; published pages remain on your site.",
     ],
   },

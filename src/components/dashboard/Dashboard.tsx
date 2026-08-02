@@ -14,6 +14,7 @@ import {
 import { buildPlan, type PageDraft } from "@/lib/plan";
 import { PRICE_PER_SITE, BUNDLE_SITES, BUNDLE_PRICE } from "@/lib/pricing";
 import { SiteSwitcher } from "./SiteSwitcher";
+import { Connections } from "./Connections";
 import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
@@ -315,7 +316,13 @@ export function Dashboard() {
             {tab === "Billing" && <Billing />}
             {tab === "Support" && <SupportPanel />}
             {tab === "Settings" && (
-              <Settings data={data} update={update} onApplied={() => setIntel(loadIntel())} />
+              <div className="grid gap-5">
+                <Settings data={data} update={update} onApplied={() => setIntel(loadIntel())} />
+                {/* Below the settings form rather than beside it: these are
+                    the destructive controls, and they should be somewhere
+                    you arrive at deliberately. */}
+                <Connections />
+              </div>
             )}
           </motion.div>
         </main>
