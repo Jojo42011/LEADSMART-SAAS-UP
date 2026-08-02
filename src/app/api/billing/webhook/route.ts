@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { verifyStripeSignature } from "@/lib/stripe";
-import { setTenantPlanByEmail, setTenantPlanByCustomer, getTenantEmailByCustomer } from "@/lib/engine/store";
+import {
+  setTenantPlanByEmail,
+  setTenantPlanByCustomer,
+  getTenantEmailByCustomer,
+  setSiteAllowance,
+} from "@/lib/engine/store";
 import { notifyPaymentFailed, notifyAgentSuspended, notifyAgentResumed } from "@/lib/engine/notify";
 import { planStatusFromStripe, entitlementFor } from "@/lib/engine/entitlement";
 
@@ -64,6 +69,10 @@ export async function POST(req: Request) {
         const email = obj.customer_details?.email || obj.customer_email || obj.metadata?.email;
         if (email) {
           await setTenantPlanByEmail(email, "active", typeof obj.customer === "string" ? obj.customer : undefined);
+          // The seat count comes from checkout metadata, which is the only
+          // place at this point that knows how many websites were bought.
+          const bought = Number(obj.metadata?.sites);
+          if (Number.isFinite(bought) && bought > 0) await setSiteAllowance(email, bought);
         }
         break;
       }

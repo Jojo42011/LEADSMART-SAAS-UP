@@ -87,6 +87,10 @@ const SCHEMA_REPAIRS = [
   // is measured from here, so it must not be restamped by the repeated
   // webhooks Stripe sends during dunning — see setTenantPlan*.
   `alter table tenants add column if not exists plan_status_since timestamptz default now()`,
+  // Websites the tenant is paying for. Stored rather than derived from
+  // Stripe on every read, so onboarding does not fail when Stripe is slow;
+  // the webhook and reconciliation keep it in step.
+  `alter table tenants add column if not exists site_allowance int not null default 1`,
   `create table if not exists support_messages (
      id uuid primary key default gen_random_uuid(),
      name text, email text not null, subject text, message text not null,
@@ -1314,4 +1318,49 @@ export async function listBillableTenants(
     stripeCustomerId: r.stripe_customer_id as string,
     planStatus: r.plan_status as string,
   }));
+}
+
+/* -------------------------------- Seats ---------------------------------- */
+
+/**
+ * How many websites a tenant is paying for, and how many they have used.
+ *
+ * site_allowance is stored rather than derived from Stripe on every read:
+ * onboarding needs it before it can provision, and blocking that on a
+ * third-party API call would make signing up fail whenever Stripe is slow.
+ * The webhook and the reconciliation keep it current, and Stripe remains
+ * the authority whenever the two disagree.
+ */
+export async function siteAllowanceFor(
+  email: string
+): Promise<{ allowance: number; used: number }> {
+  if (!storeConfigured()) return { allowance: 99, used: 0 };
+  const res = await sql(
+    `select coalesce(t.site_allowance, 1) as allowance,
+            (select count(*)::int from sites s where s.tenant_id = t.id) as used
+     from tenants t where t.email = $1`,
+    [email.toLowerCase()]
+  );
+  const row = res.rows[0];
+  if (!row) return { allowance: 1, used: 0 };
+  return { allowance: Number(row.allowance), used: Number(row.used) };
+}
+
+export async function setSiteAllowance(email: string, allowance: number): Promise<void> {
+  if (!storeConfigured()) return;
+  await sql(`update tenants set site_allowance = $2 where email = $1`, [
+    email.toLowerCase(),
+    Math.max(1, Math.floor(allowance) || 1),
+  ]);
+}
+
+export async function setSiteAllowanceByCustomer(
+  stripeCustomerId: string,
+  allowance: number
+): Promise<void> {
+  if (!storeConfigured()) return;
+  await sql(`update tenants set site_allowance = $2 where stripe_customer_id = $1`, [
+    stripeCustomerId,
+    Math.max(1, Math.floor(allowance) || 1),
+  ]);
 }

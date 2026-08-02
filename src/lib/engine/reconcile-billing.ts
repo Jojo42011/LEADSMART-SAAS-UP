@@ -1,4 +1,4 @@
-import { listBillableTenants, setTenantPlanByCustomer } from "./store";
+import { listBillableTenants, setTenantPlanByCustomer, setSiteAllowanceByCustomer } from "./store";
 import { getSubscriptionForCustomer, stripeConfigured } from "../stripe";
 import { planStatusFromStripe, entitlementFor } from "./entitlement";
 import { notifyAgentSuspended, notifyAgentResumed, notifyTrialEnding } from "./notify";
@@ -60,6 +60,10 @@ export async function reconcileBilling(limit = RECONCILE_PER_RUN): Promise<Recon
         summary.errors += 1;
         continue;
       }
+
+      // Seats follow the subscription's real quantity, so a plan changed
+      // in the Stripe dashboard rather than through our UI still lands.
+      await setSiteAllowanceByCustomer(tenant.stripeCustomerId, sub.quantity || 1);
 
       const actual = planStatusFromStripe(sub.status);
       if (actual !== tenant.planStatus) {

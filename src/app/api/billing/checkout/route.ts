@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "@/lib/session";
 import { createCheckoutSession, stripeConfigured } from "@/lib/stripe";
-import { setTenantPlanByEmail, storeConfigured } from "@/lib/engine/store";
+import { setTenantPlanByEmail, setSiteAllowance, storeConfigured } from "@/lib/engine/store";
 
 /**
  * Real subscription checkout. GET reports whether Stripe is configured so
@@ -15,6 +15,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  let quantity = 1;
+  try {
+    const body = (await req.clone().json()) as { sites?: number };
+    if (body.sites) quantity = Math.max(1, Math.floor(body.sites));
+  } catch {
+    // default quantity
+  }
+
   if (!stripeConfigured()) {
     // Demo checkout still has to activate the plan. The engine only serves
     // tenants with plan_status 'active', and the sole writer of that status
@@ -27,20 +35,15 @@ export async function POST(req: NextRequest) {
     if (user && storeConfigured()) {
       try {
         await setTenantPlanByEmail(user.email, "active");
+        // Demo checkout still records the seats, so the add-a-website
+        // limit behaves the same way it will with Stripe connected.
+        await setSiteAllowance(user.email, quantity);
       } catch {
         // The client-side demo flow proceeds regardless; onboarding's
         // provisioning surfaces database problems with a real error.
       }
     }
     return NextResponse.json({ configured: false, demoActivated: Boolean(user && storeConfigured()) });
-  }
-
-  let quantity = 1;
-  try {
-    const body = (await req.json()) as { sites?: number };
-    if (body.sites) quantity = body.sites;
-  } catch {
-    // default quantity
   }
 
   const user = readSession(req);

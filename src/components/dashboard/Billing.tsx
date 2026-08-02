@@ -25,6 +25,9 @@ type Subscription = {
   paymentMethod: { brand: string; last4: string } | null;
 };
 
+type Seats = { allowance: number; used: number };
+type Quote = { sites: number; total: number; plan: "per-site" | "bundle"; savedVersusPerSite: number };
+
 type BillingState = {
   ok: boolean;
   stripe: boolean;
@@ -32,6 +35,10 @@ type BillingState = {
   planStatus: string;
   email: string;
   subscription: Subscription | null;
+  seats?: Seats;
+  quote?: Quote;
+  quoteLabel?: string;
+  upsell?: { worthIt: boolean; message: string };
   error?: string;
 };
 
@@ -82,7 +89,7 @@ export function Billing() {
     }).catch(() => setNotify({ ...notify, on: !next }));
   };
 
-  const act = async (action: "cancel" | "resume" | "portal") => {
+  const act = async (action: "cancel" | "resume" | "portal" | "addSite" | "removeSite") => {
     setBusy(action);
     setActionError(null);
     try {
@@ -175,11 +182,11 @@ export function Billing() {
           <div className="rounded-xl border border-line p-3.5">
             <dt className="label-mono text-muted">Price</dt>
             <dd className="mt-1 text-[17px] font-medium tracking-tight">
-              ${49 * (sub?.quantity ?? 1)}<span className="text-[12px] text-muted">/mo</span>
+              ${state.quote?.total ?? 49}<span className="text-[12px] text-muted">/mo</span>
             </dd>
-            <p className="mt-0.5 text-[11.5px] text-muted">
-              {sub?.quantity ?? 1} website{(sub?.quantity ?? 1) === 1 ? "" : "s"} × $49
-            </p>
+            {/* The wording comes from the pricing module, so the plan card
+                and the invoice describe the same purchase. */}
+            <p className="mt-0.5 text-[11.5px] text-muted">{state.quoteLabel ?? "1 website × $49"}</p>
           </div>
           <div className="rounded-xl border border-line p-3.5">
             <dt className="label-mono text-muted">{inTrial ? "Trial ends" : ending ? "Service ends" : "Renews"}</dt>
@@ -206,6 +213,77 @@ export function Billing() {
           </div>
         </dl>
       </div>
+
+      {/* Websites */}
+      {state.seats && (
+        <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-medium">Websites</h2>
+              <p className="mt-0.5 text-[12.5px] text-muted">
+                {state.seats.used} of {state.seats.allowance} connected
+                {state.seats.used < state.seats.allowance
+                  ? ` — ${state.seats.allowance - state.seats.used} ready to set up`
+                  : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => act("removeSite")}
+                disabled={busy !== null || state.seats.allowance <= 1 || state.seats.allowance <= state.seats.used}
+                title={
+                  state.seats.allowance <= state.seats.used
+                    ? "Disconnect a website in Settings before reducing the plan"
+                    : "Remove a website from the plan"
+                }
+                aria-label="Remove a website from the plan"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-line text-[15px] transition-colors hover:border-ink/40 disabled:opacity-40"
+              >
+                &minus;
+              </button>
+              <span className="w-6 text-center font-mono text-[15px]">{state.seats.allowance}</span>
+              <button
+                onClick={() => act("addSite")}
+                disabled={busy !== null}
+                aria-label="Add a website to the plan"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-line text-[15px] transition-colors hover:border-ink/40 disabled:opacity-40"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* The three-pack, surfaced where the decision is made rather
+              than only on the marketing page. Shown as a fact about what
+              it would cost, not as a nag. */}
+          {state.upsell?.worthIt && state.upsell.message && (
+            <p className="mt-4 rounded-xl border border-accent/40 bg-accent/[0.06] p-3.5 text-[12.5px] leading-relaxed text-ink">
+              {state.upsell.message}
+            </p>
+          )}
+          {state.quote?.plan === "bundle" && state.quote.savedVersusPerSite > 0 && (
+            <p className="mt-4 text-[12px] text-muted">
+              The three-pack saves you ${state.quote.savedVersusPerSite} a month against paying per website.
+            </p>
+          )}
+
+          {state.seats.used < state.seats.allowance && (
+            <a
+              href="/onboarding?add=1"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-medium text-on-ink transition-colors hover:bg-accent"
+            >
+              Set up your next website
+              <span aria-hidden="true">&rarr;</span>
+            </a>
+          )}
+
+          <p className="mt-4 text-[11.5px] leading-relaxed text-muted">
+            Each website gets its own agent, its own keyword plan and its own cadence.
+            Changes to the plan are prorated — adding one mid-month costs only the rest
+            of the month.
+          </p>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">

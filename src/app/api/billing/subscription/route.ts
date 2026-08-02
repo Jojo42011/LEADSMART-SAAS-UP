@@ -6,7 +6,10 @@ import {
   getSubscriptionForCustomer,
   setCancelAtPeriodEnd,
   createPortalSession,
+  setSubscriptionSites,
 } from "@/lib/stripe";
+import { siteAllowanceFor, setSiteAllowance } from "@/lib/engine/store";
+import { quoteFor, describeQuote, bundleUpsell } from "@/lib/pricing";
 
 /**
  * The signed-in owner's subscription, and the actions on it.
@@ -40,14 +43,32 @@ export async function GET(req: NextRequest) {
   if (!stripeConfigured() || !tenant?.stripeCustomerId) {
     // Demo activation or pre-checkout: there is no Stripe subscription to
     // read, and pretending otherwise would invent trial dates.
-    return NextResponse.json({ ...base, mode: tenant?.stripeCustomerId ? "stripe" : "demo", subscription: null });
+    const seats = await siteAllowanceFor(auth.user.email);
+    return NextResponse.json({
+      ...base,
+      mode: tenant?.stripeCustomerId ? "stripe" : "demo",
+      subscription: null,
+      seats,
+      quote: quoteFor(seats.allowance),
+      quoteLabel: describeQuote(quoteFor(seats.allowance)),
+      upsell: bundleUpsell(seats.allowance),
+    });
   }
 
   const sub = await getSubscriptionForCustomer(tenant.stripeCustomerId);
   if (sub && "error" in sub) {
     return NextResponse.json({ ...base, mode: "stripe", subscription: null, error: sub.error });
   }
-  return NextResponse.json({ ...base, mode: "stripe", subscription: sub });
+  const seats = await siteAllowanceFor(auth.user.email);
+  return NextResponse.json({
+    ...base,
+    mode: "stripe",
+    subscription: sub,
+    seats,
+    quote: quoteFor(seats.allowance),
+    quoteLabel: describeQuote(quoteFor(seats.allowance)),
+    upsell: bundleUpsell(seats.allowance),
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -74,10 +95,77 @@ export async function POST(req: NextRequest) {
       await setTenantPlanByEmail(auth.user.email, action === "cancel" ? "canceled" : "active");
       return NextResponse.json({ ok: true, mode: "demo" });
     }
+    if (action === "addSite" || action === "removeSite") {
+      // Seats move in demo mode too, so the add-a-website flow can be
+      // exercised end to end before Stripe is connected — otherwise the
+      // first time it runs would be against a paying customer.
+      const seats = await siteAllowanceFor(auth.user.email);
+      const target = action === "addSite" ? seats.allowance + 1 : seats.allowance - 1;
+      if (target < 1 || target < seats.used) {
+        return NextResponse.json(
+          { ok: false, error: `You have ${seats.used} websites connected. Remove one from Settings first.` },
+          { status: 409 }
+        );
+      }
+      await setSiteAllowance(auth.user.email, target);
+      return NextResponse.json({
+        ok: true,
+        mode: "demo",
+        seats: { allowance: target, used: seats.used },
+        quote: quoteFor(target),
+        quoteLabel: describeQuote(quoteFor(target)),
+      });
+    }
     return NextResponse.json(
       { ok: false, error: "Payment methods and invoices need Stripe, which is not set up on this deployment." },
       { status: 409 }
     );
+  }
+
+  if (action === "addSite" || action === "removeSite") {
+    const seats = await siteAllowanceFor(auth.user.email);
+    const target = action === "addSite" ? seats.allowance + 1 : seats.allowance - 1;
+
+    if (target < 1) {
+      return NextResponse.json(
+        { ok: false, error: "A subscription covers at least one website. Cancel it instead to stop entirely." },
+        { status: 409 }
+      );
+    }
+    // Removing a seat must not silently orphan a site the agent is still
+    // publishing to. The owner deletes the site first; the bill follows
+    // the sites, never the other way round.
+    if (target < seats.used) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `You have ${seats.used} websites connected. Remove one from Settings before reducing the plan.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    const sub = await getSubscriptionForCustomer(tenant.stripeCustomerId);
+    if (!sub || "error" in sub) {
+      return NextResponse.json(
+        { ok: false, error: sub && "error" in sub ? sub.error : "No subscription found for this account." },
+        { status: 404 }
+      );
+    }
+    const res = await setSubscriptionSites(sub.subscriptionId, target);
+    if ("error" in res) return NextResponse.json({ ok: false, error: res.error }, { status: 502 });
+
+    // Stripe accepted the change, so the local allowance follows now
+    // rather than waiting for the webhook — the owner is about to use the
+    // seat they just bought, and being told they have not paid for it
+    // would be absurd.
+    await setSiteAllowance(auth.user.email, target);
+    return NextResponse.json({
+      ok: true,
+      seats: { allowance: target, used: seats.used },
+      quote: quoteFor(target),
+      quoteLabel: describeQuote(quoteFor(target)),
+    });
   }
 
   if (action === "portal") {

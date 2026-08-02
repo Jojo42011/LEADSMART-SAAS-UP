@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readSession } from "@/lib/session";
-import { storeConfigured, provisionSite, resetSitePlanning } from "@/lib/engine/store";
+import {
+  storeConfigured,
+  provisionSite,
+  resetSitePlanning,
+  siteAllowanceFor,
+  listSitesForEmail,
+} from "@/lib/engine/store";
+import { quoteFor } from "@/lib/pricing";
 import { notifyWelcome } from "@/lib/engine/notify";
 import type { OnboardingData } from "@/lib/onboarding";
 
@@ -65,6 +72,32 @@ export async function POST(req: NextRequest) {
   const avgRaw = Number((data.market.avgSaleValue || "").replace(/[^0-9.]/g, ""));
 
   try {
+    // Seat check, but only for a site that does not exist yet. This route
+    // is also the Settings save path, so counting an update as a new site
+    // would lock an owner at their limit out of editing the sites they
+    // already pay for.
+    const existing = await listSitesForEmail(user.email).catch(() => []);
+    const isNewSite = !existing.some(
+      (site) => site.url.replace(/^https?:\/\//, "").replace(/\/$/, "") ===
+                data.website.url.replace(/^https?:\/\//, "").replace(/\/$/, "")
+    );
+    if (isNewSite) {
+      const seats = await siteAllowanceFor(user.email);
+      if (seats.used >= seats.allowance) {
+        const next = quoteFor(seats.used + 1);
+        return NextResponse.json(
+          {
+            ok: false,
+            stored: false,
+            error: `Your plan covers ${seats.allowance} website${seats.allowance === 1 ? "" : "s"} and you are using ${seats.used}. Add a website from the Plan panel to continue.`,
+            seats,
+            nextTotal: next.total,
+          },
+          { status: 402 }
+        );
+      }
+    }
+
     const result = await provisionSite({
       email: user.email,
       name: user.name,

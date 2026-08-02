@@ -4,7 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
-import { type OnboardingData, useOnboarding, loadOnboarding, saveOnboarding } from "@/lib/onboarding";
+import {
+  type OnboardingData,
+  useOnboarding,
+  loadOnboarding,
+  saveOnboarding,
+  clearOnboarding,
+  emptyOnboarding,
+} from "@/lib/onboarding";
 import { loadBilling } from "@/lib/billing";
 import { loadIntel, saveIntel, type SiteIngest } from "@/lib/intel";
 import { buildPlan } from "@/lib/plan";
@@ -48,6 +55,27 @@ export function Wizard() {
     }
 
     const params = new URLSearchParams(window.location.search);
+
+    // "Set up your next website" from the billing panel. Without this the
+    // wizard rehydrates the site already connected, and the owner would
+    // edit their existing site believing they were adding a second one —
+    // the saved step would even drop them halfway through it.
+    //
+    // Known limitation: this local buffer holds one site, so after adding a
+    // second the dashboard's Settings tab reflects the newest one. Every
+    // site itself lives server-side and keeps running; it is only this
+    // client-side copy that is single-slot. Clearing is not what causes
+    // that — the first keystroke in the wizard overwrites the buffer either
+    // way. A site switcher reading from /api/sites is the fix.
+    if (params.get("add") === "1") {
+      clearOnboarding();
+      window.sessionStorage.removeItem(STEP_KEY);
+      update({ ...emptyOnboarding });
+      setStep(0);
+      window.history.replaceState({}, "", "/onboarding");
+      return;
+    }
+
     const wpLogin = params.get("user_login");
     const wpPassword = params.get("password");
     const github = params.get("github");

@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { quoteFor, BUNDLE_SITES, BUNDLE_PRICE, PRICE_PER_SITE } from "./pricing";
 
 /**
  * Server side Stripe wrapper over the REST API — no SDK, matching the
@@ -14,7 +15,57 @@ export function stripeConfigured(): boolean {
   return Boolean(process.env.STRIPE_SECRET_KEY);
 }
 
-const UNIT_AMOUNT_CENTS = 4900; // $49 per website per month
+/**
+ * Builds the subscription's line items for a given number of websites.
+ *
+ * Two items rather than one, because the three-pack is a different unit
+ * of sale from an individual site: the pack is a flat $99 and everything
+ * beyond it is $49 each. Expressing that as a single averaged price would
+ * make the invoice unreadable and would drift the moment a site is added.
+ *
+ * A configured STRIPE_PRICE_ID still wins for the per-site line, so a real
+ * Price object created in the dashboard is used when one exists; the pack
+ * has its own optional STRIPE_BUNDLE_PRICE_ID for the same reason.
+ */
+function applyLineItems(params: URLSearchParams, sites: number): void {
+  const quote = quoteFor(sites);
+  let index = 0;
+
+  const perSitePrice = process.env.STRIPE_PRICE_ID;
+  const bundlePrice = process.env.STRIPE_BUNDLE_PRICE_ID;
+
+  if (quote.plan === "bundle") {
+    if (bundlePrice) {
+      params.set(`line_items[${index}][price]`, bundlePrice);
+    } else {
+      params.set(`line_items[${index}][price_data][currency]`, "usd");
+      params.set(`line_items[${index}][price_data][unit_amount]`, String(BUNDLE_PRICE * 100));
+      params.set(`line_items[${index}][price_data][recurring][interval]`, "month");
+      params.set(
+        `line_items[${index}][price_data][product_data][name]`,
+        `Ascent — ${BUNDLE_SITES} websites`
+      );
+    }
+    params.set(`line_items[${index}][quantity]`, "1");
+    index += 1;
+  }
+
+  const extras = quote.plan === "bundle" ? sites - BUNDLE_SITES : sites;
+  if (extras > 0) {
+    if (perSitePrice) {
+      params.set(`line_items[${index}][price]`, perSitePrice);
+    } else {
+      params.set(`line_items[${index}][price_data][currency]`, "usd");
+      params.set(`line_items[${index}][price_data][unit_amount]`, String(PRICE_PER_SITE * 100));
+      params.set(`line_items[${index}][price_data][recurring][interval]`, "month");
+      params.set(
+        `line_items[${index}][price_data][product_data][name]`,
+        "Ascent — autonomous SEO agent, per website"
+      );
+    }
+    params.set(`line_items[${index}][quantity]`, String(extras));
+  }
+}
 
 export async function createCheckoutSession(input: {
   origin: string;
@@ -29,27 +80,24 @@ export async function createCheckoutSession(input: {
   params.set("mode", "subscription");
   params.set("success_url", `${input.origin}/checkout?paid=1&session_id={CHECKOUT_SESSION_ID}`);
   params.set("cancel_url", `${input.origin}/checkout?canceled=1`);
-  params.set("line_items[0][quantity]", String(qty));
   if (input.email) params.set("customer_email", input.email);
   params.set("metadata[sites]", String(qty));
   // Free trial, card up front. STRIPE_TRIAL_DAYS=0 disables it. The card
   // is still collected at checkout so the trial converts by default; a
   // customer who cancels during the trial is never charged.
+  // The site count lives on the subscription, not just the checkout
+  // session. Item quantities cannot answer "how many websites" once the
+  // three-pack exists — the pack is one item of quantity one covering
+  // three sites — so reading it back from items would report a 3-site
+  // customer as having 1.
+  params.set("subscription_data[metadata][sites]", String(qty));
   const trialDays = Number(process.env.STRIPE_TRIAL_DAYS ?? 7);
   if (Number.isFinite(trialDays) && trialDays > 0) {
     params.set("subscription_data[trial_period_days]", String(Math.floor(trialDays)));
   }
   if (input.email) params.set("metadata[email]", input.email);
 
-  const priceId = process.env.STRIPE_PRICE_ID;
-  if (priceId) {
-    params.set("line_items[0][price]", priceId);
-  } else {
-    params.set("line_items[0][price_data][currency]", "usd");
-    params.set("line_items[0][price_data][unit_amount]", String(UNIT_AMOUNT_CENTS));
-    params.set("line_items[0][price_data][recurring][interval]", "month");
-    params.set("line_items[0][price_data][product_data][name]", "Ascent — autonomous SEO agent, per website");
-  }
+  applyLineItems(params, qty);
 
   try {
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
@@ -147,6 +195,7 @@ export async function getSubscriptionForCustomer(
       data?: Array<{
         id: string;
         status: string;
+        metadata?: Record<string, string> | null;
         trial_end: number | null;
         cancel_at_period_end: boolean;
         current_period_end: number | null;
@@ -170,7 +219,10 @@ export async function getSubscriptionForCustomer(
       cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
       currentPeriodEnd: sub.current_period_end ?? null,
       subscriptionId: sub.id,
-      quantity: sub.items?.data?.[0]?.quantity ?? sub.quantity ?? 1,
+      // Metadata first — see the note where it is written. Falling back to
+      // summing item quantities is right for a pre-bundle subscription,
+      // where every item was one site.
+      quantity: siteCountOf(sub),
       paymentMethod: pm?.last4 ? { brand: pm.brand || "card", last4: pm.last4 } : null,
     };
   } catch {
@@ -185,6 +237,25 @@ export async function getSubscriptionForCustomer(
  * means they are never charged at all. Resume is the same flag back off,
  * possible right up to the period's last second.
  */
+/**
+ * How many websites a subscription covers.
+ *
+ * The metadata written at checkout is authoritative. The fallback sums
+ * item quantities, which is correct only for subscriptions created before
+ * the three-pack existed — with a pack the arithmetic undercounts, which
+ * is exactly why the metadata is written.
+ */
+function siteCountOf(sub: {
+  metadata?: Record<string, string> | null;
+  quantity?: number;
+  items?: { data?: Array<{ quantity?: number }> };
+}): number {
+  const declared = Number(sub.metadata?.sites);
+  if (Number.isFinite(declared) && declared > 0) return Math.floor(declared);
+  const summed = (sub.items?.data ?? []).reduce((n, item) => n + (item.quantity ?? 0), 0);
+  return summed > 0 ? summed : sub.quantity ?? 1;
+}
+
 export async function setCancelAtPeriodEnd(
   subscriptionId: string,
   cancel: boolean
@@ -235,5 +306,79 @@ export async function createPortalSession(input: {
     return { url: json.url };
   } catch {
     return { error: "stripe unreachable" };
+  }
+}
+
+/**
+ * Changes how many websites a subscription covers.
+ *
+ * Stripe is told to prorate, so a customer adding a site mid-month pays
+ * only the remainder of that period rather than a second full month —
+ * and one removing a site is credited. Charging a full month for four
+ * days of service is the kind of thing that gets noticed once and
+ * remembered permanently.
+ *
+ * The whole item set is replaced rather than nudged, because moving
+ * across the three-pack boundary changes which items exist at all: a
+ * second site is one per-site line, a third is a pack line and no
+ * per-site line. Incrementing a quantity could not express that.
+ */
+export async function setSubscriptionSites(
+  subscriptionId: string,
+  sites: number
+): Promise<{ ok: true; total: number } | { error: string }> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return { error: "not_configured" };
+  const target = Math.min(20, Math.max(1, Math.floor(sites) || 1));
+
+  try {
+    // Existing items have to be deleted explicitly; Stripe does not
+    // remove what is absent from the update.
+    const current = await fetch(
+      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15000) }
+    );
+    const sub = (await current.json()) as {
+      items?: { data?: { id: string }[] };
+      error?: { message?: string };
+    };
+    if (!current.ok) return { error: sub.error?.message || `stripe error ${current.status}` };
+
+    const params = new URLSearchParams();
+    params.set("proration_behavior", "create_prorations");
+    // Kept in step with the items, since this is what the seat count is
+    // read back from.
+    params.set("metadata[sites]", String(target));
+    let index = 0;
+    for (const item of sub.items?.data ?? []) {
+      params.set(`items[${index}][id]`, item.id);
+      params.set(`items[${index}][deleted]`, "true");
+      index += 1;
+    }
+
+    // New items, offset past the deletions.
+    const fresh = new URLSearchParams();
+    applyLineItems(fresh, target);
+    for (const [rawKey, value] of fresh.entries()) {
+      const shifted = rawKey.replace(/^line_items\[(\d+)\]/, (_m, n) => `items[${index + Number(n)}]`);
+      params.set(shifted, value);
+    }
+
+    const res = await fetch(
+      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+        signal: AbortSignal.timeout(20000),
+      }
+    );
+    if (!res.ok) {
+      const json = (await res.json()) as { error?: { message?: string } };
+      return { error: json.error?.message || `stripe error ${res.status}` };
+    }
+    return { ok: true, total: quoteFor(target).total };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "stripe unreachable" };
   }
 }
