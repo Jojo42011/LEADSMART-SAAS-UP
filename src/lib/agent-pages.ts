@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useActiveSiteId } from "./active-site";
 
 /**
  * Reads what the agent has actually written from /api/pages.
@@ -44,6 +45,8 @@ export type AgentRun = {
 export type AgentSite = {
   siteId: string;
   url: string;
+  /** What the owner calls this site, for the switcher. */
+  businessName: string;
   platform: string;
   cadence: string;
   publishMode: string;
@@ -63,19 +66,48 @@ export type Entitlement = {
 
 export type AgentState = {
   loading: boolean;
+  /**
+   * Every site on the account, unscoped — the switcher's list.
+   *
+   * Kept separate from `sites` so the two questions stay distinct: "what
+   * am I looking at" and "what could I look at". Panels that reason about
+   * the current site must never accidentally aggregate across all of them.
+   */
+  allSites: AgentSite[];
+  /** The site the dashboard is scoped to, or null before anything loads. */
+  activeSite: AgentSite | null;
+  /** Switch the dashboard to another of the owner's sites. */
+  selectSite: (siteId: string) => void;
   /** True during a manual refresh, so the button can say so — a refetch
    * with no visible acknowledgement reads as a broken button. */
   refreshing: boolean;
   /** False when DATABASE_URL is unset: no engine, so the preview is all there is. */
   engine: boolean;
+  /**
+   * The active site only, as a one-element list.
+   *
+   * Deliberately still an array: every consumer already maps over it, and
+   * scoping here means a panel cannot forget to. Before the switcher this
+   * held all sites and the dashboard silently summed them, so a two-site
+   * owner saw one blended set of numbers belonging to neither site.
+   */
   sites: AgentSite[];
   /** Why the agent may or may not work, from billing. Null without a store. */
   entitlement: Entitlement | null;
   error: string | null;
 };
 
+type Fetched = {
+  loading: boolean;
+  refreshing: boolean;
+  engine: boolean;
+  sites: AgentSite[];
+  entitlement: Entitlement | null;
+  error: string | null;
+};
+
 export function useAgentPages(): AgentState & { refresh: () => void } {
-  const [state, setState] = useState<AgentState>({
+  const [state, setState] = useState<Fetched>({
     loading: true,
     refreshing: false,
     engine: false,
@@ -84,6 +116,7 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
     error: null,
   });
   const [tick, setTick] = useState(0);
+  const [activeSiteId, setActiveSiteId] = useActiveSiteId();
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +154,21 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
     setTick((t) => t + 1);
   };
 
-  return { ...state, refresh };
+  // Resolve the stored id against what actually came back. A stale id —
+  // a site deleted elsewhere, or left over from another account on the
+  // same browser — must not blank the dashboard, so an unmatched id falls
+  // back to the first site rather than to nothing.
+  const activeSite =
+    state.sites.find((s) => s.siteId === activeSiteId) ?? state.sites[0] ?? null;
+
+  return {
+    ...state,
+    allSites: state.sites,
+    activeSite,
+    sites: activeSite ? [activeSite] : [],
+    selectSite: setActiveSiteId,
+    refresh,
+  };
 }
 
 /** Every page across all of the owner's sites, newest first. */

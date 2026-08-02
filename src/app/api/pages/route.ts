@@ -77,6 +77,11 @@ export async function GET(req: NextRequest) {
         return {
           siteId: site.id,
           url: site.url,
+          // Carried so the site switcher can label each site the way its
+          // owner thinks of it. Without it the switcher could only list
+          // hostnames, which is how two sites for the same business end up
+          // reading as interchangeable strings.
+          businessName: site.business_name,
           platform: site.platform,
           cadence: site.cadence,
           publishMode: site.publish_mode,
@@ -112,6 +117,10 @@ export async function GET(req: NextRequest) {
         sites: sites.map((site) => ({
           siteId: site.id,
           url: site.url,
+          // Also on the degraded path: losing the pages query must not
+          // strand the owner on whichever site the switcher can no longer
+          // name.
+          businessName: site.business_name,
           platform: site.platform,
           cadence: site.cadence,
           publishMode: site.publish_mode,

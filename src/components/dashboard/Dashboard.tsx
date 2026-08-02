@@ -13,6 +13,7 @@ import {
 } from "@/lib/onboarding";
 import { buildPlan, type PageDraft } from "@/lib/plan";
 import { PRICE_PER_SITE, BUNDLE_SITES, BUNDLE_PRICE } from "@/lib/pricing";
+import { SiteSwitcher } from "./SiteSwitcher";
 import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
@@ -165,8 +166,14 @@ export function Dashboard() {
 
   const plan = useMemo(() => buildPlan(data), [data]);
 
-  const siteName = data.business.name || "Your site";
-  const siteUrl = data.website.url?.replace(/^https?:\/\//, "") || "";
+  // The header names whichever site the switcher is pointed at. The local
+  // onboarding buffer only ever holds one site, so on a multi-site account
+  // it is the wrong answer for every site but the last one set up — the
+  // server row is the authority once the engine knows about the site.
+  const { allSites, activeSite, selectSite } = useAgentPages();
+  const siteName = activeSite?.businessName || data.business.name || "Your site";
+  const siteUrl =
+    (activeSite?.url || data.website.url || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   return (
     <div className="flex min-h-screen bg-paper-warm">
@@ -250,7 +257,14 @@ export function Dashboard() {
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 border-b border-line bg-paper px-4 py-4 sm:px-6">
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[16px] font-medium tracking-tight">{siteName}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-[16px] font-medium tracking-tight">{siteName}</h1>
+              <SiteSwitcher
+                sites={allSites}
+                activeSiteId={activeSite?.siteId ?? null}
+                onSelect={selectSite}
+              />
+            </div>
             {siteUrl && <p className="truncate text-[12.5px] text-muted">{siteUrl}</p>}
           </div>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
