@@ -286,7 +286,18 @@ export function buildPlan(data: OnboardingData): Plan {
   for (const service of services) {
     for (const location of locations) push(`${service} ${location}`, "Local");
     push(`${service} near me`, "Near me");
-    push(`best ${service}`, "Service");
+    // Deliberately NOT `best ${service}`. Google's spam policies were
+    // extended on 15 May 2026 to cover manipulation of AI Overviews and AI
+    // Mode, naming biased listicles and "recommendation poisoning" —
+    // content published to steer an AI answer toward recommending its own
+    // author — with demotion or removal as the penalty. A "Best Pool
+    // Installation" page on the pool installer's own domain is that claim
+    // in its purest form, and it also contradicted our own advice: the
+    // citation-platform mapping tells the owner that "best <service>" is
+    // won by being cited on third-party roundups, not by self-publishing
+    // one. The buyer's-guide query captures the same demand honestly —
+    // criteria the reader can check us against rather than a self-award.
+    push(`what to look for in a ${service} company`, "Question");
     // Question intent: AI answer engines fan a head query out into questions
     // (cost, how-to-choose), and answer-first pages for these are what get
     // quoted verbatim in AI answers.
