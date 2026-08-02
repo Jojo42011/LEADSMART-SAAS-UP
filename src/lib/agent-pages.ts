@@ -77,9 +77,6 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
 
   useEffect(() => {
     let cancelled = false;
-    if (tick > 0) {
-      setState((s) => ({ ...s, refreshing: true }));
-    }
     fetch("/api/pages")
       .then((r) => r.json())
       .then((j: { ok?: boolean; engine?: boolean; sites?: AgentSite[]; error?: string }) => {
@@ -104,7 +101,16 @@ export function useAgentPages(): AgentState & { refresh: () => void } {
     };
   }, [tick]);
 
-  return { ...state, refresh: () => setTick((t) => t + 1) };
+  // The refreshing flag is set by the caller's event handler rather than
+  // synchronously inside the effect: a setState during mount forces a
+  // second render before anything has been fetched, for a flag that only
+  // ever matters after a click.
+  const refresh = () => {
+    setState((s) => ({ ...s, refreshing: true }));
+    setTick((t) => t + 1);
+  };
+
+  return { ...state, refresh };
 }
 
 /** Every page across all of the owner's sites, newest first. */

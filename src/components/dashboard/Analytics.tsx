@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAgentPages } from "@/lib/agent-pages";
+import { useNow } from "@/lib/use-now";
 
 /**
  * The Analytics tab: real Google Search Console data — clicks,
@@ -602,6 +603,7 @@ export function Analytics() {
  */
 function AgentStatus({ siteId }: { siteId?: string }) {
   const { engine, sites } = useAgentPages();
+  const now = useNow();
   if (!engine || sites.length === 0) return null;
 
   // Scoped to the selected site rather than assuming the first one: a
@@ -623,7 +625,7 @@ function AgentStatus({ siteId }: { siteId?: string }) {
   // averaged into its rate. Same-day activity counts as one day, so the
   // figure never divides by zero or reads as an implausible burst.
   const daysLive = firstAt
-    ? Math.max(1, Math.round((Date.now() - firstAt.getTime()) / 86_400_000) || 1)
+    ? Math.max(1, Math.round((now - firstAt.getTime()) / 86_400_000) || 1)
     : 0;
   const perDay = daysLive ? published.length / daysLive : 0;
 
@@ -643,7 +645,7 @@ function AgentStatus({ siteId }: { siteId?: string }) {
   const fmtDate = (d: Date) =>
     d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const fmtWhen = (d: Date) => {
-    const mins = Math.round((Date.now() - d.getTime()) / 60000);
+    const mins = Math.round((now - d.getTime()) / 60000);
     if (mins < 1) return "just now";
     if (mins < 60) return `${mins} min ago`;
     if (mins < 48 * 60) return `${Math.round(mins / 60)} h ago`;
@@ -726,7 +728,7 @@ function AgentStatus({ siteId }: { siteId?: string }) {
           {!site.active
             ? "paused — resume the agent to schedule one"
             : nextDue
-              ? nextDue.getTime() <= Date.now()
+              ? nextDue.getTime() <= now
                 ? "due now"
                 : `${fmtDate(nextDue)}`
               : "on the next scheduled check"}

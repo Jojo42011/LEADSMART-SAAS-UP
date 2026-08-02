@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 /**
  * Light/dark switch.
@@ -16,16 +16,30 @@ import { useEffect, useState } from "react";
  * authority on which theme is active.
  */
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
-
-  useEffect(() => {
-    const current = document.documentElement.getAttribute("data-theme");
-    setTheme(current === "dark" ? "dark" : "light");
+  // The DOM attribute is the single source of truth — the head script owns
+  // it — so this subscribes to it rather than mirroring it into state.
+  // Copying it into state in an effect means a synchronous setState during
+  // mount and two renders for something that was already correct on the
+  // first one.
+  const subscribe = useCallback((onChange: () => void) => {
+    const observer = new MutationObserver(onChange);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
   }, []);
+
+  const theme = useSyncExternalStore(
+    subscribe,
+    () => (document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light"),
+    // No server snapshot: the theme is not knowable until the head script
+    // has read the visitor's stored choice, and guessing one would flip
+    // the icon visibly on hydration for half of all users.
+    () => null
+  );
 
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
+    // Writing the attribute IS the state change; the observer above turns
+    // it into a re-render.
     document.documentElement.setAttribute("data-theme", next);
     try {
       window.localStorage.setItem("ascent-theme", next);
@@ -35,9 +49,6 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     }
   };
 
-  // Until the effect resolves, render the frame at the same size with no
-  // icon. Guessing an icon server-side would flip visibly on hydration
-  // for half of all users.
   const dark = theme === "dark";
 
   return (

@@ -19,6 +19,7 @@ import { useAgentPages, allPages, type AgentPage } from "@/lib/agent-pages";
 import { Billing } from "./Billing";
 import { ContactForm } from "../support/ContactForm";
 import { ThemeToggle } from "../ui/ThemeToggle";
+import { useNow } from "@/lib/use-now";
 import { Analytics } from "./Analytics";
 
 // Billing is a Tab but not a navItem: it is entered through the Plan card
@@ -848,13 +849,14 @@ function AgentPageRow({
   // for, one step from shipping. The button runs the same engine function
   // the cycle runs, so it cannot behave differently from autopilot.
   const canPublish = (page.status === "approved" || page.status === "pending") && !page.live_url;
+  const now = useNow();
 
   // Freshness, from the last time the page actually changed. The same
   // 150-day threshold the agent schedules refreshes on, so the badge and
   // the agent's behaviour cannot tell different stories.
   const changedAt = page.refreshed_at || page.published_at;
   const staleDays = changedAt
-    ? Math.floor((Date.now() - new Date(changedAt).getTime()) / 86_400_000)
+    ? Math.floor((now - new Date(changedAt).getTime()) / 86_400_000)
     : null;
   const freshness =
     staleDays === null
