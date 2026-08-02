@@ -1,6 +1,22 @@
 import { createHash } from "crypto";
 import { normalizeGithubRepo } from "../github-repo";
 import { siteOrigin } from "../url";
+// Every request in this file that goes to a CUSTOMER-supplied host —
+// their WordPress REST API, and the liveness check on a published page —
+// goes through safeFetch, which resolves the hostname and refuses private
+// and link-local addresses, re-validating on each redirect.
+//
+// The guard already existed and was wired into site ingest, but not here.
+// That left /api/connect/wordpress/test, which is unauthenticated by
+// design because it runs before an account exists, calling verifyWordpress
+// with any host a caller names. The distinct replies — 401, a numeric
+// status, a timeout, a connection refusal — are enough to map internal
+// hosts and open ports from inside the deployment's network, including
+// the cloud metadata endpoint at 169.254.169.254.
+//
+// Calls to api.github.com are deliberately left as plain fetch: the host
+// is a fixed literal, so there is nothing for a caller to redirect.
+import { safeFetch } from "../safe-fetch";
 /**
  * Phase 5: publishing to the connected destination, plus post publish
  * live URL verification so a repo path that does not map to a public URL
@@ -25,9 +41,9 @@ export type PublishResult =
 
 export async function verifyLive(url: string): Promise<string> {
   try {
-    let res = await fetch(url, { method: "HEAD", redirect: "follow", signal: AbortSignal.timeout(8000) });
+    let res = await safeFetch(url, { method: "HEAD", signal: AbortSignal.timeout(8000) });
     if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000) });
+      res = await safeFetch(url, { method: "GET", signal: AbortSignal.timeout(8000) });
     }
     return res.ok ? `live:${res.status}` : `error:${res.status}`;
   } catch {
@@ -506,7 +522,7 @@ export async function uploadWordpressMedia(input: {
   const site = siteOrigin(input.site);
   const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
   try {
-    const res = await fetch(`${site}/wp-json/wp/v2/media`, {
+    const res = await safeFetch(`${site}/wp-json/wp/v2/media`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${auth}`,
@@ -523,7 +539,7 @@ export async function uploadWordpressMedia(input: {
     // Alt text is a second call because the upload response is the raw
     // attachment. Best effort: a missing alt is an accessibility and AEO
     // loss, not a reason to fail a publish that already has the bytes.
-    await fetch(`${site}/wp-json/wp/v2/media/${json.id}`, {
+    await safeFetch(`${site}/wp-json/wp/v2/media/${json.id}`, {
       method: "POST",
       headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
       body: JSON.stringify({ alt_text: input.alt }),
@@ -550,7 +566,7 @@ export async function verifyWordpress(input: {
   const site = siteOrigin(input.site);
   const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
   try {
-    const res = await fetch(`${site}/wp-json/wp/v2/users/me?context=edit`, {
+    const res = await safeFetch(`${site}/wp-json/wp/v2/users/me?context=edit`, {
       headers: { Authorization: `Basic ${auth}` },
       signal: AbortSignal.timeout(15_000),
     });
@@ -659,7 +675,7 @@ export async function publishWordpress(input: {
   const endpoint = input.wpPageId
     ? `${site}/wp-json/wp/v2/pages/${input.wpPageId}`
     : `${site}/wp-json/wp/v2/pages`;
-  const res = await fetch(endpoint, {
+  const res = await safeFetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -707,7 +723,7 @@ export async function deleteWordpressPage(input: {
   const site = siteOrigin(input.site);
   const auth = Buffer.from(`${input.user}:${input.appPassword}`).toString("base64");
   try {
-    const res = await fetch(`${site}/wp-json/wp/v2/pages/${input.pageId}?force=true`, {
+    const res = await safeFetch(`${site}/wp-json/wp/v2/pages/${input.pageId}?force=true`, {
       method: "DELETE",
       headers: { Authorization: `Basic ${auth}` },
       signal: AbortSignal.timeout(20_000),

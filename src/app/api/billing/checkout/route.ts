@@ -18,7 +18,11 @@ export async function POST(req: NextRequest) {
   let quantity = 1;
   try {
     const body = (await req.clone().json()) as { sites?: number };
-    if (body.sites) quantity = Math.max(1, Math.floor(body.sites));
+    // Bounded. In demo mode this number becomes the tenant's site
+    // allowance without a payment, so an unbounded value let a signed-in
+    // user grant themselves any number of free sites by editing one
+    // request. 20 matches the checkout stepper's own ceiling.
+    if (body.sites) quantity = Math.min(20, Math.max(1, Math.floor(body.sites)));
   } catch {
     // default quantity
   }

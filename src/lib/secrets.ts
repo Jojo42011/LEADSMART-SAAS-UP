@@ -21,7 +21,20 @@ const PREFIX = "enc:v1";
 const DEV_KEY_MATERIAL = "ascent-dev-secret-change-me";
 
 function keyMaterial(): string {
-  return process.env.CREDENTIALS_KEY || process.env.AUTH_SECRET || DEV_KEY_MATERIAL;
+  const configured = process.env.CREDENTIALS_KEY || process.env.AUTH_SECRET;
+  if (configured) return configured;
+  // Same reasoning as the session secret: this key encrypts every stored
+  // WordPress application password and OAuth refresh token, and the
+  // fallback is a literal in a source file. Encrypting customer
+  // credentials with a publicly known key is indistinguishable from
+  // storing them in plain text, while looking like encryption in the
+  // database. Refuse rather than pretend.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Neither CREDENTIALS_KEY nor AUTH_SECRET is set. Refusing to encrypt customer credentials with the development key."
+    );
+  }
+  return DEV_KEY_MATERIAL;
 }
 
 function key(): Buffer {

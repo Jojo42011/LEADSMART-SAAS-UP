@@ -9,6 +9,15 @@
  *
  * Run: npm test
  */
+/**
+ * These tests publish to a real HTTP server on 127.0.0.1, so the SSRF
+ * guard must be switched off for them. It is the guard behaving correctly:
+ * loopback is exactly what it exists to refuse for a customer-supplied
+ * host. INGEST_ALLOW_PRIVATE_HOSTS must never be set in production — see
+ * test/ssrf.test.ts, which asserts the guard holds with it unset.
+ */
+process.env.INGEST_ALLOW_PRIVATE_HOSTS = "1";
+
 import { createServer } from "node:http";
 import { publishWordpress, type PublishResult } from "../src/lib/engine/publish";
 

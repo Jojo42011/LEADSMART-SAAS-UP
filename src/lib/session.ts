@@ -42,8 +42,28 @@ export type SessionUser = {
   v?: number;
 };
 
+/** Used only when NODE_ENV is not production. Public, by definition. */
+const DEV_SECRET = "ascent-dev-secret-change-me";
+
 function secret(): string {
-  return process.env.AUTH_SECRET || "ascent-dev-secret-change-me";
+  const configured = process.env.AUTH_SECRET;
+  if (configured) return configured;
+  // Fail closed. This value signs the session cookie, and it is a literal
+  // in a source file — so a production deployment that falls through to it
+  // lets anyone who has read the repo mint a valid session for any email
+  // address, which is every tenant's account and every stored credential.
+  //
+  // The old behaviour was to use it silently, and the way that happens is
+  // mundane: an env var added to Vercel's Preview scope but not
+  // Production. Nothing looks wrong afterwards — sign-in works, the
+  // dashboard loads — so a loud failure at the first request is strictly
+  // better than a quiet one that only shows up in an incident report.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "AUTH_SECRET is not set. Refusing to sign sessions with the development key. Set AUTH_SECRET (openssl rand -base64 32) in the production environment."
+    );
+  }
+  return DEV_SECRET;
 }
 
 /** The cookie options every session cookie is written with. */
