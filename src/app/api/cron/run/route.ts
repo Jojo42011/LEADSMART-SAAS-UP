@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { storeConfigured, getDueSites, recoverStuckRuns, pruneRateLimits } from "@/lib/engine/store";
 import { runSiteCycle, type CycleResult } from "@/lib/engine/orchestrator";
 import { reconcileBilling } from "@/lib/engine/reconcile-billing";
+import { secretsMatch } from "@/lib/api-auth";
 
 /**
  * The daily heartbeat, fired by the Vercel cron in vercel.json.
@@ -42,7 +43,7 @@ export async function GET(req: Request) {
       { status: 503 }
     );
   }
-  if (authHeader !== `Bearer ${secret}`) {
+  if (!secretsMatch(authHeader, `Bearer ${secret}`)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
