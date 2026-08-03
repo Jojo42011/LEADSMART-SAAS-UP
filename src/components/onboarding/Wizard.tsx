@@ -902,7 +902,7 @@ function MarketStep({ data, update }: StepProps) {
         <Field
           label="Competitors you watch"
           optional
-          hint="The agent maps their keyword coverage against yours. Every gap becomes a page in your queue. We will find the rest."
+          hint="Leave this blank and the agent finds them — it searches Google for the sites ranking in your market. Add names only if there are specific rivals you want watched."
           placeholder="competitor1.com, competitor2.com"
           value={m.competitors}
           onChange={(e) => set({ competitors: e.target.value })}

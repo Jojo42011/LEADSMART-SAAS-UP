@@ -165,7 +165,13 @@ export function Dashboard() {
     }
   }, []);
 
-  const plan = useMemo(() => buildPlan(data), [data]);
+  // Competitors the research cycle discovered feed the plan, so the tab is
+  // populated whether or not the owner happened to type any names in.
+  const discovered = useMemo(
+    () => (intel.research?.competitors ?? []).map((c) => c.domain).filter(Boolean),
+    [intel.research]
+  );
+  const plan = useMemo(() => buildPlan(data, discovered), [data, discovered]);
 
   // The header names whichever site the switcher is pointed at. The local
   // onboarding buffer only ever holds one site, so on a multi-site account
@@ -365,6 +371,17 @@ function Overview({
     { label: "90 day roadmap built", done: hasPlan },
   ];
 
+  // Two counts, both of them things the agent has actually done.
+  //
+  // This row used to carry "Traffic value (est.)" and "Projected monthly
+  // revenue" beside them. Both were modelled rather than measured — the
+  // revenue figure multiplied assumed traffic by an assumed close rate at
+  // an assumed sale value — and both belong to the argument for buying,
+  // not to the account of a customer who already has. Anchoring somebody
+  // to $21,300 a month that nothing in the product can verify invites
+  // exactly one question at renewal, and the honest answer is that the
+  // number was never a measurement. Real revenue reporting belongs to the
+  // Analytics tab once Search Console data is connected.
   const kpis = [
     {
       label: "Pages in queue",
@@ -372,22 +389,6 @@ function Overview({
       note: hasPlan ? "First page within 24 hours" : "Add services in Settings to start the queue",
     },
     { label: "Keywords tracked", value: String(plan.keywords.length), note: "Prioritized by business potential" },
-    {
-      label: "Traffic value (est.)",
-      value: plan.trafficValue > 0 ? `$${plan.trafficValue.toLocaleString()}/mo` : "—",
-      note: "What these clicks would cost in ads, at month-6 pace",
-    },
-    plan.projection
-      ? {
-          label: "Projected monthly revenue",
-          value: `$${plan.projection.monthlyValue.toLocaleString()}`,
-          note: `~${plan.projection.leads} leads/mo, ${Math.round(plan.projection.closeRate * 100)}% closing at $${plan.projection.avgSaleValue.toLocaleString()} each, month 6 pace`,
-        }
-      : {
-          label: "Projected monthly value",
-          value: "—",
-          note: "Add your average sale value in Settings to project revenue",
-        },
   ];
 
   return (
@@ -434,7 +435,7 @@ function Overview({
       </div>
 
       {/* KPIs */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
         {kpis.map((kpi) => (
           <Card key={kpi.label} className="p-6">
             <p className="label-mono text-muted">{kpi.label}</p>
@@ -619,28 +620,50 @@ function QueueRow({
             {page.keyword} &middot; {note}
           </p>
         </div>
-        <span
-          className={`hidden shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] sm:inline-flex ${
-            page.infoGain < 0.5 ? "bg-ink text-on-ink" : "bg-ink/[0.04] text-muted"
-          }`}
-          title="Information gain vs. current top-ranking pages. Must clear 0.50 to publish."
-        >
-          <span className="sr-only">Information gain </span>
-          <span aria-hidden="true">IG </span>
-          {page.infoGain.toFixed(2)}
-          <span className="sr-only"> of a required 0.50 minimum</span>
-        </span>
-        <span
-          className="hidden shrink-0 rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted sm:inline-flex"
-          title="Weighted GEO score: tactics weighted by their real measured impact on AI-answer visibility, minus penalties for keyword stuffing, thin content, excessive CTAs, or low fact density."
-        >
-          GEO {page.geo.score}/100
-        </span>
+        {/* Only the score that changes what happens next stays on the
+            closed card: information gain below 0.50 is why a page does not
+            publish. Everything else moved into Details — a card carrying
+            four bars, ten chips and three schema toggles at rest is not
+            more informative, it is just harder to read. */}
+        {page.infoGain < 0.5 && (
+          <span
+            className="hidden shrink-0 rounded-full bg-ink px-2.5 py-1 font-mono text-[11px] text-on-ink sm:inline-flex"
+            title="Information gain vs. the pages currently ranking. Must clear 0.50 to publish."
+          >
+            <span className="sr-only">Information gain </span>
+            <span aria-hidden="true">IG </span>
+            {page.infoGain.toFixed(2)}
+            <span className="sr-only"> of a required 0.50 minimum — below the publish gate</span>
+          </span>
+        )}
         <StatusPill status={status} />
       </div>
       {detailed && (
-        <>
-          <div className="mt-3.5 grid gap-2 border-t border-line pt-3.5 sm:grid-cols-2 lg:grid-cols-4">
+        <details className="group">
+          <summary className="mt-3 cursor-pointer list-none border-t border-line pt-3 text-[12px] text-muted transition-colors hover:text-ink">
+            <span className="label-mono">
+              Details
+              <span className="ml-1.5 inline-block transition-transform group-open:rotate-90">&rsaquo;</span>
+            </span>
+            <span className="ml-2.5 font-normal normal-case tracking-normal">
+              Scores, AI tactics, schema
+            </span>
+          </summary>
+          <div className="mt-3.5 flex flex-wrap items-center gap-1.5 border-t border-line pt-3.5">
+            <span
+              className="rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted"
+              title="Information gain vs. the pages currently ranking. Must clear 0.50 to publish."
+            >
+              IG {page.infoGain.toFixed(2)}
+            </span>
+            <span
+              className="rounded-full bg-ink/[0.04] px-2.5 py-1 font-mono text-[11px] text-muted"
+              title="Weighted GEO score: tactics weighted by measured impact on AI-answer visibility, minus penalties."
+            >
+              GEO {page.geo.score}/100
+            </span>
+          </div>
+          <div className="mt-3.5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {(
               [
                 ["Substance", page.pillars.substance],
@@ -726,7 +749,7 @@ function QueueRow({
               </pre>
             </div>
           )}
-        </>
+        </details>
       )}
       {actions}
     </div>
@@ -1200,26 +1223,22 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
         <h2 className="text-[14.5px] font-medium">Planned queue</h2>
         <span className="label-mono text-muted">{plan.pages.length} pages this cycle</span>
       </div>
+      {/* One line. The paragraph this replaced explained the pillar
+          scores, the information-gain gate, the GEO score, schema and the
+          freshness clock before the reader had seen a single card — an
+          explanation of machinery nobody had asked about yet. What they
+          need here is what the list is; the scoring explains itself inside
+          Details, next to the numbers it describes. */}
       <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
         {engine ? (
           <>
-            <span className="font-medium text-ink">The agent&apos;s working plan.</span>{" "}
-            Keywords the agent has already written show their real status;
-            the rest are planned and will be picked up cycle by cycle. Each
-            card shows how the page will be judged: Ascent Method pillar
-            scores, an information gain check, a weighted GEO score, schema
-            markup and a freshness clock. Under 75 overall, 0.50 IG, or a
-            failed critical check, a page never publishes.
+            The order the agent works in. Anything below the quality gate is
+            rewritten rather than published.
           </>
         ) : (
           <>
-            <span className="font-medium text-ink">This is the plan, not live progress.</span>{" "}
-            It shows the order the agent intends to work in and how each page
-            would be judged: Ascent Method pillar scores, an information gain
-            check, a weighted GEO score for AI answer engines, real schema markup
-            and a freshness clock. Under 75 overall, 0.50 IG, or a failed critical
-            check, a page never publishes. Spoke pages go out before the hub they
-            link back to. Pages the agent has actually written appear above.
+            The plan, not live progress — the order the agent intends to work
+            in. Pages it has actually written appear above.
           </>
         )}
       </p>
@@ -1287,22 +1306,37 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
         <h2 className="text-[14.5px] font-medium">Tracked keywords</h2>
         <span className="label-mono text-muted">{plan.keywords.length} keywords</span>
       </div>
-      <p className="mt-1 px-6 text-[12.5px] text-muted">
-        Ordered by business potential: how likely a searcher is to become a
-        customer, not just how many people search. Off site opportunity flags
-        which off-site surface would help this keyword get cited by AI answer
-        engines. For local intent that is the curated &quot;best of&quot; roundups
-        already ranking for the phrase, since those are what engines quote when
-        recommending a local business; elsewhere it follows where each engine
-        actually draws its citations from.
+      <p className="mt-1 px-6 text-[12.5px] leading-relaxed text-muted">
+        Ordered by business potential — how likely a searcher is to become a
+        customer, not how many people search.
       </p>
-      <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
-        Independent of any keyword, being complete and accurate on{" "}
-        <span className="text-ink/80">{CORE_LOCAL_CITATIONS.join(", ")}</span> feeds
-        local AI recommendations more than presence on many small directories. That
-        is a one-time setup task on your own profiles, not something the agent
-        publishes.
-      </p>
+      {/* The off-site guidance is real and worth having, but it was two
+          dense paragraphs above a table nobody had read yet. It sits behind
+          a disclosure now: available when the column raises the question,
+          absent when it does not. */}
+      <details className="group px-6">
+        <summary className="mt-2 cursor-pointer list-none text-[12px] text-muted transition-colors hover:text-ink">
+          <span className="label-mono">
+            About the off-site column
+            <span className="ml-1.5 inline-block transition-transform group-open:rotate-90">&rsaquo;</span>
+          </span>
+        </summary>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+          It flags which off-site surface would most help this keyword get
+          cited by AI answer engines. For local intent that is the curated
+          &quot;best of&quot; roundups already ranking for the phrase, since
+          those are what engines quote when recommending a local business;
+          elsewhere it follows where each engine actually draws citations
+          from.
+        </p>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+          Independent of any keyword, being complete and accurate on{" "}
+          <span className="text-ink/80">{CORE_LOCAL_CITATIONS.join(", ")}</span>{" "}
+          feeds local AI recommendations more than presence on many small
+          directories. That is a one-time setup task on your own profiles,
+          not something the agent publishes.
+        </p>
+      </details>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-left text-[13px]">
           <thead>
@@ -1610,7 +1644,8 @@ function Settings({
           />
           <Field
             label="Competitors"
-            hint="Names or domains, comma separated. Their coverage is mapped against yours for the gap analysis."
+            optional
+            hint="Optional. The agent discovers competitors from live search each cycle; anything you add here is watched as well as what it finds."
             value={data.market.competitors}
             onChange={(e) => update({ market: { ...data.market, competitors: e.target.value } })}
           />

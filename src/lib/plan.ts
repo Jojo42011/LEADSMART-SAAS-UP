@@ -218,7 +218,19 @@ function checkVeto(term: string): Veto {
   return { triggered: false, reason: null };
 }
 
-export function buildPlan(data: OnboardingData): Plan {
+/**
+ * @param discoveredCompetitors Domains the research cycle found on its own.
+ *
+ * The competitor list used to come only from the box the owner typed into
+ * during onboarding, so leaving it blank — which is the sensible thing to
+ * do when you do not already know who outranks you — produced an empty
+ * Competitors tab and no gap analysis. Meanwhile the research engine was
+ * already asking Gemini, with Google Search grounding, for the strongest
+ * sites ranking in the market, and throwing the answer away as far as this
+ * view was concerned. Discovered domains win when present; the typed list
+ * stays as a seed for anyone who does have names in mind.
+ */
+export function buildPlan(data: OnboardingData, discoveredCompetitors?: string[]): Plan {
   const services = parseList(data.market.services);
   const locations = Array.from(
     new Set(
@@ -308,7 +320,12 @@ export function buildPlan(data: OnboardingData): Plan {
   // Deduped case-insensitively: the same competitor listed twice would
   // otherwise duplicate React keys and double-count its gaps in every total.
   const competitorNames = Array.from(
-    new Map(parseList(data.market.competitors).map((n) => [n.toLowerCase(), n])).values()
+    new Map(
+      [...(discoveredCompetitors ?? []), ...parseList(data.market.competitors)]
+        .map((n) => n.trim())
+        .filter(Boolean)
+        .map((n) => [n.toLowerCase(), n] as const)
+    ).values()
   );
 
   // Union of every keyword any competitor covers — summing per-competitor
