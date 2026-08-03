@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { quoteFor, describeQuote } from "@/lib/pricing";
 
 /**
  * The Billing tab: what the customer is paying, where it stands, and the
@@ -40,6 +41,13 @@ type BillingState = {
   quoteLabel?: string;
   error?: string;
 };
+
+// Used only when the API omits quote/quoteLabel (a Stripe read error).
+// Computed once from the shared pricing module rather than assuming "1
+// website" is definitely right, but it is the only sane default when the
+// real seat count could not be read either.
+const fallbackQuote = quoteFor(1);
+const fallbackQuoteLabel = describeQuote(fallbackQuote);
 
 const fmtDate = (epochSeconds: number) =>
   new Date(epochSeconds * 1000).toLocaleDateString("en-US", {
@@ -181,11 +189,17 @@ export function Billing() {
           <div className="rounded-xl border border-line p-3.5">
             <dt className="label-mono text-muted">Price</dt>
             <dd className="mt-1 text-[17px] font-medium tracking-tight">
-              ${state.quote?.total ?? 49}<span className="text-[12px] text-muted">/mo</span>
+              ${state.quote?.total ?? fallbackQuote.total}<span className="text-[12px] text-muted">/mo</span>
             </dd>
             {/* The wording comes from the pricing module, so the plan card
-                and the invoice describe the same purchase. */}
-            <p className="mt-0.5 text-[11.5px] text-muted">{state.quoteLabel ?? "1 website × $49"}</p>
+                and the invoice describe the same purchase. The API omits
+                quote/quoteLabel on one path — a Stripe read error — and
+                the fallback used to be a hardcoded "$49" / "1 website ×
+                $49" literal here, which is the exact duplication this
+                module exists to prevent. Falls back through quoteFor(1)
+                instead, so a price change never has to be remembered in
+                two places. */}
+            <p className="mt-0.5 text-[11.5px] text-muted">{state.quoteLabel ?? fallbackQuoteLabel}</p>
           </div>
           <div className="rounded-xl border border-line p-3.5">
             <dt className="label-mono text-muted">{inTrial ? "Trial ends" : ending ? "Service ends" : "Renews"}</dt>
