@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AgentSite } from "@/lib/agent-pages";
-import { quoteFor, describeQuote, PRICE_PER_SITE } from "@/lib/pricing";
+import { quoteFor, describeQuote } from "@/lib/pricing";
 
 /**
  * The "+" beside the site name: switch between the owner's websites, or

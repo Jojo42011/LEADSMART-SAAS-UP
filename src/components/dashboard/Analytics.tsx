@@ -511,7 +511,13 @@ export function Analytics() {
             />
           </div>
 
-          {/* Charts — one series per chart, one axis per chart */}
+          {/* One chart, not three.
+              Every tile above already carries a sparkline of its own
+              series, so the impressions and position charts were a second,
+              larger drawing of lines the reader had just seen. Clicks is
+              the one that answers "is this working" — visits the site
+              actually received — so it keeps the full chart, and the other
+              two are a click away for anyone reading a trend closely. */}
           <TimeSeriesChart
             title="Clicks from Google Search"
             sub="Daily clicks on your results"
@@ -519,25 +525,33 @@ export function Analytics() {
             color={HUES.clicks}
             fmt={(n) => compact(Math.round(n))}
           />
-          <div className="grid gap-5 lg:grid-cols-2">
-            <TimeSeriesChart
-              title="Impressions"
-              sub="How often your site appeared in results"
-              points={series.map((p) => ({ date: p.date, value: p.impressions }))}
-              color={HUES.impressions}
-              fmt={(n) => compact(Math.round(n))}
-              compactWidth
-            />
-            <TimeSeriesChart
-              title="Average position"
-              sub="Closer to 1 is better — up means improving"
-              points={series.map((p) => ({ date: p.date, value: p.position }))}
-              color={HUES.position}
-              fmt={(n) => n.toFixed(1)}
-              invert
-              compactWidth
-            />
-          </div>
+          <details className="group">
+            <summary className="cursor-pointer list-none text-[12.5px] text-muted transition-colors hover:text-ink">
+              <span className="label-mono">
+                Impressions and position over time
+                <span className="ml-1.5 inline-block transition-transform group-open:rotate-90">&rsaquo;</span>
+              </span>
+            </summary>
+            <div className="mt-4 grid gap-5 lg:grid-cols-2">
+              <TimeSeriesChart
+                title="Impressions"
+                sub="How often your site appeared in results"
+                points={series.map((p) => ({ date: p.date, value: p.impressions }))}
+                color={HUES.impressions}
+                fmt={(n) => compact(Math.round(n))}
+                compactWidth
+              />
+              <TimeSeriesChart
+                title="Average position"
+                sub="Closer to 1 is better — up means improving"
+                points={series.map((p) => ({ date: p.date, value: p.position }))}
+                color={HUES.position}
+                fmt={(n) => n.toFixed(1)}
+                invert
+                compactWidth
+              />
+            </div>
+          </details>
 
           {/* Top queries */}
           {topQueries && topQueries.length > 0 && (
@@ -552,7 +566,6 @@ export function Analytics() {
                     <tr className="border-b border-line text-[11px] uppercase tracking-wide text-muted">
                       <th className="px-5 py-2.5 font-medium">Query</th>
                       <th className="px-4 py-2.5 text-right font-medium">Clicks</th>
-                      <th className="px-4 py-2.5 text-right font-medium">Impressions</th>
                       <th className="px-4 py-2.5 text-right font-medium">CTR</th>
                       <th className="px-5 py-2.5 text-right font-medium">Position</th>
                     </tr>
@@ -562,7 +575,6 @@ export function Analytics() {
                       <tr key={q.query} className="border-b border-line/60 last:border-0">
                         <td className="max-w-[280px] truncate px-5 py-2.5 font-medium text-ink">{q.query}</td>
                         <td className="px-4 py-2.5 text-right">{q.clicks.toLocaleString()}</td>
-                        <td className="px-4 py-2.5 text-right">{q.impressions.toLocaleString()}</td>
                         <td className="px-4 py-2.5 text-right">{pct(q.ctr)}</td>
                         <td className="px-5 py-2.5 text-right">{q.position.toFixed(1)}</td>
                       </tr>

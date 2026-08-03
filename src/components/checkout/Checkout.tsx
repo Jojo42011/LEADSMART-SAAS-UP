@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { saveBilling } from "@/lib/billing";
-import { quoteFor, describeQuote, PRICE_PER_SITE } from "@/lib/pricing";
+import { quoteFor, describeQuote } from "@/lib/pricing";
 
 const ease = [0.21, 0.47, 0.32, 0.98] as const;
 

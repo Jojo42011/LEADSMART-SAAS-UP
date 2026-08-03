@@ -171,6 +171,14 @@ export function Dashboard() {
     () => (intel.research?.competitors ?? []).map((c) => c.domain).filter(Boolean),
     [intel.research]
   );
+  /** What live research said about each competitor, keyed by domain. */
+  const researchNotes = useMemo(() => {
+    const map: Record<string, { strength: string; weakness: string }> = {};
+    for (const c of intel.research?.competitors ?? []) {
+      if (c.domain) map[c.domain.toLowerCase()] = { strength: c.strength, weakness: c.weakness };
+    }
+    return map;
+  }, [intel.research]);
   const plan = useMemo(() => buildPlan(data, discovered), [data, discovered]);
 
   // The header names whichever site the switcher is pointed at. The local
@@ -310,11 +318,13 @@ export function Dashboard() {
                 <Keywords plan={plan} />
               </div>
             )}
+            {/* The Live-research panel used to sit above these cards
+                listing the same competitors a second time — the research
+                findings and the analysed cards were two renderings of one
+                set of domains, on one screen. The research sentences now
+                ride on the card they describe. */}
             {tab === "Competitors" && (
-              <div className="grid gap-5">
-                <LiveResearch intel={intel} mode="competitors" />
-                <Competitors plan={plan} goTo={setTab} />
-              </div>
+              <Competitors plan={plan} goTo={setTab} notes={researchNotes} />
             )}
             {tab === "Billing" && <Billing />}
             {tab === "Support" && <SupportPanel />}
@@ -1411,23 +1421,27 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
 function Competitors({
   plan,
   goTo,
+  notes = {},
 }: {
   plan: ReturnType<typeof buildPlan>;
   goTo: (t: Tab) => void;
+  /** Live-research strength/weakness per domain, when research has run. */
+  notes?: Record<string, { strength: string; weakness: string }>;
 }) {
   if (plan.competitors.length === 0)
     return (
       <Card className="p-10 text-center">
-        <p className="text-[14.5px] font-medium">No competitors added yet</p>
-        <p className="mx-auto mt-1.5 max-w-sm text-[13px] text-muted">
-          List the competitors you want the agent to study and it will map
-          their keyword coverage against yours.
+        <p className="text-[14.5px] font-medium">No competitors mapped yet</p>
+        <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-muted">
+          The agent finds these from live search on its first research cycle.
+          Add your services and locations in Settings if you have not yet —
+          it needs a market to search in.
         </p>
         <button
           onClick={() => goTo("Settings")}
           className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-medium text-on-ink transition-colors hover:bg-accent"
         >
-          Add competitors in Settings &rarr;
+          Open Settings &rarr;
         </button>
       </Card>
     );
@@ -1440,19 +1454,39 @@ function Competitors({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-[14.5px] font-medium">Keyword gap analysis</h2>
-            <p className="mt-1 text-[12.5px] text-muted">
-              Every gap is classified: <span className="font-medium text-ink/80">Core</span> (all
-              top competitors cover it, add now), <span className="font-medium text-ink/80">Differentiator</span> (some
-              do, and outrank you), <span className="font-medium text-ink/80">Commodity</span> (everyone
-              covers it shallowly — a sentence is enough), or <span className="font-medium text-ink/80">Opportunity</span> (nobody
-              owns this angle yet — a real chance to lead). Gap findings feed
-              the queue automatically: Core and Opportunity keywords get a
-              priority boost on the Keywords tab, and Core gaps jump straight
-              into the page queue. Competitors are ranked by threat so you know
-              which to answer first. Overlap and referring-domain figures are
-              estimates derived from your keyword set — connect Search Console
-              for measured data.
+            {/* Was a ten-line paragraph defining four gap types, explaining
+                how findings feed the queue and caveating the estimates —
+                all before the reader had seen a single competitor. The
+                badges carry their own definitions on hover; the rest is
+                here for whoever wants it. */}
+            <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+              Keywords your competitors cover and you do not. The agent
+              queues these itself — nothing here needs acting on.
             </p>
+            <details className="group">
+              <summary className="mt-2 cursor-pointer list-none text-[12px] text-muted transition-colors hover:text-ink">
+                <span className="label-mono">
+                  How gaps are classified
+                  <span className="ml-1.5 inline-block transition-transform group-open:rotate-90">&rsaquo;</span>
+                </span>
+              </summary>
+              <p className="mt-2 max-w-2xl text-[12.5px] leading-relaxed text-muted">
+                <span className="font-medium text-ink/80">Core</span> — all top
+                competitors cover it, add now.{" "}
+                <span className="font-medium text-ink/80">Differentiator</span> —
+                some do, and outrank you.{" "}
+                <span className="font-medium text-ink/80">Commodity</span> —
+                everyone covers it shallowly, a sentence is enough.{" "}
+                <span className="font-medium text-ink/80">Opportunity</span> —
+                nobody owns this angle yet.
+              </p>
+              <p className="mt-2 max-w-2xl text-[12.5px] leading-relaxed text-muted">
+                Core and Opportunity keywords get a priority boost in the
+                queue, and Core gaps jump straight into it. Overlap is
+                estimated from your keyword set until Search Console data is
+                connected.
+              </p>
+            </details>
           </div>
           <div className="text-right">
             <p className="font-display text-4xl leading-none tracking-tight">{totalGaps}</p>
@@ -1472,7 +1506,15 @@ function Competitors({
                 {c.threat.level} threat
               </span>
             </div>
-            <p className="mt-1.5 text-[12.5px] text-muted">{c.threat.reason}</p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{c.threat.reason}</p>
+            {/* From live search rather than derived from the keyword set,
+                so it is the one genuinely researched thing on the card. */}
+            {notes[c.name.toLowerCase()]?.weakness && (
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+                <span className="font-medium text-accent">Your opening </span>
+                {notes[c.name.toLowerCase()].weakness}
+              </p>
+            )}
             <div className="mt-5">
               {c.overlap !== null && (
                 <>
@@ -1487,9 +1529,7 @@ function Competitors({
                   </div>
                 </>
               )}
-              <p className="mt-2 text-[11.5px] text-muted">
-                {c.referringDomains} referring domains (est.)
-              </p>
+
             </div>
             <div className="mt-5 border-t border-line pt-4">
               {c.gapItems.length > 0 ? (
@@ -1522,12 +1562,16 @@ function Competitors({
                   ))}
                 </div>
               )}
+              {/* Reassuring, not actionable — the gaps above are the work.
+                  Kept, because a card that only lists deficits misreads a
+                  competitive position, but folded away. */}
               {c.leadCount > 0 && (
-                <div className="mt-4 border-t border-line pt-3.5">
-                  <p className="text-[12px] text-muted">
+                <details className="group mt-4 border-t border-line pt-3.5">
+                  <summary className="cursor-pointer list-none text-[12px] text-muted transition-colors hover:text-ink">
                     <span className="font-medium text-ink">{c.leadCount} keyword{c.leadCount > 1 ? "s" : ""}</span>{" "}
-                    where you lead &middot; they have no mapped coverage
-                  </p>
+                    where you lead
+                    <span className="ml-1.5 inline-block transition-transform group-open:rotate-90">&rsaquo;</span>
+                  </summary>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {c.leadItems.map((term) => (
                       <span
@@ -1538,7 +1582,7 @@ function Competitors({
                       </span>
                     ))}
                   </div>
-                </div>
+                </details>
               )}
             </div>
           </Card>
