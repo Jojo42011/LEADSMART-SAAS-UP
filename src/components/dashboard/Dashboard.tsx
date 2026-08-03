@@ -432,6 +432,17 @@ function Overview({
   const pagesLive = engine
     ? sites.reduce((n, s) => n + s.pages.filter((p) => p.status === "published").length, 0)
     : null;
+  // Same reconciliation the Content tab does: once the engine is
+  // connected, a keyword with a real written page must show that page's
+  // real status, not the hash-derived preview label ("Drafting",
+  // "Rewriting"...) that never changes no matter what actually happened.
+  const realByKeyword = useMemo(
+    () => new Map(allPages(sites).map((p) => [p.keyword.trim().toLowerCase(), p])),
+    [sites]
+  );
+  const queuePreview = plan.pages.filter(
+    (p) => !engine || !realByKeyword.has(p.keyword.trim().toLowerCase())
+  );
 
   const setupTasks = [
     { label: "Workspace created", done: true },
@@ -485,7 +496,7 @@ function Overview({
     },
     {
       label: "In the queue",
-      value: String(plan.pages.length),
+      value: String(queuePreview.length),
       note: hasPlan ? "Next pages the agent will write" : "Add services in Settings to start the queue",
     },
   ];
@@ -574,13 +585,26 @@ function Overview({
           </button>
         </div>
         <div className="mt-5 grid gap-3">
-          {plan.pages.slice(0, 3).map((page) => (
-            <QueueRow key={page.keyword} page={page} />
+          {queuePreview.slice(0, 3).map((page) => (
+            <QueueRow
+              key={page.keyword}
+              page={page}
+              override={
+                engine
+                  ? { status: "Planned", note: "Queued for a future cycle.", suppressVeto: true }
+                  : undefined
+              }
+            />
           ))}
         </div>
         {plan.pages.length === 0 && (
           <p className="mt-2 text-center text-[12.5px] text-muted">
             Add services and locations in Settings to build your queue.
+          </p>
+        )}
+        {plan.pages.length > 0 && queuePreview.length === 0 && (
+          <p className="mt-2 text-center text-[12.5px] text-muted">
+            The agent has written every keyword currently mapped — see Content for what&apos;s live.
           </p>
         )}
       </Card>
