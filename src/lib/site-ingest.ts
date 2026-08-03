@@ -39,7 +39,63 @@ export type SiteIngest = {
   colors: string[];
   fonts: string[];
   pageCount: number | null;
+  /**
+   * How much text the site serves in its raw HTML, before any JavaScript
+   * runs — which is all an answer engine ever gets.
+   *
+   * Vercel and MERJ tracked 500M+ GPTBot fetches and found zero JavaScript
+   * execution; ClaudeBot downloads JS in ~24% of requests and never runs
+   * it. PerplexityBot, Bytespider and Meta's crawler behave the same way.
+   * Googlebot is the exception — it renders with headless Chrome — so a
+   * client-rendered site can rank perfectly well on Google while being
+   * invisible to every AI answer engine. That divergence is invisible to
+   * the owner precisely because their Google rankings look fine.
+   *
+   * Ascent can report it for free: this ingest already fetches raw HTML
+   * with no JavaScript, so what it sees is what GPTBot sees. It is not
+   * something the agent can fix by publishing — the pages it writes are
+   * static HTML and are readable either way — which is exactly why it is
+   * worth telling the owner rather than silently working around.
+   */
+  rawTextChars: number;
+  /** True only when the evidence is strong. See detectClientRendered. */
+  clientRendered: boolean;
 };
+
+/**
+ * Does this page serve its content only after JavaScript runs?
+ *
+ * Deliberately conservative, and requires two independent signals. Telling
+ * an owner their site is invisible to AI search when it is not would be a
+ * worse failure than staying quiet: it is alarming, it is hard for them
+ * to disprove, and it would undermine every other number on the page.
+ *
+ * So: a framework mount point that is EMPTY, plus almost no body text.
+ * A server-rendered Next.js or Nuxt site has the same mount point with
+ * the content already inside it, and so fails the first test. A thin but
+ * genuinely server-rendered page fails the second.
+ */
+export function detectClientRendered(html: string): { clientRendered: boolean; textChars: number } {
+  const body = html.match(/<body[\s\S]*<\/body>/i)?.[0] ?? html;
+  const textChars = body
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-z#0-9]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim().length;
+
+  // An empty mount point: <div id="root"></div> and friends, with nothing
+  // but whitespace inside.
+  const emptyMount =
+    /<div[^>]+id=["'](root|app|__next|__nuxt|ember-app)["'][^>]*>\s*<\/div>/i.test(body) ||
+    /<div[^>]+id=["']app["'][^>]*>\s*<!--\s*-->\s*<\/div>/i.test(body);
+
+  // 600 characters is roughly two paragraphs. Every real homepage that
+  // serves its own copy clears it comfortably; a shell does not.
+  return { clientRendered: emptyMount && textChars < 600, textChars };
+}
 
 /**
  * Whether a hex color can plausibly be a brand accent.
@@ -182,6 +238,8 @@ export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
     colors: [],
     fonts: [],
     pageCount: null,
+    rawTextChars: 0,
+    clientRendered: false,
   };
 
   try {
@@ -195,6 +253,10 @@ export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
     const html = (await res.text()).slice(0, 500_000);
 
     result.ok = true;
+    // Measured on the same raw HTML an answer-engine crawler receives.
+    const render = detectClientRendered(html);
+    result.rawTextChars = render.textChars;
+    result.clientRendered = render.clientRendered;
     result.title = decodeEntities(extract(/<title[^>]*>([^<]*)<\/title>/i, html));
     result.description = decodeEntities(
       extract(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i, html) ||

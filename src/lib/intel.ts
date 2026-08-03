@@ -19,6 +19,15 @@ export type SiteIngest = {
   colors: string[];
   fonts: string[];
   pageCount: number | null;
+  /**
+   * Visible text in the raw HTML before any JavaScript runs, and whether
+   * the page appears to be an empty client-rendered shell. Set by
+   * detectClientRendered in src/lib/site-ingest.ts — see the reasoning
+   * there. Optional because snapshots saved before this existed are still
+   * in customers' browsers.
+   */
+  rawTextChars?: number;
+  clientRendered?: boolean;
 };
 
 export type ResearchKeyword = {
