@@ -84,7 +84,11 @@ export async function POST(req: NextRequest) {
   }
 
   if (result.delivered) {
-    return NextResponse.json({ ok: true, delivered: true });
+    // The address is server truth (SUPPORT_INBOX), not the caller's
+    // display copy — those are two different env vars (SUPPORT_EMAIL vs
+    // NEXT_PUBLIC_SUPPORT_EMAIL) and telling someone their message went
+    // somewhere it didn't is exactly the wrong place for that to drift.
+    return NextResponse.json({ ok: true, delivered: true, inbox: SUPPORT_INBOX });
   }
 
   // Stored but undeliverable. Say so, and hand back the inbox address so

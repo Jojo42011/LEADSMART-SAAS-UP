@@ -13,6 +13,7 @@ import {
 } from "@/lib/onboarding";
 import { buildPlan, type PageDraft } from "@/lib/plan";
 import { PRICE_PER_SITE } from "@/lib/pricing";
+import { site } from "@/lib/site";
 import { SiteSwitcher } from "./SiteSwitcher";
 import { Connections } from "./Connections";
 import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
@@ -1916,7 +1917,12 @@ function SupportPanel() {
           here and they reach a person, usually within one business day.
         </p>
         <div className="mt-5">
-          <ContactForm inbox="toolascent@gmail.com" />
+          {/* Was a hardcoded literal — the public /support page and the
+              legal pages all read the configurable site.supportEmail, so
+              the dashboard's own Support tab was the one surface that
+              would keep mailing the old address if that env var ever
+              changed. */}
+          <ContactForm inbox={site.supportEmail} />
         </div>
       </div>
       <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">

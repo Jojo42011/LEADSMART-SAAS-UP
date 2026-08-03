@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
  */
 
 type Result =
-  | { kind: "sent" }
+  | { kind: "sent"; inbox: string }
   | { kind: "stored"; inbox: string; reason: string }
   | { kind: "error"; message: string };
 
@@ -64,7 +64,10 @@ export function ContactForm({ inbox }: { inbox: string }) {
       if (!res.ok || !json.ok) {
         setResult({ kind: "error", message: json.error || "Something went wrong. Try again." });
       } else if (json.delivered) {
-        setResult({ kind: "sent" });
+        // json.inbox is the server's actual delivery address; the `inbox`
+        // prop is only ever a display default before that response
+        // arrives, and the two can be configured by different env vars.
+        setResult({ kind: "sent", inbox: json.inbox || inbox });
         setSubject("");
         setMessage("");
       } else {
@@ -88,7 +91,7 @@ export function ContactForm({ inbox }: { inbox: string }) {
       <div className="rounded-2xl border border-accent/40 bg-accent/[0.06] p-6">
         <h2 className="text-[15.5px] font-medium">Message sent</h2>
         <p className="mt-1.5 text-[14px] leading-relaxed text-ink/80">
-          It went to {inbox} and we&apos;ll reply to {email}. Most enquiries get an
+          It went to {result.inbox} and we&apos;ll reply to {email}. Most enquiries get an
           answer within one business day.
         </p>
         <button
