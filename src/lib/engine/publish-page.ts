@@ -118,6 +118,10 @@ export async function publishStoredPage(
       published = true;
       liveUrl = res.liveUrl;
       liveStatus = res.liveStatus;
+      // Recorded before the discovery step, which appends rather than
+      // replaces — an artwork failure and a sitemap failure are separate
+      // facts and the run summary should carry both.
+      discoveryNote = res.imageNote;
 
       // Discovery, after the page itself is safely live: sitemap + folder
       // index (which every page's breadcrumb links to) + IndexNow key
@@ -151,14 +155,16 @@ export async function publishStoredPage(
           pathPrefix: res.path.startsWith("public/") ? "public/" : "",
           pages: publishedRefs,
         });
-        discoveryNote = support.ok ? "discovery ok" : `discovery failed for ${support.failed.join(", ")}`;
+        const supportNote = support.ok ? "discovery ok" : `discovery failed for ${support.failed.join(", ")}`;
+        discoveryNote = discoveryNote ? `${discoveryNote}, ${supportNote}` : supportNote;
         if (res.liveUrl) {
           const ping = await pingIndexNow({ siteUrl: origin, siteId: site.id, urls: [res.liveUrl] });
           discoveryNote += `, ${ping}`;
         }
       } catch (e) {
         // discovery plumbing only; the publish already succeeded
-        discoveryNote = `discovery error: ${e instanceof Error ? e.message : "unknown"}`;
+        const errNote = `discovery error: ${e instanceof Error ? e.message : "unknown"}`;
+        discoveryNote = discoveryNote ? `${discoveryNote}, ${errNote}` : errNote;
       }
     } else if (!res.ok) {
       publishError = [res.error, res.detail].filter(Boolean).join(" — ");

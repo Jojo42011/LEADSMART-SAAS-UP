@@ -346,23 +346,6 @@ export function Dashboard() {
 
 /* ------------------------------- Overview ------------------------------- */
 
-function PillarBar({ label, value, delay = 0 }: { label: string; value: number; delay?: number }) {
-  return (
-    <div className="flex items-center gap-4">
-      <span className="w-24 shrink-0 text-[12.5px] text-muted">{label}</span>
-      <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-ink/[0.06]">
-        <motion.div
-          className="h-full rounded-full bg-accent"
-          initial={{ width: 0 }}
-          animate={{ width: `${value}%` }}
-          transition={{ duration: 0.9, delay, ease: [0.21, 0.47, 0.32, 0.98] }}
-        />
-      </div>
-      <span className="w-8 shrink-0 text-right font-mono text-[11.5px] text-muted">{value}</span>
-    </div>
-  );
-}
-
 function Overview({
   plan,
   goTo,
@@ -378,7 +361,7 @@ function Overview({
     { label: "Workspace created", done: true },
     { label: "Brand and design ingest", done: true },
     { label: "Keyword gap analysis", done: hasPlan },
-    { label: "90 day roadmap built", done: hasPlan },
+    { label: "Content queue built", done: hasPlan },
   ];
 
   // Two counts, both of them things the agent has actually done.
@@ -409,14 +392,14 @@ function Overview({
           <div>
             <span className="label-mono text-accent">{hasPlan ? "Setup complete" : "Almost there"}</span>
             <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">
-              {hasPlan ? "Your 90 day roadmap is ready." : "Tell the agent about your market."}
+              {hasPlan ? "Your content plan is ready." : "Tell the agent about your market."}
             </h2>
             <p className="mt-3 max-w-sm text-[14px] leading-relaxed text-on-ink/75">
               {hasPlan ? (
                 <>
                   The agent mapped {plan.keywords.length} keywords across your
                   services and locations and queued the first {plan.pages.length}{" "}
-                  pages. The roadmap rebuilds itself from live results every cycle.
+                  pages. The plan rebuilds itself from live results every cycle.
                 </>
               ) : (
                 <>
@@ -455,72 +438,15 @@ function Overview({
         ))}
       </div>
 
-      {/* Ascent Score + roadmap */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Card className="p-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-[14.5px] font-medium">Ascent Score</h2>
-              <p className="mt-1 text-[12.5px] text-muted">
-                Site health across pillars, coverage and AI readiness
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="font-display text-4xl leading-none tracking-tight">
-                {plan.ascentScore.value || "—"}
-              </p>
-              <p className="label-mono mt-1 text-accent">
-                {plan.ascentScore.delta > 0 ? `▲ +${plan.ascentScore.delta} this cycle` : "Pending"}
-              </p>
-            </div>
-          </div>
-          <div className="mt-6 space-y-3.5">
-            <PillarBar label="Substance" value={plan.pillars.substance} />
-            <PillarBar label="Signal" value={plan.pillars.signal} delay={0.08} />
-            <PillarBar label="Structure" value={plan.pillars.structure} delay={0.16} />
-            <PillarBar label="AI retrieval" value={plan.retrievability} delay={0.24} />
-          </div>
-          <p className="mt-5 border-t border-line pt-4 text-[12px] leading-relaxed text-muted">
-            Substance is depth and originality. Signal is links and trust.
-            Structure is the technical layer. AI retrieval is how citable your
-            pages are in AI answers. The agent works on whatever raises this
-            score most.
-          </p>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[14.5px] font-medium">90 day roadmap</h2>
-            <span className="label-mono text-muted">Rebuilds every cycle</span>
-          </div>
-          {plan.roadmap.length === 0 && (
-            <p className="mt-4 text-[13px] leading-relaxed text-muted">
-              The roadmap is built from your keyword map. Add services and
-              locations in Settings and it will fill in here.
-            </p>
-          )}
-          <div className="mt-4 grid gap-3">
-            {plan.roadmap.map((r, i) => (
-              <div key={r.period} className="min-w-0 rounded-xl border border-line p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="label-mono text-accent">{r.period}</span>
-                  <span className="text-[12px] text-muted">{r.pages} pages</span>
-                </div>
-                <p className="mt-1.5 text-[13.5px] font-medium">{r.focus}</p>
-                {r.samples.length > 0 && (
-                  <p className="mt-1 truncate text-[12px] text-muted">
-                    {i === 0 ? "Starting with: " : "e.g. "}
-                    {r.samples.join(", ")}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* Cycle digest + AI visibility */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      {/* The agent's own account of the cycle.
+          The Ascent Score, the 90-day roadmap and the AI-visibility panel
+          used to sit above and beside this. All three were scoreboards
+          about work rather than the work: a composite number with no
+          action attached, a plan already expressed by the queue, and a
+          list of engines all reading "Monitoring" until citations exist to
+          report. This is what is left, and it is the one that says what
+          actually happened. */}
+      <div className="mt-6">
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <h2 className="text-[14.5px] font-medium">This cycle</h2>
@@ -534,31 +460,6 @@ function Overview({
                   <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 {a}
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[14.5px] font-medium">AI visibility</h2>
-            <span className="label-mono text-muted">Retrievability {plan.retrievability || "—"}/100</span>
-          </div>
-          <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
-            Every page is structured so AI answer engines can cite it: direct
-            answers first, entity-rich language, machine-readable structure.
-            Citations are tracked here once your first pages are live.
-          </p>
-          <div className="mt-4 grid gap-2 border-t border-line pt-4">
-            {/* Copilot belongs here: robots.ts already allows Bingbot
-                specifically because Copilot cites from the Bing index. */}
-            {["Google AI Mode", "Google AI Overviews", "ChatGPT", "Perplexity", "Gemini", "Microsoft Copilot"].map((engine) => (
-              <div key={engine} className="flex items-center justify-between text-[13px]">
-                <span className="text-ink/80">{engine}</span>
-                <span className="inline-flex items-center gap-2 text-[11.5px] text-muted">
-                  <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
-                  Monitoring
-                </span>
               </div>
             ))}
           </div>

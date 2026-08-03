@@ -24,7 +24,16 @@ import { safeFetch } from "../safe-fetch";
  */
 
 export type PublishResult =
-  | { ok: true; platform: "github"; commitSha: string | null; path: string; liveUrl: string | null; liveStatus: string | null }
+  | {
+      ok: true;
+      platform: "github";
+      commitSha: string | null;
+      path: string;
+      liveUrl: string | null;
+      liveStatus: string | null;
+      /** How the artwork was resolved, for the run summary. */
+      imageNote: string | null;
+    }
   | {
       ok: true;
       platform: "wordpress";
@@ -94,6 +103,47 @@ export async function publishGithub(input: {
   const path = `${prefix}${input.folder}/${input.slug}/index.html`;
   const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
 
+  // ARTWORK FIRST, then the page that references it.
+  //
+  // This was the other way round, with the image committed afterwards
+  // behind a `.catch(() => false)`. The reasoning was that a page with a
+  // broken image beats no page — but it also meant a failed artwork
+  // commit published a live page showing a broken-image icon and returned
+  // ok: true, so nothing anywhere reported it. That is what a customer
+  // actually saw on their site.
+  //
+  // Committing the image first makes the ordering honest: by the time the
+  // HTML goes live the bytes it points at are already in the repo. The
+  // commit is retried, because the usual failure is a transient 5xx or a
+  // secondary-rate-limit reply rather than anything permanent.
+  let html = input.html;
+  let imageNote: string | null = null;
+  if (input.image) {
+    const committed = await commitWithRetry({
+      token: input.token,
+      repo,
+      branch: input.branch,
+      path: `${prefix}${input.folder}/${input.slug}/${input.image.filename}`,
+      contentBase64: input.image.base64,
+      message: `Add artwork for ${input.title}`,
+    });
+    if (committed) {
+      imageNote = "artwork committed";
+    } else {
+      // Still publish — the page is worth more than the picture — but
+      // strip the reference so the reader gets the hero's brand-coloured
+      // ground rather than a broken-image icon, and say so in the result
+      // rather than reporting a clean success. Same treatment the
+      // WordPress path already gives orphaned artwork.
+      const orphan = new RegExp(
+        `<img\\b[^>]*src="[^"]*${input.image.filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*>`,
+        "gi"
+      );
+      html = html.replace(orphan, "");
+      imageNote = "artwork commit failed after retries; image reference removed";
+    }
+  }
+
   let sha: string | undefined;
   const existing = await fetch(apiUrl, { headers, cache: "no-store" });
   if (existing.ok) sha = ((await existing.json()) as { sha?: string }).sha;
@@ -103,7 +153,7 @@ export async function publishGithub(input: {
     headers,
     body: JSON.stringify({
       message: `Publish ${input.title}`,
-      content: Buffer.from(input.html, "utf8").toString("base64"),
+      content: Buffer.from(html, "utf8").toString("base64"),
       ...(input.branch ? { branch: input.branch } : {}),
       ...(sha ? { sha } : {}),
     }),
@@ -113,24 +163,38 @@ export async function publishGithub(input: {
     return { ok: false, error: `GitHub commit failed (${res.status})`, detail: (await res.text()).slice(0, 300) };
   }
 
-  // The image ships with the page. Committed after the HTML so a failure
-  // here leaves a page with a broken img rather than no page at all, and
-  // is best effort for the same reason the sitemap is.
-  if (input.image) {
-    await commitFile({
-      token: input.token,
-      repo,
-      branch: input.branch,
-      path: `${prefix}${input.folder}/${input.slug}/${input.image.filename}`,
-      contentBase64: input.image.base64,
-      message: `Add artwork for ${input.title}`,
-    }).catch(() => false);
-  }
-
   const json = (await res.json()) as { commit?: { sha?: string } };
   const liveUrl = input.siteUrl ? `${input.siteUrl.replace(/\/$/, "")}/${input.folder}/${input.slug}/` : null;
   const liveStatus = liveUrl ? await verifyLive(liveUrl) : null;
-  return { ok: true, platform: "github", commitSha: json.commit?.sha || null, path, liveUrl, liveStatus };
+  return { ok: true, platform: "github", commitSha: json.commit?.sha || null, path, liveUrl, liveStatus, imageNote };
+}
+
+/**
+ * commitFile, retried.
+ *
+ * Used for artwork, which the page's HTML references by name — so unlike
+ * the sitemap, a failure here is visible to every reader of the page. The
+ * failures worth retrying are the ones GitHub returns transiently: 5xx,
+ * and the 403 it uses for secondary rate limits when several commits land
+ * back to back, which is exactly what a publish does. Delays are
+ * deliberate: a page taking a few seconds longer is a better trade than a
+ * broken image sitting on a customer's site until someone notices.
+ */
+async function commitWithRetry(
+  input: Parameters<typeof commitFile>[0],
+  attempts = 3
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      if (await commitFile(input)) return true;
+    } catch {
+      // Treated the same as a false return: retry, then give up.
+    }
+    if (attempt < attempts) {
+      await new Promise((r) => setTimeout(r, attempt * 1500));
+    }
+  }
+  return false;
 }
 
 /** Creates or updates one file in the repo; returns false on failure. */

@@ -188,20 +188,31 @@ export async function heroImageFor(input: {
       .filter(Boolean)
       .join(" ");
 
-    try {
-      const img = await geminiImage(prompt);
-      if (img?.data) {
-        const ext = img.mimeType.includes("jpeg") ? "jpg" : img.mimeType.includes("webp") ? "webp" : "png";
-        return {
-          filename: `${base}.${ext}`,
-          base64: img.data,
-          alt,
-          source: "generated",
-          mimeType: img.mimeType,
-        };
+    // Retried before giving up on a real photograph.
+    //
+    // A single attempt meant one transient refusal — a rate limit, a
+    // safety filter tripping on an innocuous prompt, a 5xx — dropped the
+    // page to the SVG brandmark permanently, and the brandmark is
+    // obviously a placeholder to anyone looking at the published page.
+    // Spending a few extra seconds here is worth far more than shipping
+    // the fallback, so the model gets three tries with a widening gap.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const img = await geminiImage(prompt);
+        if (img?.data) {
+          const ext = img.mimeType.includes("jpeg") ? "jpg" : img.mimeType.includes("webp") ? "webp" : "png";
+          return {
+            filename: `${base}.${ext}`,
+            base64: img.data,
+            alt,
+            source: "generated",
+            mimeType: img.mimeType,
+          };
+        }
+      } catch {
+        // Same handling as an empty reply: try again, then fall through.
       }
-    } catch {
-      // fall through to the brandmark
+      if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2000));
     }
   }
 

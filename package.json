@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npx tsx test/wordpress-publish.test.ts && npx tsx test/wordpress-refresh.test.ts && npx tsx test/link-graph.test.ts && npx tsx test/capacity.test.ts && npx tsx test/entitlement.test.ts && npx tsx test/secrets-match.test.ts && npx tsx test/ssrf.test.ts && npx tsx test/jsonld-escape.test.ts && npx tsx test/pricing.test.ts && npx tsx test/rate-limit.live.test.ts && npx tsx test/entitlement.live.test.ts && npx tsx test/account-delete.live.test.ts"
+    "test": "npx tsx test/wordpress-publish.test.ts && npx tsx test/wordpress-refresh.test.ts && npx tsx test/link-graph.test.ts && npx tsx test/capacity.test.ts && npx tsx test/entitlement.test.ts && npx tsx test/secrets-match.test.ts && npx tsx test/ssrf.test.ts && npx tsx test/github-artwork.test.ts && npx tsx test/jsonld-escape.test.ts && npx tsx test/pricing.test.ts && npx tsx test/rate-limit.live.test.ts && npx tsx test/entitlement.live.test.ts && npx tsx test/account-delete.live.test.ts"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.1",
