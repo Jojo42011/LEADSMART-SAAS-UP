@@ -1511,8 +1511,14 @@ function Competitors({
               </span>
             </div>
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{c.threat.reason}</p>
-            {/* From live search rather than derived from the keyword set,
-                so it is the one genuinely researched thing on the card. */}
+            {/* From live search rather than derived from the keyword set —
+                the genuinely researched things on the card, not estimates. */}
+            {notes[c.name.toLowerCase()]?.strength && (
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+                <span className="font-medium text-ink/80">Why they rank </span>
+                {notes[c.name.toLowerCase()].strength}
+              </p>
+            )}
             {notes[c.name.toLowerCase()]?.weakness && (
               <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
                 <span className="font-medium text-accent">Your opening </span>
