@@ -223,7 +223,6 @@ function StatTile({
   deltaGood,
   spark,
   hue,
-  fmtSpark,
 }: {
   label: string;
   value: string;
@@ -232,7 +231,6 @@ function StatTile({
   deltaGood: boolean | null;
   spark: number[];
   hue: string;
-  fmtSpark?: (n: number) => string;
 }) {
   const w = 84;
   const h = 26;
@@ -246,7 +244,6 @@ function StatTile({
     })
     .join(" ");
   const lastPt = pts.split(" ").pop()?.split(",").map(Number) ?? [0, 0];
-  void fmtSpark;
 
   return (
     <div className="min-w-0 rounded-2xl border border-line bg-paper p-5">
@@ -271,7 +268,20 @@ function StatTile({
 
 /* ------------------------------ Connect card ----------------------------- */
 
-function ConnectCard({ googleReady, error }: { googleReady: boolean; error?: string }) {
+function ConnectCard({
+  googleReady,
+  error,
+  alreadyConnected,
+  properties,
+}: {
+  googleReady: boolean;
+  error?: string;
+  /** True when Google auth succeeded but no property could be read —
+   * a mismatch, not a missing connection. Re-running OAuth cannot fix
+   * this, so the card must not offer that as the way out. */
+  alreadyConnected?: boolean;
+  properties?: string[];
+}) {
   return (
     <div className="rounded-2xl border border-line bg-paper p-8 sm:p-10">
       <div className="mx-auto max-w-md text-center">
@@ -282,17 +292,41 @@ function ConnectCard({ googleReady, error }: { googleReady: boolean; error?: str
           </svg>
         </span>
         <h2 className="font-display mt-5 text-[22px] tracking-tight">See what your site is really doing</h2>
-        <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
-          Connect Google Search Console and this tab fills with your actual
-          impressions, clicks, click-through rate and ranking position —
-          straight from Google, updated daily.
-        </p>
+        {!alreadyConnected && (
+          <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
+            Connect Google Search Console and this tab fills with your actual
+            impressions, clicks, click-through rate and ranking position —
+            straight from Google, updated daily.
+          </p>
+        )}
         {error && (
           <p className="mt-4 rounded-xl border border-accent/30 bg-accent-dim px-4 py-3 text-[12.5px] leading-relaxed text-ink">
             {error}
           </p>
         )}
-        {googleReady ? (
+        {alreadyConnected ? (
+          <>
+            {/* Google is already connected — the fix is verifying the
+                right property in Search Console, not repeating OAuth,
+                which would succeed again and change nothing. */}
+            {properties && properties.length > 0 && (
+              <p className="mt-4 text-[12.5px] leading-relaxed text-muted">
+                This Google account can already read:{" "}
+                <span className="text-ink">{properties.join(", ")}</span>. None of
+                those match this site&apos;s URL.
+              </p>
+            )}
+            <a
+              href="https://search.google.com/search-console"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-ink px-7 py-3.5 text-[14.5px] font-medium text-on-ink transition-colors hover:bg-accent"
+            >
+              Open Search Console
+              <span aria-hidden="true">&rarr;</span>
+            </a>
+          </>
+        ) : googleReady ? (
           <a
             href="/api/connect/gsc/start?flow=dashboard"
             className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-ink px-7 py-3.5 text-[14.5px] font-medium text-on-ink transition-colors hover:bg-accent"
@@ -404,6 +438,13 @@ export function Analytics() {
         <ConnectCard
           googleReady={data.googleReady}
           error={data.connected ? data.error || "No data returned." : data.error}
+          // Narrower than "connected: true" alone: the API also returns
+          // connected:true when a resolved, matching property's query
+          // simply failed (a transient error whose own copy correctly
+          // says to reconnect). The "OAuth can't fix this" case is
+          // specifically when no property was ever resolved.
+          alreadyConnected={data.connected && !data.property}
+          properties={data.properties}
         />
         <SitePicker sites={agentSites} value={scopedId} onChange={setSiteId} />
         <AgentStatus siteId={scopedId} />
@@ -594,17 +635,6 @@ export function Analytics() {
 }
 
 /**
- * A month of publishing at a glance: which days the agent shipped a page,
- * which days it held one, and when the next cycle is due.
- *
- * Built from the engine's own rows rather than a schedule model, so it
- * shows what actually happened. Upcoming days are projected from the
- * site's cadence and marked as projections, never mixed in with real
- * history — a calendar that draws planned work in the same ink as
- * finished work is the kind of thing that quietly misleads an owner about
- * what their site contains.
- */
-/**
  * What the agent has actually been doing: whether it is running, how much
  * it produces per day, and how long it has been operational.
  *
@@ -750,6 +780,17 @@ function AgentStatus({ siteId }: { siteId?: string }) {
   );
 }
 
+/**
+ * A month of publishing at a glance: which days the agent shipped a page,
+ * which days it held one, and when the next cycle is due.
+ *
+ * Built from the engine's own rows rather than a schedule model, so it
+ * shows what actually happened. Upcoming days are projected from the
+ * site's cadence and marked as projections, never mixed in with real
+ * history — a calendar that draws planned work in the same ink as
+ * finished work is the kind of thing that quietly misleads an owner about
+ * what their site contains.
+ */
 function PublishingCalendar({ siteId }: { siteId?: string }) {
   const { engine, sites } = useAgentPages();
   const [monthOffset, setMonthOffset] = useState(0);
