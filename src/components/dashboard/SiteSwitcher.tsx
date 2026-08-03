@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AgentSite } from "@/lib/agent-pages";
-import { quoteFor, describeQuote, PRICE_PER_SITE, BUNDLE_SITES, BUNDLE_PRICE } from "@/lib/pricing";
+import { quoteFor, describeQuote, PRICE_PER_SITE } from "@/lib/pricing";
 
 /**
  * The "+" beside the site name: switch between the owner's websites, or
@@ -235,10 +235,8 @@ export function SiteSwitcher({
 /**
  * What adding one more site costs, stated before it is charged.
  *
- * Shows the delta rather than only the new total, because the delta is the
- * number the customer is deciding about — and when the three-pack makes
- * that delta smaller than the sticker price, saying so is worth more than
- * the dollar it forgoes.
+ * Shows the delta as well as the new total, because the delta is the
+ * number the customer is actually deciding about.
  */
 function AddConfirm({
   seats,
@@ -254,7 +252,6 @@ function AddConfirm({
   const now = quoteFor(seats.allowance);
   const next = quoteFor(seats.allowance + 1);
   const delta = next.total - now.total;
-  const cheaperThanSticker = delta < PRICE_PER_SITE;
 
   return (
     <div className="p-4">
@@ -281,10 +278,8 @@ function AddConfirm({
       </dl>
 
       <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">
-        {describeQuote(next)}.{" "}
-        {cheaperThanSticker
-          ? `The ${BUNDLE_SITES}-website pack at $${BUNDLE_PRICE} makes this one $${delta} instead of $${PRICE_PER_SITE}.`
-          : "Prorated — you only pay for the rest of this month."}
+        {describeQuote(next)}. Prorated — you only pay for the rest of this
+        month.
       </p>
 
       <div className="mt-3.5 flex items-center gap-2">

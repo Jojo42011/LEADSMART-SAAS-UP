@@ -12,7 +12,7 @@ import {
   type PublishMode,
 } from "@/lib/onboarding";
 import { buildPlan, type PageDraft } from "@/lib/plan";
-import { PRICE_PER_SITE, BUNDLE_SITES, BUNDLE_PRICE } from "@/lib/pricing";
+import { PRICE_PER_SITE } from "@/lib/pricing";
 import { SiteSwitcher } from "./SiteSwitcher";
 import { Connections } from "./Connections";
 import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
@@ -242,14 +242,11 @@ export function Dashboard() {
         >
           <p className="label-mono text-muted">Plan</p>
           <p className="mt-1 text-[13.5px] font-medium">Active</p>
-          {/* Deliberately the rate rather than a total: this card sits in
-              the shell and does not know how many websites the tenant has,
-              and a number stated confidently here would be wrong for
-              everyone on the three-pack. The Billing tab shows the real
-              total. */}
-          <p className="mt-0.5 text-[12px] text-muted">
-            ${PRICE_PER_SITE} per website · {BUNDLE_SITES} for ${BUNDLE_PRICE}
-          </p>
+          {/* The rate rather than a total: this card sits in the shell and
+              does not know how many websites the tenant has, so a total
+              stated here would be wrong for anyone running more than one.
+              The Billing tab shows the real total. */}
+          <p className="mt-0.5 text-[12px] text-muted">${PRICE_PER_SITE} per website, monthly</p>
           <p className="mt-2 text-[12px] font-medium text-accent">Manage billing &rarr;</p>
         </button>
       </aside>

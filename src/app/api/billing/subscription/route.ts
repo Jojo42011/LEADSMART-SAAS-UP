@@ -9,7 +9,7 @@ import {
   setSubscriptionSites,
 } from "@/lib/stripe";
 import { siteAllowanceFor, setSiteAllowance } from "@/lib/engine/store";
-import { quoteFor, describeQuote, bundleUpsell } from "@/lib/pricing";
+import { quoteFor, describeQuote } from "@/lib/pricing";
 
 /**
  * The signed-in owner's subscription, and the actions on it.
@@ -51,7 +51,6 @@ export async function GET(req: NextRequest) {
       seats,
       quote: quoteFor(seats.allowance),
       quoteLabel: describeQuote(quoteFor(seats.allowance)),
-      upsell: bundleUpsell(seats.allowance),
     });
   }
 
@@ -67,7 +66,6 @@ export async function GET(req: NextRequest) {
     seats,
     quote: quoteFor(seats.allowance),
     quoteLabel: describeQuote(quoteFor(seats.allowance)),
-    upsell: bundleUpsell(seats.allowance),
   });
 }
 

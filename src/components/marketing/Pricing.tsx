@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Reveal } from "@/components/ui/Reveal";
-import { PRICE_PER_SITE, BUNDLE_SITES, BUNDLE_PRICE } from "@/lib/pricing";
+import { PRICE_PER_SITE } from "@/lib/pricing";
 
 const included = [
   "Daily competitor and keyword research",
@@ -23,16 +23,15 @@ export function Pricing() {
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="label-mono text-accent">Pricing</span>
           <h2 className="font-display mt-5 text-4xl leading-[1.08] tracking-tight sm:text-5xl">
-            Two ways to pay.
+            One plan.
             <br />
-            <em className="text-muted">Everything included in both.</em>
+            <em className="text-muted">Everything included.</em>
           </h2>
           <p className="mt-5 text-[15.5px] leading-relaxed text-muted">
             An agency retainer starts around $3,000 a month, on a contract,
             after a sales call. This is ${PRICE_PER_SITE} per website, month
-            to month, and it publishes every day. Running {BUNDLE_SITES} or
-            more? All {BUNDLE_SITES} are ${BUNDLE_PRICE} together. Each
-            website gets its own agent either way.
+            to month, and it publishes every day. Add as many websites as you
+            want — each one gets its own agent.
           </p>
         </Reveal>
 
@@ -55,24 +54,6 @@ export function Pricing() {
                     Every website gets its own autonomous agent, its own
                     strategy and its own publishing schedule.
                   </p>
-                  <div className="mt-6 rounded-xl border border-accent/40 bg-accent/10 p-4">
-                    <span className="label-mono text-accent">
-                      {BUNDLE_SITES}-pack
-                    </span>
-                    <div className="mt-2 flex items-baseline gap-1.5">
-                      <span className="font-display text-4xl tracking-tight">
-                        ${BUNDLE_PRICE}
-                      </span>
-                      <span className="text-[13px] text-on-ink/75">
-                        /month for {BUNDLE_SITES}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-[12.5px] leading-relaxed text-on-ink/75">
-                      ${BUNDLE_SITES * PRICE_PER_SITE - BUNDLE_PRICE} less than
-                      paying per website. Extra websites beyond the pack are $
-                      {PRICE_PER_SITE} each.
-                    </p>
-                  </div>
                 </div>
                 <Link
                   href="/signup"

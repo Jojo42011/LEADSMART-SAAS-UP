@@ -68,7 +68,13 @@ export default function RootLayout({
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('ascent-theme');if(!t){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();`,
+            // Light is the product's default, not the operating system's
+            // preference. Following prefers-color-scheme meant most
+            // first-time visitors — who skew dark at the OS level — met a
+            // dark marketing site, which is not the impression this brand
+            // is built to make. Dark is a choice the toggle stores, and a
+            // stored choice always wins from then on.
+            __html: `(function(){try{var t=localStorage.getItem('ascent-theme');if(t!=='dark'&&t!=='light'){t='light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();`,
           }}
         />
       </head>

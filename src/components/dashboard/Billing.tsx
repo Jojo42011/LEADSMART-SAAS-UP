@@ -26,7 +26,7 @@ type Subscription = {
 };
 
 type Seats = { allowance: number; used: number };
-type Quote = { sites: number; total: number; plan: "per-site" | "bundle"; savedVersusPerSite: number };
+type Quote = { sites: number; total: number };
 
 type BillingState = {
   ok: boolean;
@@ -38,7 +38,6 @@ type BillingState = {
   seats?: Seats;
   quote?: Quote;
   quoteLabel?: string;
-  upsell?: { worthIt: boolean; message: string };
   error?: string;
 };
 
@@ -252,20 +251,6 @@ export function Billing() {
               </button>
             </div>
           </div>
-
-          {/* The three-pack, surfaced where the decision is made rather
-              than only on the marketing page. Shown as a fact about what
-              it would cost, not as a nag. */}
-          {state.upsell?.worthIt && state.upsell.message && (
-            <p className="mt-4 rounded-xl border border-accent/40 bg-accent/[0.06] p-3.5 text-[12.5px] leading-relaxed text-ink">
-              {state.upsell.message}
-            </p>
-          )}
-          {state.quote?.plan === "bundle" && state.quote.savedVersusPerSite > 0 && (
-            <p className="mt-4 text-[12px] text-muted">
-              The three-pack saves you ${state.quote.savedVersusPerSite} a month against paying per website.
-            </p>
-          )}
 
           {state.seats.used < state.seats.allowance && (
             <a

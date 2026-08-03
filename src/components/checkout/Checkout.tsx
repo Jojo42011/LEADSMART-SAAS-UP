@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { saveBilling } from "@/lib/billing";
-import { quoteFor, describeQuote, bundleUpsell, PRICE_PER_SITE } from "@/lib/pricing";
+import { quoteFor, describeQuote, PRICE_PER_SITE } from "@/lib/pricing";
 
 const ease = [0.21, 0.47, 0.32, 0.98] as const;
 
@@ -66,7 +66,6 @@ export function Checkout() {
   // marketing page and the Stripe line items — see src/lib/pricing.ts.
   const quote = quoteFor(sites);
   const total = quote.total;
-  const upsell = bundleUpsell(sites);
 
   /** Real checkout: create a Stripe session and hand the browser to Stripe. */
   const payStripe = async () => {
@@ -170,22 +169,6 @@ export function Checkout() {
                   </button>
                 </div>
               </div>
-
-              {upsell.worthIt && (
-                <button
-                  type="button"
-                  onClick={() => setSites(3)}
-                  className="mt-3 w-full rounded-xl border border-accent/40 bg-accent/10 px-4 py-2.5 text-left text-[11.5px] leading-relaxed text-on-ink/85 transition-colors hover:border-accent"
-                >
-                  {upsell.message}
-                </button>
-              )}
-              {quote.plan === "bundle" && quote.savedVersusPerSite > 0 && (
-                <p className="mt-3 text-[11.5px] text-on-ink/75">
-                  Three-pack applied — ${quote.savedVersusPerSite} less than $
-                  {PRICE_PER_SITE} per website.
-                </p>
-              )}
 
               <ul className="mt-6 grid gap-2.5">
                 {included.map((f) => (

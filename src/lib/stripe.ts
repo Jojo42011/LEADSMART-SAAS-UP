@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { quoteFor, BUNDLE_SITES, BUNDLE_PRICE, PRICE_PER_SITE } from "./pricing";
+import { quoteFor, PRICE_PER_SITE } from "./pricing";
 
 /**
  * Server side Stripe wrapper over the REST API — no SDK, matching the
@@ -18,53 +18,28 @@ export function stripeConfigured(): boolean {
 /**
  * Builds the subscription's line items for a given number of websites.
  *
- * Two items rather than one, because the three-pack is a different unit
- * of sale from an individual site: the pack is a flat $99 and everything
- * beyond it is $49 each. Expressing that as a single averaged price would
- * make the invoice unreadable and would drift the moment a site is added.
- *
- * A configured STRIPE_PRICE_ID still wins for the per-site line, so a real
- * Price object created in the dashboard is used when one exists; the pack
- * has its own optional STRIPE_BUNDLE_PRICE_ID for the same reason.
+ * A configured STRIPE_PRICE_ID wins, so a real Price object created in the
+ * dashboard is used when one exists; otherwise the price is created inline
+ * so checkout works the moment the secret key does.
  */
 function applyLineItems(params: URLSearchParams, sites: number): void {
-  const quote = quoteFor(sites);
-  let index = 0;
-
+  // One line item: the per-site price at quantity = number of sites.
+  // There was briefly a second item for a three-site pack; removing it
+  // also removed the seat-counting trap it created, where item 0 had
+  // quantity 1 regardless of how many sites it covered.
   const perSitePrice = process.env.STRIPE_PRICE_ID;
-  const bundlePrice = process.env.STRIPE_BUNDLE_PRICE_ID;
-
-  if (quote.plan === "bundle") {
-    if (bundlePrice) {
-      params.set(`line_items[${index}][price]`, bundlePrice);
-    } else {
-      params.set(`line_items[${index}][price_data][currency]`, "usd");
-      params.set(`line_items[${index}][price_data][unit_amount]`, String(BUNDLE_PRICE * 100));
-      params.set(`line_items[${index}][price_data][recurring][interval]`, "month");
-      params.set(
-        `line_items[${index}][price_data][product_data][name]`,
-        `Ascent — ${BUNDLE_SITES} websites`
-      );
-    }
-    params.set(`line_items[${index}][quantity]`, "1");
-    index += 1;
+  if (perSitePrice) {
+    params.set("line_items[0][price]", perSitePrice);
+  } else {
+    params.set("line_items[0][price_data][currency]", "usd");
+    params.set("line_items[0][price_data][unit_amount]", String(PRICE_PER_SITE * 100));
+    params.set("line_items[0][price_data][recurring][interval]", "month");
+    params.set(
+      "line_items[0][price_data][product_data][name]",
+      "Ascent — autonomous SEO agent, per website"
+    );
   }
-
-  const extras = quote.plan === "bundle" ? sites - BUNDLE_SITES : sites;
-  if (extras > 0) {
-    if (perSitePrice) {
-      params.set(`line_items[${index}][price]`, perSitePrice);
-    } else {
-      params.set(`line_items[${index}][price_data][currency]`, "usd");
-      params.set(`line_items[${index}][price_data][unit_amount]`, String(PRICE_PER_SITE * 100));
-      params.set(`line_items[${index}][price_data][recurring][interval]`, "month");
-      params.set(
-        `line_items[${index}][price_data][product_data][name]`,
-        "Ascent — autonomous SEO agent, per website"
-      );
-    }
-    params.set(`line_items[${index}][quantity]`, String(extras));
-  }
+  params.set("line_items[0][quantity]", String(Math.max(1, Math.floor(sites) || 1)));
 }
 
 export async function createCheckoutSession(input: {
@@ -86,10 +61,8 @@ export async function createCheckoutSession(input: {
   // is still collected at checkout so the trial converts by default; a
   // customer who cancels during the trial is never charged.
   // The site count lives on the subscription, not just the checkout
-  // session. Item quantities cannot answer "how many websites" once the
-  // three-pack exists — the pack is one item of quantity one covering
-  // three sites — so reading it back from items would report a 3-site
-  // customer as having 1.
+  // session, so entitlement and the seat limit can read it back without
+  // depending on the shape of the line items.
   params.set("subscription_data[metadata][sites]", String(qty));
   const trialDays = Number(process.env.STRIPE_TRIAL_DAYS ?? 7);
   if (Number.isFinite(trialDays) && trialDays > 0) {
@@ -240,10 +213,11 @@ export async function getSubscriptionForCustomer(
 /**
  * How many websites a subscription covers.
  *
- * The metadata written at checkout is authoritative. The fallback sums
- * item quantities, which is correct only for subscriptions created before
- * the three-pack existed — with a pack the arithmetic undercounts, which
- * is exactly why the metadata is written.
+ * The metadata written at checkout is authoritative; summing item
+ * quantities is the fallback for subscriptions created before that
+ * metadata existed. Both agree now that there is one line item per site,
+ * but the metadata is kept as the primary read so a future change to the
+ * line-item shape cannot silently move the seat count again.
  */
 function siteCountOf(sub: {
   metadata?: Record<string, string> | null;
@@ -318,10 +292,10 @@ export async function createPortalSession(input: {
  * days of service is the kind of thing that gets noticed once and
  * remembered permanently.
  *
- * The whole item set is replaced rather than nudged, because moving
- * across the three-pack boundary changes which items exist at all: a
- * second site is one per-site line, a third is a pack line and no
- * per-site line. Incrementing a quantity could not express that.
+ * The whole item set is replaced rather than nudged. With one per-site
+ * line that is more work than incrementing a quantity, but it keeps this
+ * function correct for subscriptions created under the earlier two-item
+ * pricing, whose items do not match what applyLineItems now builds.
  */
 export async function setSubscriptionSites(
   subscriptionId: string,
