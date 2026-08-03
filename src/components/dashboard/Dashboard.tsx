@@ -19,6 +19,7 @@ import { Connections } from "./Connections";
 import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
+import { refreshAndSaveResearch } from "@/lib/research-client";
 import { useAgentPages, allPages, type AgentPage } from "@/lib/agent-pages";
 import { Billing } from "./Billing";
 import { ContactForm } from "../support/ContactForm";
@@ -140,11 +141,21 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   return <div className={`min-w-0 rounded-2xl border border-line bg-paper ${className}`}>{children}</div>;
 }
 
-function EmptyState({ title, sub }: { title: string; sub: string }) {
+function EmptyState({
+  title,
+  sub,
+  action,
+}: {
+  title: string;
+  sub: string;
+  /** Optional call-to-action rendered under the copy (e.g. a research button). */
+  action?: React.ReactNode;
+}) {
   return (
     <Card className="p-10 text-center">
       <p className="text-[14.5px] font-medium">{title}</p>
-      <p className="mx-auto mt-1.5 max-w-sm text-[13px] text-muted">{sub}</p>
+      <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-muted">{sub}</p>
+      {action && <div className="mt-5 flex justify-center">{action}</div>}
     </Card>
   );
 }
@@ -172,6 +183,12 @@ export function Dashboard() {
     () => (intel.research?.competitors ?? []).map((c) => c.domain).filter(Boolean),
     [intel.research]
   );
+  // Keyword targets the research cycle discovered, folded into the same
+  // scored keyword universe as the service/location and wishlist terms.
+  const discoveredKeywords = useMemo(
+    () => (intel.research?.keywords ?? []).map((k) => k.keyword).filter(Boolean),
+    [intel.research]
+  );
   /** What live research said about each competitor, keyed by domain. */
   const researchNotes = useMemo(() => {
     const map: Record<string, { strength: string; weakness: string }> = {};
@@ -180,7 +197,14 @@ export function Dashboard() {
     }
     return map;
   }, [intel.research]);
-  const plan = useMemo(() => buildPlan(data, discovered), [data, discovered]);
+  const plan = useMemo(
+    () => buildPlan(data, discovered, discoveredKeywords),
+    [data, discovered, discoveredKeywords]
+  );
+  // Both tabs' research buttons write to the intel cache; this pulls the
+  // fresh snapshot back so the plan recomputes — the same refresh the
+  // Settings "Save changes" flow uses via onApplied.
+  const refreshIntel = () => setIntel(loadIntel());
 
   // The header names whichever site the switcher is pointed at. The local
   // onboarding buffer only ever holds one site, so on a multi-site account
@@ -317,14 +341,22 @@ export function Dashboard() {
                 this — a second keyword list over the real one, the same
                 shape the Competitors tab had before its research panel was
                 merged away. The table below is the authoritative view. */}
-            {tab === "Keywords" && <Keywords plan={plan} />}
+            {tab === "Keywords" && (
+              <Keywords plan={plan} data={data} onResearched={refreshIntel} />
+            )}
             {/* The Live-research panel used to sit above these cards
                 listing the same competitors a second time — the research
                 findings and the analysed cards were two renderings of one
                 set of domains, on one screen. The research sentences now
                 ride on the card they describe. */}
             {tab === "Competitors" && (
-              <Competitors plan={plan} goTo={setTab} notes={researchNotes} />
+              <Competitors
+                plan={plan}
+                goTo={setTab}
+                notes={researchNotes}
+                data={data}
+                onResearched={refreshIntel}
+              />
             )}
             {tab === "Billing" && <Billing />}
             {tab === "Support" && <SupportPanel />}
@@ -1329,27 +1361,129 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
   );
 }
 
+/* --------------------------- Research actions --------------------------- */
+
+/**
+ * The on-demand live-research action shared by the Competitors ("find
+ * competitors") and Keywords ("generate keywords") buttons.
+ *
+ * One Google-grounded research call returns competitors AND keyword targets
+ * together, so both buttons run the same operation and differ only in which
+ * half of the result their tab is built to show. Keeping the trigger in one
+ * hook means the two entry points cannot drift in how they fetch, cache, or
+ * report — the same reason the fetch itself lives in research-client.ts.
+ */
+function useResearchAction(data: OnboardingData, onResearched: () => void) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  // The search needs something to look for. Industry or services is enough;
+  // with neither there is nothing to ground the query on.
+  const canResearch =
+    data.market.industry.trim() !== "" || data.market.services.trim() !== "";
+
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    setMessage(null);
+    const research = await refreshAndSaveResearch(data);
+    setBusy(false);
+    if (!research) {
+      setMessage("Couldn't reach the research engine. Try again in a moment.");
+      return;
+    }
+    onResearched();
+    // On a live pass the refreshed table is the feedback, so stay quiet.
+    // When the deployment has no Google-grounded engine the call still
+    // returns useful targets expanded from the owner's own answers — say
+    // so rather than letting it read as a live market search that wasn't.
+    setMessage(
+      research.source === "live"
+        ? null
+        : "Live Google search isn't configured here — expanded from your own answers instead."
+    );
+  };
+
+  return { run, busy, message, canResearch };
+}
+
+function ResearchButton({
+  label,
+  busyLabel,
+  action,
+}: {
+  label: string;
+  busyLabel: string;
+  action: ReturnType<typeof useResearchAction>;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-1 sm:items-end">
+      <button
+        onClick={action.run}
+        disabled={action.busy || !action.canResearch}
+        title={
+          action.canResearch
+            ? "Searches Google for your market and folds the findings into the plan"
+            : "Add your industry or services in Settings first — the search needs something to look for."
+        }
+        className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-on-ink transition-colors hover:bg-accent disabled:opacity-60"
+      >
+        {action.busy && (
+          <span
+            aria-hidden="true"
+            className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-on-ink/30 border-t-white"
+          />
+        )}
+        {action.busy ? busyLabel : label}
+      </button>
+      {/* role=status so the outcome is announced, not conveyed by a
+          transient colour change alone. */}
+      <span role="status" aria-live="polite" className="max-w-xs text-[11.5px] leading-snug text-muted">
+        {action.busy ? "Searching Google…" : action.message ?? ""}
+      </span>
+    </div>
+  );
+}
+
 /* ------------------------------- Keywords ------------------------------- */
 
-function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
+function Keywords({
+  plan,
+  data,
+  onResearched,
+}: {
+  plan: ReturnType<typeof buildPlan>;
+  data: OnboardingData;
+  onResearched: () => void;
+}) {
+  const research = useResearchAction(data, onResearched);
+
   if (plan.keywords.length === 0)
     return (
       <EmptyState
         title="No keywords tracked yet"
-        sub="Add your services and locations in Settings and the agent will map the keywords worth ranking for."
+        sub="Add your services and locations in Settings and the agent maps the keywords worth ranking for — or search Google for them now."
+        action={<ResearchButton label="Generate keywords" busyLabel="Generating…" action={research} />}
       />
     );
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between px-6 pt-6">
-        <h2 className="text-[14.5px] font-medium">Tracked keywords</h2>
-        <span className="label-mono text-muted">{plan.keywords.length} keywords</span>
+      <div className="flex flex-wrap items-start justify-between gap-3 px-6 pt-6">
+        <div>
+          <h2 className="text-[14.5px] font-medium">Tracked keywords</h2>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+            Ordered by business potential — how likely a searcher is to become a
+            customer, not how many people search.
+          </p>
+        </div>
+        <div className="flex flex-col items-start gap-1.5 sm:items-end">
+          <span className="label-mono text-muted">{plan.keywords.length} keywords</span>
+          {/* Generate keywords: a live Google-grounded pass whose targets
+              fold into the table below on the same scored footing. */}
+          <ResearchButton label="Generate keywords" busyLabel="Generating…" action={research} />
+        </div>
       </div>
-      <p className="mt-1 px-6 text-[12.5px] leading-relaxed text-muted">
-        Ordered by business potential — how likely a searcher is to become a
-        customer, not how many people search.
-      </p>
       {/* The off-site guidance is real and worth having, but it was two
           dense paragraphs above a table nobody had read yet. It sits behind
           a disclosure now: available when the column raises the question,
@@ -1450,27 +1584,36 @@ function Competitors({
   plan,
   goTo,
   notes = {},
+  data,
+  onResearched,
 }: {
   plan: ReturnType<typeof buildPlan>;
   goTo: (t: Tab) => void;
   /** Live-research strength/weakness per domain, when research has run. */
   notes?: Record<string, { strength: string; weakness: string }>;
+  data: OnboardingData;
+  onResearched: () => void;
 }) {
+  const research = useResearchAction(data, onResearched);
+
   if (plan.competitors.length === 0)
     return (
       <Card className="p-10 text-center">
         <p className="text-[14.5px] font-medium">No competitors mapped yet</p>
         <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-muted">
-          The agent finds these from live search on its first research cycle.
-          Add your services and locations in Settings if you have not yet —
-          it needs a market to search in.
+          Search Google for the sites ranking in your market now, or let the
+          agent find them on its first research cycle. Either way it needs
+          your services and locations set in Settings first.
         </p>
-        <button
-          onClick={() => goTo("Settings")}
-          className="mt-5 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-medium text-on-ink transition-colors hover:bg-accent"
-        >
-          Open Settings &rarr;
-        </button>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+          <ResearchButton label="Find competitors" busyLabel="Searching…" action={research} />
+          <button
+            onClick={() => goTo("Settings")}
+            className="inline-flex items-center gap-2 rounded-full border border-line px-5 py-2.5 text-[13px] font-medium text-ink transition-colors hover:border-ink/40 hover:bg-paper-warm"
+          >
+            Open Settings &rarr;
+          </button>
+        </div>
       </Card>
     );
 
@@ -1479,9 +1622,15 @@ function Competitors({
   return (
     <>
       <Card className="p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-[14.5px] font-medium">Keyword gap analysis</h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-[14.5px] font-medium">Keyword gap analysis</h2>
+              {/* Find competitors: re-runs the same Google-grounded search
+                  the agent uses, so the owner can refresh the set on demand
+                  rather than wait for the next cycle. */}
+              <ResearchButton label="Find competitors" busyLabel="Searching…" action={research} />
+            </div>
             {/* Was a ten-line paragraph defining four gap types, explaining
                 how findings feed the queue and caveating the estimates —
                 all before the reader had seen a single competitor. The

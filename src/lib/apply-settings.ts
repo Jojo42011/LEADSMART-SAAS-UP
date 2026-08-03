@@ -2,7 +2,8 @@
 
 import type { OnboardingData } from "./onboarding";
 import { saveOnboarding } from "./onboarding";
-import { clearIntel, saveIntel, type Research } from "./intel";
+import { clearIntel, saveIntel } from "./intel";
+import { runLiveResearch } from "./research-client";
 import { marketProfileOf, profileChanged, savePlannedProfile } from "./profile";
 
 /**
@@ -41,27 +42,6 @@ export type ApplyResult = {
   cleared?: { keywords: number; competitors: number; drafts: number } | null;
   message: string;
 };
-
-async function refreshResearch(data: OnboardingData): Promise<Research | null> {
-  try {
-    const res = await fetch("/api/research", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        business: data.business,
-        market: data.market,
-        websiteUrl: data.website.url,
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!res.ok) return null;
-    const research = (await res.json()) as Research;
-    if (!research || !Array.isArray(research.keywords)) return null;
-    return research;
-  } catch {
-    return null;
-  }
-}
 
 async function syncEngine(
   data: OnboardingData,
@@ -117,7 +97,7 @@ export async function applySettings(
   clearIntel();
 
   stage("researching");
-  const research = await refreshResearch(data);
+  const research = await runLiveResearch(data);
   if (research) saveIntel({ research: { ...research, ranAt: new Date().toISOString() } });
 
   stage("syncing");

@@ -220,6 +220,7 @@ function checkVeto(term: string): Veto {
 
 /**
  * @param discoveredCompetitors Domains the research cycle found on its own.
+ * @param discoveredKeywords Keyword terms the research cycle found on its own.
  *
  * The competitor list used to come only from the box the owner typed into
  * during onboarding, so leaving it blank — which is the sensible thing to
@@ -229,8 +230,19 @@ function checkVeto(term: string): Veto {
  * sites ranking in the market, and throwing the answer away as far as this
  * view was concerned. Discovered domains win when present; the typed list
  * stays as a seed for anyone who does have names in mind.
+ *
+ * Discovered keywords ride the same path: the research engine returns
+ * live, Google-grounded keyword targets, and folding them into the same
+ * scored/deduped keyword universe here — rather than showing them in a
+ * separate list — means one keyword table, ranked one way, with the
+ * researched terms competing on the same footing as the ones derived from
+ * services and locations.
  */
-export function buildPlan(data: OnboardingData, discoveredCompetitors?: string[]): Plan {
+export function buildPlan(
+  data: OnboardingData,
+  discoveredCompetitors?: string[],
+  discoveredKeywords?: string[]
+): Plan {
   const services = parseList(data.market.services);
   const locations = Array.from(
     new Set(
@@ -282,17 +294,32 @@ export function buildPlan(data: OnboardingData, discoveredCompetitors?: string[]
     });
   };
 
-  // Owner's wishlist seeds the queue first.
-  for (const term of parseList(data.market.wishlist)) {
+  // Intent inferred from the phrasing of a free-text term, for keywords
+  // that did not come from the service × location template (the owner's
+  // wishlist and the terms live research discovered).
+  const inferIntent = (term: string): KeywordRow["intent"] => {
     const lower = term.toLowerCase();
-    const intent: KeywordRow["intent"] = lower.includes("near me")
+    return lower.includes("near me")
       ? "Near me"
       : /^(how|what|why|when|which|can|do|does|is|are|should)\b/.test(lower) || lower.endsWith("?")
         ? "Question"
         : locations.some((l) => lower.includes(l.toLowerCase()))
           ? "Local"
           : "Service";
-    push(term, intent, true);
+  };
+
+  // Owner's wishlist seeds the queue first.
+  for (const term of parseList(data.market.wishlist)) {
+    push(term, inferIntent(term), true);
+  }
+
+  // Terms live research surfaced, seeded before the mechanical expansion so
+  // a Google-grounded target wins the dedup over a templated near-duplicate.
+  // Not wishlisted — the owner did not ask for these, the engine proposed
+  // them — but they compete for a slot on the same scored footing.
+  for (const term of discoveredKeywords ?? []) {
+    const clean = term.trim();
+    if (clean) push(clean, inferIntent(clean));
   }
 
   for (const service of services) {
