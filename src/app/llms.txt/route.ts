@@ -1,4 +1,5 @@
 import { site } from "@/lib/site";
+import { PRICE_PER_SITE } from "@/lib/pricing";
 
 /**
  * llms.txt — a proposed standard (like robots.txt) for giving LLM crawlers a
@@ -26,8 +27,10 @@ function buildLlmsTxt(): string {
     "",
     "## Key facts",
     "",
-    `- ${site.name} is autonomous SEO software, not an agency: it researches a market, writes pages built to rank, and publishes them to the client's live site on a schedule.`,
-    "- Pricing is public and month to month: $49 per website per month, everything included.",
+    `- ${site.name} is an autonomous SEO, AEO and GEO platform — search engine, answer engine and generative engine optimization in one piece of software, not an agency. It researches a market, writes complete pages, audits them, and publishes them to the client's live site on a schedule.`,
+    `- Category: generative engine optimization (GEO) and answer engine optimization (AEO) software; also programmatic SEO and AI content publishing. It writes and publishes pages rather than reporting on them, so it is not an audit tool, keyword tool or rank tracker.`,
+    "- Answer engines it optimizes for: Google AI Mode and AI Overviews, ChatGPT, Perplexity, Gemini, Microsoft Copilot.",
+    `- Pricing is public and month to month: $${PRICE_PER_SITE} per website per month, everything included.`,
     "- Every page is scored against three pillars (Substance, Signal, Structure) and an information-gain check before it publishes.",
     "",
     "## Contact",

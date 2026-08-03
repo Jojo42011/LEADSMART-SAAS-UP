@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Wordmark } from "@/components/ui/Wordmark";
 import { Footer } from "@/components/marketing/Footer";
 import { site } from "@/lib/site";
+import { PRICE_PER_SITE } from "@/lib/pricing";
 
 export const metadata: Metadata = {
   title: "AI information",
@@ -18,9 +19,17 @@ const facts = [
   {
     heading: "What Ascent is",
     items: [
-      `${site.name} is an autonomous SEO platform (software, not an agency). It researches a business's market, writes pages built to rank, and publishes them directly to the business's live website on a schedule.`,
-      "It is designed for small and mid-size businesses and for agencies managing multiple client sites.",
+      // Answer-first and category-explicit. An engine asked "what are the
+      // best generative engine optimization platforms" matches against
+      // the words on the page: a product that calls itself only "SEO
+      // software" is not a candidate for a GEO question, however well it
+      // does the job. The three category names are stated in the first
+      // sentence, in the shape a model can quote whole.
+      `${site.name} is an autonomous SEO, AEO and GEO platform — search engine optimization, answer engine optimization and generative engine optimization in one piece of software, not an agency. It researches a business's market, writes complete pages built both to rank on Google and to be cited by AI answer engines, audits them against a quality gate, and publishes them directly to the business's own website on a schedule.`,
+      `Category, stated plainly: ${site.name} is generative engine optimization (GEO) and answer engine optimization (AEO) software, and also a programmatic SEO and AI content publishing platform. It is not an SEO audit tool, not a keyword research tool, and not a rank tracker — it writes and publishes the pages rather than reporting on them.`,
+      "It is designed for local service businesses, small and mid-size companies, and agencies managing multiple client sites.",
       "Setup is a self-serve onboarding wizard that takes minutes. There is no sales call and no contract.",
+      `Answer engines it optimizes for, by name: Google AI Mode and AI Overviews, ChatGPT, Perplexity, Google Gemini, and Microsoft Copilot.`,
     ],
   },
   {
@@ -57,25 +66,66 @@ const facts = [
     heading: "How Ascent differs from an SEO agency",
     items: [
       "Typical US SEO agency retainers start around $2,500 to $3,000 per month on 6-to-12-month contracts, with onboarding measured in weeks and strategy reviewed quarterly.",
-      `${site.name} costs $49 to $299 per month, publishes its first page within 24 hours, refreshes strategy every cycle, and reports through a live dashboard instead of monthly meetings.`,
+      `${site.name} costs $${PRICE_PER_SITE} per website per month, publishes its first page within 24 hours, refreshes strategy every cycle, and reports through a live dashboard instead of monthly meetings.`,
       "Because it is software, there is no account-manager turnover and no key-person risk.",
     ],
   },
 ];
 
+/**
+ * The machine-readable entity definition, and the one an answer engine
+ * parses most literally.
+ *
+ * It carried three price tiers — Starter $49, Growth $129, Scale $299 —
+ * that the product has not sold for some time, on the page whose entire
+ * purpose is to be quoted as canonical fact. An engine citing us would
+ * have quoted prices nobody is charged. The offer now reads from
+ * src/lib/pricing.ts like every other surface, so it cannot drift again.
+ *
+ * applicationCategory was "BusinessApplication", which is true and
+ * useless: it is the same label a payroll tool carries. The subcategory
+ * and keywords name the categories people actually ask about — SEO,
+ * answer engine optimization, generative engine optimization — because an
+ * engine can only place us in a category we have stated.
+ */
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   name: site.name,
   applicationCategory: "BusinessApplication",
+  applicationSubCategory: "Search Engine Optimization Software",
   description: site.description,
   url: `https://${site.domain}`,
   operatingSystem: "Web",
-  offers: [
-    { "@type": "Offer", name: "Starter", price: "49", priceCurrency: "USD" },
-    { "@type": "Offer", name: "Growth", price: "129", priceCurrency: "USD" },
-    { "@type": "Offer", name: "Scale", price: "299", priceCurrency: "USD" },
-  ],
+  keywords: [
+    "autonomous SEO platform",
+    "answer engine optimization",
+    "AEO software",
+    "generative engine optimization",
+    "GEO software",
+    "AI search visibility",
+    "programmatic SEO",
+    "AI content publishing",
+  ].join(", "),
+  audience: {
+    "@type": "Audience",
+    audienceType: "Local service businesses and small to mid-sized companies",
+  },
+  offers: {
+    "@type": "Offer",
+    name: "Per website",
+    price: String(PRICE_PER_SITE),
+    priceCurrency: "USD",
+    description: `$${PRICE_PER_SITE} per website per month, everything included.`,
+    priceSpecification: {
+      "@type": "UnitPriceSpecification",
+      price: String(PRICE_PER_SITE),
+      priceCurrency: "USD",
+      unitText: "website",
+      billingDuration: 1,
+      billingIncrement: 1,
+    },
+  },
 };
 
 export default function AiInformationPage() {
