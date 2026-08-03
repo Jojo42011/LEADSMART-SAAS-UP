@@ -1665,9 +1665,28 @@ function Settings({
             onChange={(e) => update({ website: { ...data.website, url: e.target.value } })}
           />
           <Field
+            label="Phone"
+            optional
+            hint="Shown on every page and included in your business schema markup."
+            value={data.business.phone}
+            onChange={(e) => update({ business: { ...data.business, phone: e.target.value } })}
+          />
+          <Field
+            label="Street address"
+            optional
+            value={data.business.address}
+            onChange={(e) => update({ business: { ...data.business, address: e.target.value } })}
+          />
+          <Field
             label="City"
             value={data.business.city}
             onChange={(e) => update({ business: { ...data.business, city: e.target.value } })}
+          />
+          <Field
+            label="State or region"
+            optional
+            value={data.business.region}
+            onChange={(e) => update({ business: { ...data.business, region: e.target.value } })}
           />
           <Field
             label="Service area"
@@ -1684,6 +1703,12 @@ function Settings({
           The agent builds keywords and the content queue from these. Comma separated.
         </p>
         <div className="mt-5 grid gap-5">
+          <Field
+            label="Industry"
+            hint="e.g. Custom pool construction"
+            value={data.market.industry}
+            onChange={(e) => update({ market: { ...data.market, industry: e.target.value } })}
+          />
           <Field
             label="Services"
             hint="e.g. pool remodeling, pool installation"
@@ -1702,6 +1727,15 @@ function Settings({
             hint="Optional. The agent discovers competitors from live search each cycle; anything you add here is watched as well as what it finds."
             value={data.market.competitors}
             onChange={(e) => update({ market: { ...data.market, competitors: e.target.value } })}
+          />
+          <Field
+            label="Average sale value"
+            optional
+            hint="What a typical customer is worth in dollars. Turns rankings into revenue projections on your dashboard."
+            placeholder="4500"
+            inputMode="numeric"
+            value={data.market.avgSaleValue}
+            onChange={(e) => update({ market: { ...data.market, avgSaleValue: e.target.value } })}
           />
           <Field
             label="Keyword wishlist"
