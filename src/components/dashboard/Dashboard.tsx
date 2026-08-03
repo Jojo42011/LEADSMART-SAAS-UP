@@ -312,12 +312,11 @@ export function Dashboard() {
             {tab === "Overview" && <Overview plan={plan} goTo={setTab} />}
             {tab === "Content" && <Content plan={plan} />}
             {tab === "Analytics" && <Analytics />}
-            {tab === "Keywords" && (
-              <div className="grid gap-5">
-                <LiveResearch intel={intel} mode="keywords" />
-                <Keywords plan={plan} />
-              </div>
-            )}
+            {/* The "Live keyword targets" chip panel used to stack above
+                this — a second keyword list over the real one, the same
+                shape the Competitors tab had before its research panel was
+                merged away. The table below is the authoritative view. */}
+            {tab === "Keywords" && <Keywords plan={plan} />}
             {/* The Live-research panel used to sit above these cards
                 listing the same competitors a second time — the research
                 findings and the analysed cards were two renderings of one
@@ -1360,7 +1359,6 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
               <th className="px-6 py-3 font-medium">Keyword</th>
               <th className="px-4 py-3 font-medium">Potential</th>
               <th className="px-4 py-3 font-medium">Intent</th>
-              <th className="px-4 py-3 font-medium">Est. volume</th>
               <th className="px-4 py-3 font-medium">Difficulty</th>
               <th className="px-4 py-3 font-medium">Off site opportunity</th>
               <th className="px-6 py-3 text-right font-medium">Status</th>
@@ -1399,7 +1397,6 @@ function Keywords({ plan }: { plan: ReturnType<typeof buildPlan> }) {
                   </div>
                 </td>
                 <td className="px-4 py-3.5 text-muted">{k.intent}</td>
-                <td className="px-4 py-3.5 text-muted">{k.volume.toLocaleString()}/mo</td>
                 <td className="px-4 py-3.5 text-muted">{k.difficulty}</td>
                 <td className="px-4 py-3.5">
                   <span
@@ -1700,14 +1697,6 @@ function Settings({
             onChange={(e) => update({ market: { ...data.market, competitors: e.target.value } })}
           />
           <Field
-            label="Average sale value"
-            hint="What a typical customer is worth in dollars. Powers the revenue projection on your overview."
-            placeholder="4500"
-            inputMode="numeric"
-            value={data.market.avgSaleValue}
-            onChange={(e) => update({ market: { ...data.market, avgSaleValue: e.target.value } })}
-          />
-          <Field
             label="Keyword wishlist"
             hint="Keywords you want to win, comma separated. The agent seeds its queue with these first."
             placeholder="pool remodeling scottsdale, best pool builder"
@@ -1787,82 +1776,6 @@ function Settings({
       </div>
     </div>
   );
-}
-
-/* ---------------------------- Live research ---------------------------- */
-
-/**
- * Findings from the agent's real first research cycle, captured during
- * onboarding. Shown above the planning views so live market data always
- * outranks simulation.
- */
-function LiveResearch({ intel, mode }: { intel: Intel; mode: "keywords" | "competitors" }) {
-  const research = intel.research;
-  if (!research) return null;
-
-  if (mode === "competitors" && research.competitors.length > 0) {
-    return (
-      <Card className="p-6">
-        <div className="flex items-center justify-between">
-          <p className="flex items-center gap-2 text-[14.5px] font-medium">
-            Live research findings
-            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
-          </p>
-          <span className="label-mono text-muted">
-            {research.source === "live" ? "From live search" : "First pass"}
-          </span>
-        </div>
-        <p className="mt-1 text-[12.5px] text-muted">{research.summary}</p>
-        <div className="mt-4 grid gap-2.5">
-          {research.competitors.slice(0, 6).map((c) => (
-            <div key={c.domain} className="rounded-xl border border-line p-4">
-              <p className="font-mono text-[12.5px] font-medium">{c.domain}</p>
-              <p className="mt-1 text-[12.5px] text-muted">
-                <span className="font-medium text-ink/70">Ranks because </span>
-                {c.strength}
-              </p>
-              <p className="mt-0.5 text-[12.5px] text-muted">
-                <span className="font-medium text-accent">Your opening </span>
-                {c.weakness}
-              </p>
-            </div>
-          ))}
-        </div>
-      </Card>
-    );
-  }
-
-  if (mode === "keywords" && research.keywords.length > 0) {
-    return (
-      <Card className="p-6">
-        <div className="flex items-center justify-between">
-          <p className="flex items-center gap-2 text-[14.5px] font-medium">
-            Live keyword targets
-            <span className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
-          </p>
-          <span className="label-mono text-muted">
-            {research.keywords.length} found {research.source === "live" ? "via live search" : "from your profile"}
-          </span>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {research.keywords.slice(0, 18).map((k) => (
-            <span
-              key={k.keyword}
-              title={k.reason}
-              className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[12px]"
-            >
-              {k.keyword}
-              <span className={`font-mono text-[10.5px] ${k.opportunity >= 70 ? "text-accent" : "text-muted"}`}>
-                {k.opportunity}
-              </span>
-            </span>
-          ))}
-        </div>
-      </Card>
-    );
-  }
-
-  return null;
 }
 
 /**
