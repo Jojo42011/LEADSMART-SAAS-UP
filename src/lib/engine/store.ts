@@ -373,10 +373,18 @@ export async function upsertTenant(email: string, name?: string): Promise<string
 export async function getPageForEmail(
   pageId: string,
   email: string
-): Promise<{ id: string; title: string; html: string | null; live_url: string | null; status: string } | null> {
+): Promise<{
+  id: string;
+  title: string;
+  html: string | null;
+  live_url: string | null;
+  status: string;
+  /** The site this page belongs to, so the preview can resolve artwork. */
+  site_url: string;
+} | null> {
   if (!storeConfigured()) return null;
   const res = await sql(
-    `select p.id, p.title, p.html, p.live_url, p.status
+    `select p.id, p.title, p.html, p.live_url, p.status, s.url as site_url
      from pages p
      join sites s on s.id = p.site_id
      join tenants t on t.id = s.tenant_id
