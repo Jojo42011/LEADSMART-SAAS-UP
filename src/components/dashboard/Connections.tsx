@@ -190,7 +190,8 @@ function DeleteAccount({ siteCount }: { siteCount: number }) {
     <div className="rounded-2xl border border-line bg-paper p-5 sm:p-6">
       <h2 className="text-[14.5px] font-medium">Delete account</h2>
       <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
-        Permanently removes your account, {siteCount === 1 ? "your site" : `all ${siteCount} sites`},
+        Permanently removes your account
+        {siteCount === 0 ? "" : siteCount === 1 ? ", your site" : `, all ${siteCount} sites`},
         stored credentials, keyword plans and page records, and cancels your
         subscription. Pages already published to your own website stay live and
         remain yours. This cannot be undone.
