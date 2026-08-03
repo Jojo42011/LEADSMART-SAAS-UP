@@ -565,34 +565,6 @@ function Overview({
         })}
       </div>
 
-      {/* The agent's own account of the cycle.
-          The Ascent Score, the 90-day roadmap and the AI-visibility panel
-          used to sit above and beside this. All three were scoreboards
-          about work rather than the work: a composite number with no
-          action attached, a plan already expressed by the queue, and a
-          list of engines all reading "Monitoring" until citations exist to
-          report. This is what is left, and it is the one that says what
-          actually happened. */}
-      <div className="mt-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[14.5px] font-medium">This cycle</h2>
-            <span className="label-mono text-muted">Written by your agent</span>
-          </div>
-          <p className="mt-3 text-[13.5px] leading-relaxed text-ink/80">{plan.digest.summary}</p>
-          <div className="mt-4 grid gap-2 border-t border-line pt-4">
-            {plan.digest.actions.map((a) => (
-              <div key={a} className="flex items-start gap-2.5 text-[13px] text-muted">
-                <svg viewBox="0 0 16 16" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m3.5 8.5 3 3L12.5 5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                {a}
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
       {/* Queue preview */}
       <Card className="mt-6 p-6">
         <div className="flex items-center justify-between">
@@ -1232,22 +1204,23 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
     );
   };
 
-  const visiblePages = plan.pages.filter((p) => !dismissed.has(p.keyword.trim().toLowerCase()));
+  // When the engine is connected, a keyword with a real page is already
+  // shown in "Pages the agent has written" above — listing it here again,
+  // with a note pointing back up to that card, was the same duplication
+  // the Competitors tab had. So the planned queue drops to what it is for:
+  // the work still ahead. In preview mode (no engine) nothing has been
+  // written, so the whole plan is legitimately upcoming.
+  const visiblePages = plan.pages.filter((p) => {
+    const key = p.keyword.trim().toLowerCase();
+    if (dismissed.has(key)) return false;
+    if (engine && real.has(key)) return false;
+    return true;
+  });
 
-  const overrideFor = (keyword: string) => {
+  const overrideFor = (): { status: string; note: string; suppressVeto?: boolean } | undefined => {
     if (!engine) return undefined;
-    const match = real.get(keyword.trim().toLowerCase());
-    if (match) {
-      return {
-        status:
-          match.status === "published" ? "Published" : match.status === "pending" ? "In review" : "Held",
-        note:
-          match.status === "published"
-            ? `Written and published by the agent (scored ${match.audit_score}) — the live link is in the card above.`
-            : match.held_reason || "Written by the agent, waiting on review.",
-        suppressVeto: true,
-      };
-    }
+    // Only planned keywords reach here now — written ones are filtered out
+    // above and shown in the card of real pages.
     return {
       status: "Planned",
       note: "Queued for a future cycle — press Generate a page now above, or let the schedule pick it up.",
@@ -1258,8 +1231,11 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-[14.5px] font-medium">Planned queue</h2>
-        <span className="label-mono text-muted">{plan.pages.length} pages this cycle</span>
+        <h2 className="text-[14.5px] font-medium">{engine ? "Up next" : "Planned queue"}</h2>
+        <span className="label-mono text-muted">
+          {visiblePages.length} {visiblePages.length === 1 ? "page" : "pages"}
+          {engine ? " ahead" : " this cycle"}
+        </span>
       </div>
       {/* One line. The paragraph this replaced explained the pillar
           scores, the information-gain gate, the GEO score, schema and the
@@ -1270,13 +1246,13 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
       <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
         {engine ? (
           <>
-            The order the agent works in. Anything below the quality gate is
-            rewritten rather than published.
+            What the agent writes next, in order. Anything below the quality
+            gate is rewritten rather than published.
           </>
         ) : (
           <>
             The plan, not live progress — the order the agent intends to work
-            in. Pages it has actually written appear above.
+            in.
           </>
         )}
       </p>
@@ -1293,7 +1269,7 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
               key={page.keyword}
               page={page}
               detailed
-              override={overrideFor(page.keyword)}
+              override={overrideFor()}
               actions={
                 engine && !hasRealPage ? (
                   <span className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
@@ -1319,7 +1295,9 @@ function PlannedQueue({ plan }: { plan: ReturnType<typeof buildPlan> }) {
         })}
         {visiblePages.length === 0 && (
           <p className="text-center text-[12.5px] text-muted">
-            Every planned page has been removed. Add services or locations in Settings to plan more.
+            {engine
+              ? "The agent has worked through every planned page. It will plan more from live results next cycle."
+              : "Every planned page has been removed. Add services or locations in Settings to plan more."}
           </p>
         )}
       </div>
