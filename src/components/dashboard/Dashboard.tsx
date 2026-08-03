@@ -346,6 +346,75 @@ export function Dashboard() {
 
 /* ------------------------------- Overview ------------------------------- */
 
+/**
+ * The two Search Console numbers the Overview shows, and nothing else.
+ *
+ * A deliberately small read: the Analytics tab fetches the same endpoint
+ * for its charts, but the Overview only needs a headline, and pulling the
+ * whole payload apart in two places is how the two screens end up
+ * disagreeing about a number. Failures and an unconnected account are the
+ * same outcome here — no figure, and the card says why rather than
+ * showing a zero that reads as "nobody found you".
+ */
+function useSearchSnapshot(): {
+  loading: boolean;
+  connected: boolean;
+  clicks: number | null;
+  position: number | null;
+  clicksDelta: string | null;
+  positionDelta: string | null;
+} {
+  const [state, setState] = useState({
+    loading: true,
+    connected: false,
+    clicks: null as number | null,
+    position: null as number | null,
+    clicksDelta: null as string | null,
+    positionDelta: null as string | null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/analytics?range=28")
+      .then((r) => r.json())
+      .then((j: {
+        connected?: boolean;
+        totals?: { clicks: number; position: number };
+        prevTotals?: { clicks: number; position: number };
+      }) => {
+        if (cancelled) return;
+        const t = j.totals;
+        const prev = j.prevTotals;
+        // Position improves as it falls, so its arrow is inverted. Getting
+        // that backwards would report a genuine improvement as a decline.
+        const posDelta =
+          t && prev && prev.position
+            ? `${prev.position - t.position >= 0 ? "▲" : "▼"} ${Math.abs(prev.position - t.position).toFixed(1)} vs previous 28 days`
+            : null;
+        const clickDelta =
+          t && prev
+            ? `${t.clicks - prev.clicks >= 0 ? "▲" : "▼"} ${Math.abs(t.clicks - prev.clicks).toLocaleString()} vs previous 28 days`
+            : null;
+        setState({
+          loading: false,
+          connected: Boolean(j.connected && t),
+          clicks: t?.clicks ?? null,
+          position: t?.position ?? null,
+          clicksDelta: clickDelta,
+          positionDelta: posDelta,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setState((p) => ({ ...p, loading: false, connected: false }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return state;
+}
+
 function Overview({
   plan,
   goTo,
@@ -356,6 +425,13 @@ function Overview({
   // With no keywords there is no analysis, no roadmap, and no first page —
   // the banner and checklist must not claim work that never happened.
   const hasPlan = plan.keywords.length > 0;
+  const search = useSearchSnapshot();
+  // Real published pages, from the engine's rows. Null when no engine is
+  // connected, so "no pages yet" and "we cannot tell" stay distinguishable.
+  const { engine, sites } = useAgentPages();
+  const pagesLive = engine
+    ? sites.reduce((n, s) => n + s.pages.filter((p) => p.status === "published").length, 0)
+    : null;
 
   const setupTasks = [
     { label: "Workspace created", done: true },
@@ -364,24 +440,54 @@ function Overview({
     { label: "Content queue built", done: hasPlan },
   ];
 
-  // Two counts, both of them things the agent has actually done.
+  // Four cards, one from each of the categories a useful SEO report is
+  // built from — outcome, traffic, visibility, and what happens next.
   //
-  // This row used to carry "Traffic value (est.)" and "Projected monthly
-  // revenue" beside them. Both were modelled rather than measured — the
-  // revenue figure multiplied assumed traffic by an assumed close rate at
-  // an assumed sale value — and both belong to the argument for buying,
-  // not to the account of a customer who already has. Anchoring somebody
-  // to $21,300 a month that nothing in the product can verify invites
-  // exactly one question at renewal, and the honest answer is that the
-  // number was never a measurement. Real revenue reporting belongs to the
-  // Analytics tab once Search Console data is connected.
+  // Chosen against one test: does the number help the owner answer "is
+  // this working, and what is coming?" That rules out what this row used
+  // to carry. "Traffic value (est.)" and "Projected monthly revenue" were
+  // modelled, not measured — the revenue figure multiplied assumed
+  // traffic by an assumed close rate at an assumed sale value — and a
+  // number nothing in the product can verify is not a report, it is an
+  // argument for buying aimed at somebody who already has.
+  //
+  // Everything below is measured. Pages live and the queue come from the
+  // engine's own rows; clicks and average position come from Search
+  // Console. When Search Console is not connected those two say so and
+  // link to it, which is a truthful empty state and a useful prompt —
+  // better than a plausible estimate standing in for a measurement.
   const kpis = [
     {
-      label: "Pages in queue",
-      value: String(plan.pages.length),
-      note: hasPlan ? "First page within 24 hours" : "Add services in Settings to start the queue",
+      label: "Pages live",
+      value: search.loading && pagesLive === null ? "—" : String(pagesLive ?? 0),
+      note:
+        pagesLive === null
+          ? "Connect the engine to publish"
+          : pagesLive === 0
+            ? "First page within 24 hours"
+            : "Published to your site by the agent",
     },
-    { label: "Keywords tracked", value: String(plan.keywords.length), note: "Prioritized by business potential" },
+    {
+      label: "Clicks, 28 days",
+      value: search.connected && search.clicks !== null ? search.clicks.toLocaleString() : "—",
+      note: search.connected
+        ? search.clicksDelta ?? "From Google Search"
+        : "Connect Search Console to measure",
+      onClick: search.connected ? undefined : () => goTo("Analytics"),
+    },
+    {
+      label: "Average position",
+      value: search.connected && search.position !== null ? search.position.toFixed(1) : "—",
+      note: search.connected
+        ? search.positionDelta ?? "Closer to 1 is better"
+        : "Connect Search Console to measure",
+      onClick: search.connected ? undefined : () => goTo("Analytics"),
+    },
+    {
+      label: "In the queue",
+      value: String(plan.pages.length),
+      note: hasPlan ? "Next pages the agent will write" : "Add services in Settings to start the queue",
+    },
   ];
 
   return (
@@ -428,14 +534,35 @@ function Overview({
       </div>
 
       {/* KPIs */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        {kpis.map((kpi) => (
-          <Card key={kpi.label} className="p-6">
-            <p className="label-mono text-muted">{kpi.label}</p>
-            <p className="font-display mt-2 text-[27px] leading-tight tracking-tight sm:text-3xl">{kpi.value}</p>
-            <p className="mt-1.5 text-[12.5px] text-muted">{kpi.note}</p>
-          </Card>
-        ))}
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {kpis.map((kpi) => {
+          const body = (
+            <>
+              <p className="label-mono text-muted">{kpi.label}</p>
+              <p className="font-display mt-2 text-[27px] leading-tight tracking-tight sm:text-3xl">{kpi.value}</p>
+              <p className="mt-1.5 text-[12.5px] text-muted">
+                {kpi.note}
+                {/* A card that says "connect Search Console" and cannot be
+                    clicked is a dead end. Where there is an action, the
+                    whole card is the button. */}
+                {kpi.onClick && <span className="ml-1 text-accent">&rarr;</span>}
+              </p>
+            </>
+          );
+          return kpi.onClick ? (
+            <button
+              key={kpi.label}
+              onClick={kpi.onClick}
+              className="rounded-2xl border border-line bg-paper p-6 text-left transition-colors hover:border-ink/40"
+            >
+              {body}
+            </button>
+          ) : (
+            <Card key={kpi.label} className="p-6">
+              {body}
+            </Card>
+          );
+        })}
       </div>
 
       {/* The agent's own account of the cycle.
