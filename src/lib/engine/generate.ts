@@ -289,7 +289,7 @@ function renderHtml(input: GenerateInput, c: PageContent, slug: string, folder: 
 <meta property="og:description" content="${esc(c.metaDescription)}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="${canonical}">
-<meta name="robots" content="index, follow">
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <meta property="article:modified_time" content="${today}">
 ${schemas.map((s) => `<script type="application/ld+json">${JSON.stringify(s)}</script>`).join("\n")}
 <style>

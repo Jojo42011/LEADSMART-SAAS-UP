@@ -271,7 +271,7 @@ function folderIndexHtml(input: {
 <title>${esc(label)} — ${esc(input.businessName)}</title>
 <meta name="description" content="${esc(label)} from ${esc(input.businessName)}.">
 <link rel="canonical" href="${origin}/${input.folder}/">
-<meta name="robots" content="index, follow">
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;color:#16181d;line-height:1.7;background:#fff}
