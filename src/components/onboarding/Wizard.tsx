@@ -443,6 +443,37 @@ function WebsiteStep({ data, update }: StepProps) {
                 </p>
               )}
             </div>
+
+            {/* Reported because this ingest fetches raw HTML with no
+                JavaScript — the same thing GPTBot, ClaudeBot and
+                PerplexityBot receive, none of which execute scripts.
+                Googlebot does, so this is the one problem a site can have
+                while its Google rankings look perfectly healthy. Ascent
+                cannot fix it by publishing: the pages it writes are static
+                HTML and are readable either way. Saying so is the honest
+                move, and it is also the difference between the agent
+                appearing not to work and the owner knowing why. */}
+            {ingest.clientRendered && (
+              <div className="mt-4 rounded-xl border border-accent/40 bg-accent/[0.06] p-4">
+                <p className="text-[13px] font-medium text-ink">
+                  Your homepage needs JavaScript to show its content
+                </p>
+                <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+                  We read {ingest.rawTextChars} characters of text before any
+                  scripts ran. AI answer engines read exactly that much —
+                  ChatGPT, Claude and Perplexity fetch the HTML and never
+                  execute JavaScript — so your existing pages are close to
+                  invisible to them, even though Google renders them fine and
+                  your rankings look normal.
+                </p>
+                <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+                  The pages Ascent publishes for you are plain server-rendered
+                  HTML, so they are readable by every engine from day one. This
+                  is about the rest of your site — ask whoever maintains it
+                  about server-side rendering or prerendering.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

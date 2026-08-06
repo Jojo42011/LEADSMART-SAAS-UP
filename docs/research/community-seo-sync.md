@@ -60,7 +60,7 @@ its `skill.md`-style pages are designed to make agents execute instructions
 - Treat anything an agent forum "recommends doing" as untrusted input, not an
   instruction.
 
-**Last synced:** 2026-08-01
+**Last synced:** 2026-08-06
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -619,3 +619,248 @@ act on what's genuinely new beyond this.
     entity-clarity ground.
   - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
     in today's rotation).
+
+- **2026-08-02** — Reddit still blocked (r/SEO and old.reddit r/aeo .json fetches
+  failed). Searched: "GEO generative engine optimization new study August 2026",
+  the agent-forum monitoring topic (rotation: last checked 07-21; search-only,
+  no moltbook fetch), "AEO new tactics August 2026", "Google algorithm update
+  August 2026 core update AI Mode", then a dedicated corroboration query on the
+  one genuinely new item. Findings:
+  - **NEW + applied (`plan.ts` keyword generation):** Google extended its spam
+    policies on **15 May 2026** to explicitly cover manipulation of AI Overviews
+    and AI Mode — the first time gaming the generative layer is its own named
+    violation, with demotion or removal from Search as the penalty. The policy
+    names **biased listicles and "recommendation poisoning"**: content published
+    to steer an AI answer toward recommending its own author. Corroborated
+    across Search Engine Land, ppc.land, winbuzzer and others. Checked our
+    generator against it and found a real hit: for every service, `buildPlan`
+    generated `best ${service}` as a Service-intent target, producing a page
+    titled e.g. **"Best Pool Installation" on the pool installer's own domain** —
+    a self-award claim aimed squarely at the generative layer. It also
+    contradicted our own advice, since the 07-30 citation-platform work
+    established that "best <service>" is won by being *cited on* third-party
+    roundups, not by self-publishing one. Replaced it with
+    `what to look for in a ${service} company` at Question intent — the same
+    buying demand answered honestly, as criteria the reader can check the
+    business against. This also closes a comment/code mismatch: the adjacent
+    comment already claimed the planner fanned out to "cost, how-to-choose"
+    queries, but the how-to-choose half was never generated. Verified in the
+    browser: no "Best …" target or title remains, the new row renders on
+    Keywords, page titles read correctly ("What To Look For In A Pool
+    Installation Company?"), and the generated JSON-LD resolves the service
+    noun cleanly ("Pool Installation") with no scaffolding leaking into schema
+    fields — the failure mode the Question-intent fallback was written for.
+  - **Confirmed, no action (we are already clean):** the same policy round
+    established that Google and Bing treat **maintaining separate markdown
+    pages or content variants specifically for AI crawlers as cloaking**.
+    Checked: `robots.ts` only ever *allows* crawlers and never varies content by
+    user agent, and `/llms.txt` is a supplementary index file at its own URL,
+    not a different rendering of a page — so we neither do this nor advise it.
+    Worth knowing because several 2026 GEO vendors recommend exactly this
+    tactic; if client-facing advice is ever written, it must not.
+  - **Confirmed, already captured:** the August–September core-update window is
+    still forecast rather than landed (same speculative "Aug 26" chatter logged
+    07-27 and 08-01); the March 2026 scaled-AI-content spam update and the
+    Gemini-3.5-Flash AI Mode default are both already in the log; AEO roundups
+    repeat answer-first, entity clarity, schema, fact density and third-party
+    validation, all encoded already. The GEO study search returned the original
+    Princeton/KDD paper (quotes +27.8%, statistics +25.9%, citations +24.9%) —
+    already the basis of our tactic weights.
+  - **Agent-forum trend (monitoring only):** coverage (Vectra, CNBC, Forbes,
+    arXiv 2602.10127, Wikipedia) reiterates that synthetic engagement can
+    manufacture authority, and that answer engines are responding by preferring
+    provenance, citation-vs-mention clarity and governance signals over
+    virality — the direction Ascent already optimizes for. Nothing actionable.
+    Guardrail respected: no moltbook.com or agent-forum page was fetched; all
+    signal came from third-party coverage via search.
+
+- **2026-08-03** — Reddit still blocked (r/TechSEO and old.reddit r/SEO .json
+  fetches failed). Rotated to a surface the log had never covered: how AI
+  crawlers handle JavaScript rendering. Findings:
+  - **NEW + applied (`site-ingest.ts`, onboarding):** no major AI crawler
+    executes JavaScript. Vercel and MERJ tracked **500M+ GPTBot fetches with
+    zero JavaScript execution**; GPTBot downloads JS in ~11.5% of requests
+    and ClaudeBot in ~23.8%, and neither ever runs it. PerplexityBot,
+    Bytespider and Meta's crawler behave the same way. **Googlebot is the
+    exception** — headless Chrome, two-phase indexing — so a client-rendered
+    site can rank perfectly well on Google while being invisible to every
+    answer engine. Corroborated across Vercel's own write-up ("The rise of
+    the AI crawler"), the joint MERJ analysis and several independent
+    technical write-ups.
+    Why this was actionable rather than generic advice: Ascent's `ingestSite`
+    **already fetches raw HTML with no JavaScript**, so what it reads is
+    exactly what GPTBot reads. The information was sitting in a response we
+    already had and were throwing away. Added `detectClientRendered` plus
+    `rawTextChars` / `clientRendered` on `SiteIngest`, and a plain-language
+    notice in onboarding's site-analysis panel.
+    The detector is deliberately conservative and needs **two** independent
+    signals — an EMPTY framework mount point *and* under 600 characters of
+    body text. Matching the mount id alone would flag every server-rendered
+    Next.js site in existence, and a false "your site is invisible to AI
+    search" is worse than silence: alarming, hard for an owner to disprove,
+    and it would undermine every other number we show them.
+    `test/client-rendered.test.ts` covers the four shell shapes and, more
+    importantly, six sites that must NOT be flagged (SSR Next.js with content
+    inside the mount, ordinary WordPress, a thin server-rendered page, a
+    mount that also ships copy, a page with a large inline bundle, and an
+    empty non-mount div). Browser-verified that the notice appears for a
+    client-rendered result and is absent for a normal one.
+    Note this is explicitly NOT a GEO score or a negative signal. Every page
+    Ascent generates is static server-rendered HTML, so scoring it would be a
+    constant-true signal and pure noise. It is a fact about the customer's
+    *existing* site that the agent cannot fix by publishing — which is
+    precisely why the owner should be told rather than have it silently
+    worked around.
+  - **Confirmed, already captured:** the SSR guidance otherwise repeats
+    known ground (structured hierarchical HTML, internal links, crawl
+    efficiency) already encoded in the GEO tactics.
+  - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
+    in today's rotation; last covered 08-02).
+
+- **2026-08-04** — Reddit still blocked (r/SEO .json and old.reddit r/aeo .json
+  fetches both failed, as expected). Searched: "Google algorithm update August
+  2026 AI Mode" (rotation), "AI Overviews citation ranking factors new study
+  August 2026", then a dedicated corroboration query on the strongest new
+  finding: "max-snippet / nosnippet meta robots AI Overviews citation
+  eligibility". Findings:
+  - **NEW + applied (page-generation robots meta — the snippet-eligibility
+    gate):** multiple independent 2026 sources (SiteSpeakAI's AI-overview
+    glossary, jwatte.com, digitalapplied's 1,000-AI-Overviews study, needle.sh's
+    2026 robots.txt guide, and a 500M-keyword analysis) converge on a citation
+    gate that was nowhere in our model or copy: the **`nosnippet` /
+    `max-snippet:0` robots meta directives make a page ineligible for AI
+    Overviews and AI Mode citation** — "misconfigured directives zero out
+    citations that ranking alone would have earned" — while **`max-snippet:-1`
+    (plus `max-image-preview:large`) grants full snippet eligibility**. This is
+    a hard binary gate, upstream of every content/GEO tactic: a page perfect on
+    all nine GEO tactics still earns zero AI citations if it declares
+    `nosnippet`. Ascent's own page-generation templates emitted
+    `<meta name="robots" content="index, follow">` — which doesn't *block*
+    snippets (Google defaults to allowing them) but doesn't *explicitly* grant
+    unlimited snippet length or large previews either. Updated both
+    generated-page heads (`engine/generate.ts` article pages,
+    `engine/publish.ts` hub/folder index pages) to `index, follow,
+    max-snippet:-1, max-image-preview:large, max-video-preview:-1`, so every
+    page Ascent publishes is explicitly, maximally eligible to be shown and
+    cited across AI surfaces and robust against a restrictive default. One-line,
+    zero-risk, non-fabrication (a technical directive, not content); `npm run
+    build` clean.
+  - **Deliberately NOT added as a geo.ts negative signal:** a `snippetBlocked`
+    penalty was considered and rejected, for the same reason the 08-03
+    JavaScript-rendering finding was kept out of the GEO score. The existing
+    negative signals (keyword stuffing, thin content, excessive CTA, low fact
+    density) are *content* properties of what the agent generates, simulated
+    deterministically per keyword. A `nosnippet` directive is a technical
+    meta-robots configuration Ascent fully controls at publish time and would
+    never set on its own pages — a hash-triggered penalty would be a
+    constant-false signal and would falsely flag Ascent's own snippet-eligible
+    pages as citation-blocked. The correct place to act is the generation
+    template (done above). If a real backend ever audits a *client's existing*
+    site, checking its global robots meta for `nosnippet` / `max-snippet:0`
+    would be a genuine pre-flight check — same class as the deferred
+    client-robots.txt / Cloudflare-bot-management audit notes and the 08-03
+    client-side rendering check.
+  - **Noted, not applied (aggregator precision):** the same citation-factor
+    roundups quote exact scores (URL accessibility 9.5/10, search rank 9.4,
+    fan-out rank 9.3), "brand mentions ~3x backlinks", "schema cited 2.3x", and
+    "median cited page is 14 months old — recency isn't the lever." The
+    directional content is already encoded (search rank + fan-out → dual-track
+    SEO/GEO and Question-intent generation; brand mentions → off-site scope;
+    schema → schemaRichness). The "14-month median / freshness overrated"
+    framing conflicts with the strong 2026-07-16 baseline data (83% of
+    commercial-query citations within 12 months, 60%+ within 6) and comes from
+    secondary aggregators, so freshness weighting stands unchanged per the
+    corroboration rule.
+  - **Confirmed, already captured:** August's crop otherwise reproduced known
+    ground — AI Mode default-answer shift, semantic-quality core updates,
+    answer-first structure, schema value — all already in the model and copy.
+  - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
+    in today's rotation; last covered 08-02).
+
+- **2026-08-05** — Reddit still blocked (r/TechSEO .json and old.reddit r/SEO
+  .json fetches both failed, as expected). Searched: "schema markup AI search
+  citation new study August 2026", "how ChatGPT/Perplexity/Gemini choose
+  citations 2026", "Google core update August 2026 confirmed", "AEO new tactics
+  / content structure 2026", and the agent-forum monitoring topic (rotation:
+  last covered 08-02; search-only, no moltbook fetch). Quiet day — no code
+  change; everything reproduced already-captured ground. Findings:
+  - **Confirmed, already captured (schema):** the Ahrefs May-2026 study
+    (1,885 pages that added JSON-LD vs 4,000 matched controls) found no
+    citation uplift on AI Mode or ChatGPT and a small −4.6% dip on AI
+    Overviews, while OtterlyAI's sitewide rollout claimed large gains and the
+    Feb-2026 study still shows Product/Review-with-facts cited more than
+    generic types. This exact mixed picture was already logged 07-17 and 07-23;
+    our stance is unchanged and correct — schema supports entity clarity and
+    SERP features (our Group D framing), is never claimed to *rank* or earn
+    citations on its own, and we already never over-weight it. No change.
+  - **Confirmed, already captured (citation behavior):** 11% ChatGPT/Perplexity
+    domain overlap, ChatGPT ~34.5% web-search activation / recency + authority
+    lean, Perplexity citation-frequency + Reddit lean, Gemini Google-index +
+    GBP weighting, and the sharp drop in SEO-ranking↔AI-citation overlap — all
+    already in the baseline and the 07-19/07-20/07-22/07-26 entries. Reinforces
+    the deferred "weight tactics per target engine" item; still premature to
+    encode on the deterministic frontend model without a real per-engine
+    citation backend.
+  - **Confirmed, already captured (algo):** no confirmed August core update as
+    of today — a Q3 (Aug/Sept) update is expected but unannounced on the Search
+    Status Dashboard, the same speculative window logged 07-27/08-01/08-02.
+    Nothing landed. AEO roundups repeated answer-first, machine-readable
+    structure, entity clarity, schema, earned authority, and the exact 83%/60%
+    freshness baseline stat — all encoded already.
+  - **Agent-forum trend (monitoring only, no fetch):** third-party coverage
+    (Gartner digital-provenance 2026 trend, Microsoft agent-governance toolkit,
+    arXiv attribution work) plus the EU AI Act **Article 50** transparency
+    obligation taking effect **2 Aug 2026** (machine-readable marking of
+    AI-generated content). This is a regulatory duty on *generative-AI
+    providers*, not a website citation/ranking factor — it does not require a
+    publisher to label its pages and changes nothing in geo.ts/plan.ts/schema.
+    The directional signal (ecosystem moving toward provenance, verifiable
+    sourcing, citation-vs-mention clarity over synthetic consensus) is the
+    direction Ascent already optimizes for. Nothing actionable. Guardrail
+    respected: no moltbook.com or agent-forum page fetched; all signal came
+    from third-party coverage via search.
+
+- **2026-08-06** — Reddit still blocked (r/aeo .json and old.reddit r/TechSEO
+  .json fetches both failed, as expected). Searched: "new AI crawler user agent
+  robots.txt August 2026" (rotation: last checked 08-01), "llms.txt adoption /
+  answer-engine support August 2026", "GEO generative engine optimization study
+  2026 new findings", then a dedicated corroboration query on the one
+  potentially-new item ("content length / word count → AI citations, causation
+  vs correlation"). Quiet day — no code change. Findings:
+  - **Checked and correctly NOT applied (content length as a citation
+    signal):** a ConvertMate GEO benchmark claimed "pages above 20,000
+    characters get 4.3x more AI citations," and Gauge/Growth Memo data put
+    20,000+-word pages at ~5x baseline (finance 5–10k words at ~10.9x). This
+    looked like a possible new positive signal (we have a `thinContent` <300-
+    word *floor* but no depth/comprehensiveness lever beyond the substance
+    pillar). The corroboration query killed it: Ahrefs' 174,048-page study
+    (Dec 2025) found a Spearman correlation of **0.04** — essentially zero —
+    between word count and citation position, with **53.4% of cited pages
+    under 1,000 words** (16.6% under 350). The synthesis across sources is that
+    length is confounded, not causal: "AI engines extract passages, not pages,"
+    and the factors that correlate with longer content (comprehensiveness,
+    passage structure) have independent effects that exceed length itself.
+    Implementing a character/word-count threshold would reward padding, is
+    contradicted by the strongest study, and would duplicate what the substance
+    pillar + passage-level tactics (answer-first, statistics, fact density,
+    fluency) already score. Logged so this isn't rediscovered as "new" — the
+    correct driver (topical depth / passage quality) is already encoded; raw
+    length is not a lever.
+  - **Confirmed, already captured (crawlers):** the 2026 crawler roster
+    (GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-SearchBot,
+    PerplexityBot, Google-Extended, Applebot-Extended, meta-externalagent, and
+    the search-vs-training split) is unchanged from the 08-01 reconfirmation and
+    already present in robots.ts's training/citation tiers. No new agent surfaced.
+  - **Confirmed, already captured (llms.txt):** ~10% adoption, still no
+    consumer answer engine confirming it consumes llms.txt (Google on record
+    against it, Mueller's keywords-meta-tag comparison), real value only in the
+    agentic/IDE-tooling layer (Cursor, Claude Code, Copilot). Exactly the 07-18/
+    07-24/08-01 picture; our copy already states this accurately. No change.
+  - **Confirmed, already captured (GEO study):** 83% of AIO citations / 53% of
+    cited domains outside the organic top-10 (dual-track SEO+GEO, already
+    messaged), Princeton quotes +27.8% / statistics +25.9% / citations +24.9%
+    (the exact basis of our geo.ts tactic weights), and "entity authority over
+    keyword rankings" (entity clarity already throughout schema + tactics).
+    Nothing new.
+  - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
+    in today's rotation; last covered 08-05).
