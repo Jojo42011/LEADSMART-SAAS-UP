@@ -19,12 +19,13 @@ import { useAgentPages } from "@/lib/agent-pages";
  * action that takes one click is a bug waiting for a mis-tap.
  */
 
-type Service = "wordpress" | "github" | "gsc";
+type Service = "wordpress" | "github" | "gsc" | "ftp";
 
 const SERVICE_LABEL: Record<Service, string> = {
   wordpress: "WordPress",
   github: "GitHub",
   gsc: "Google Search Console",
+  ftp: "FTP/SFTP hosting",
 };
 
 const SERVICE_NOTE: Record<Service, string> = {
@@ -33,6 +34,7 @@ const SERVICE_NOTE: Record<Service, string> = {
   github:
     "The access token and repository are deleted. The agent stops publishing to this site until you reconnect it.",
   gsc: "The token is revoked at Google and deleted here. Your rankings panel stops updating; nothing on your site changes.",
+  ftp: "The server address and password are deleted. The agent stops uploading to this site until you reconnect it.",
 };
 
 export function Connections() {

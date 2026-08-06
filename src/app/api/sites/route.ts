@@ -129,6 +129,16 @@ export async function POST(req: NextRequest) {
         // this site row existed. Already encrypted by the GSC callback;
         // encryptSecret's already-encrypted guard prevents double-wrapping.
         gscRefreshToken: req.cookies.get("gsc_token")?.value || undefined,
+        ftpHost: data.publishing.ftpHost || undefined,
+        // The wizard keeps the port as typed text; parse here and let the
+        // adapter default by protocol when it is absent or nonsense.
+        ftpPort: Number.parseInt(data.publishing.ftpPort, 10) || undefined,
+        ftpUser: data.publishing.ftpUser || undefined,
+        ftpPassword: data.publishing.ftpPassword || undefined,
+        ftpProtocol: data.publishing.ftpProtocol || undefined,
+        // "" is meaningful (login already lands in the web root), so only
+        // an ftp site sends the field at all rather than || undefined.
+        ftpRoot: data.website.platform === "ftp" ? data.publishing.ftpRoot.trim() : undefined,
       },
     });
     if (!result) {

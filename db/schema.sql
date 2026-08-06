@@ -25,7 +25,7 @@ create table if not exists sites (
   -- tenant, so a second signup on the same website inherits the pages the
   -- first one published. See siteHost() and FREE_PAGE_LIMIT.
   host          text not null default '',
-  platform      text not null,                       -- wordpress | github
+  platform      text not null,                       -- wordpress | github | ftp
   cadence       text not null default 'daily',       -- daily | every3days | weekly
   publish_mode  text not null default 'autopilot',   -- autopilot | review
   active        boolean not null default true,
@@ -62,6 +62,15 @@ create table if not exists connections (
   github_token  text,
   github_branch text,
   gsc_refresh_token text,
+  -- FTP/SFTP publishing, for hosts that are neither WordPress nor a
+  -- GitHub-deployed repo. ftp_password is encrypted at rest like every
+  -- other credential in this table.
+  ftp_host      text,
+  ftp_port      int,
+  ftp_user      text,
+  ftp_password  text,
+  ftp_protocol  text,                                -- ftps | ftp | sftp
+  ftp_root      text,                                -- e.g. public_html
   updated_at    timestamptz not null default now()
 );
 

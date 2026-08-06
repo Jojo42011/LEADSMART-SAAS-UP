@@ -14,7 +14,7 @@ import { assertPublicUrl, safeFetch } from "./safe-fetch";
 export type SiteIngest = {
   ok: boolean;
   url: string;
-  platform: "wordpress" | "github" | "unknown";
+  platform: "wordpress" | "github" | "wix" | "lovable" | "unknown";
   title: string;
   description: string;
   h1: string;
@@ -206,7 +206,23 @@ export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
     if (tel) result.phone = tel[1].trim();
 
     // Platform detection: generator meta, wp-content paths, then a wp-json probe.
-    if (/wp-content|wp-includes|name=["']generator["'][^>]*wordpress/i.test(html)) {
+    //
+    // Wix and Lovable are detected first because they change what the
+    // wizard should say, in opposite directions. Wix blocks all external
+    // editing — no API, no FTP — so the honest move is to say so up front
+    // rather than let someone finish onboarding into a publish that can
+    // never work. Lovable is the opposite: every Lovable project syncs
+    // bi-directionally with a GitHub repository, so the existing GitHub
+    // path already covers it and the wizard just has to point there.
+    const hostName = new URL(origin).hostname.toLowerCase();
+    if (
+      /\.wixsite\.com$|\.wix\.com$/.test(hostName) ||
+      /wixstatic\.com|wix-code|name=["']generator["'][^>]*wix/i.test(html)
+    ) {
+      result.platform = "wix";
+    } else if (/\.lovable\.app$|\.lovableproject\.com$/.test(hostName)) {
+      result.platform = "lovable";
+    } else if (/wp-content|wp-includes|name=["']generator["'][^>]*wordpress/i.test(html)) {
       result.platform = "wordpress";
     } else {
       try {

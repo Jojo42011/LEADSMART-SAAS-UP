@@ -17,6 +17,7 @@ import {
   pingIndexNow,
   publishWordpress,
 } from "./publish";
+import { publishFtp, publishFtpSupportFiles, type FtpProtocol } from "./ftp";
 
 /**
  * Publishes one stored page to the site's connected platform.
@@ -163,6 +164,71 @@ export async function publishStoredPage(
         }
       } catch (e) {
         // discovery plumbing only; the publish already succeeded
+        const errNote = `discovery error: ${e instanceof Error ? e.message : "unknown"}`;
+        discoveryNote = discoveryNote ? `${discoveryNote}, ${errNote}` : errNote;
+      }
+    } else if (!res.ok) {
+      publishError = [res.error, res.detail].filter(Boolean).join(" — ");
+    }
+  } else if (site.platform === "ftp" && conn?.ftp_host && conn.ftp_user && conn.ftp_password) {
+    const credentials = {
+      host: conn.ftp_host,
+      port: conn.ftp_port ?? 21,
+      user: conn.ftp_user,
+      password: conn.ftp_password,
+      protocol: (conn.ftp_protocol as FtpProtocol) || "ftps",
+      root: conn.ftp_root ?? "",
+    };
+    const res = await publishFtp({
+      credentials,
+      folder: page.folder,
+      slug: page.slug,
+      title: page.title,
+      html: page.html,
+      siteUrl: origin,
+      image: page.image,
+    });
+    if (res.ok && res.platform === "ftp") {
+      await markPagePublished(page.id, {
+        liveUrl: res.liveUrl ?? undefined,
+        liveStatus: res.liveStatus ?? undefined,
+      });
+      published = true;
+      liveUrl = res.liveUrl;
+      liveStatus = res.liveStatus;
+      discoveryNote = res.imageNote;
+
+      // The same discovery set the GitHub path commits — sitemap, folder
+      // index, IndexNow key + ping — because a plain static host has no
+      // CMS generating any of it. Best effort, never unwinds the publish.
+      try {
+        const brand = site.brand as { colors?: string[]; nav?: { label: string; href: string }[] };
+        const allPages = await listPages(site.id);
+        const publishedRefs = allPages
+          .filter((p) => p.status === "published" && p.live_url)
+          .map((p) => ({
+            folder: p.folder,
+            slug: p.slug,
+            title: p.title,
+            liveUrl: p.live_url as string,
+            publishedAt: p.published_at,
+          }));
+        const support = await publishFtpSupportFiles({
+          credentials,
+          siteId: site.id,
+          siteUrl: origin,
+          businessName: site.business_name,
+          accent: pickAccent(brand?.colors),
+          nav: brand?.nav,
+          pages: publishedRefs,
+        });
+        const supportNote = support.ok ? "discovery ok" : `discovery failed for ${support.failed.join(", ")}`;
+        discoveryNote = discoveryNote ? `${discoveryNote}, ${supportNote}` : supportNote;
+        if (res.liveUrl) {
+          const ping = await pingIndexNow({ siteUrl: origin, siteId: site.id, urls: [res.liveUrl] });
+          discoveryNote += `, ${ping}`;
+        }
+      } catch (e) {
         const errNote = `discovery error: ${e instanceof Error ? e.message : "unknown"}`;
         discoveryNote = discoveryNote ? `${discoveryNote}, ${errNote}` : errNote;
       }

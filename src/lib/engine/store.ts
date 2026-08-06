@@ -112,6 +112,14 @@ const SCHEMA_REPAIRS = [
        '^www\\.', '')
      where host = '' and url <> ''`,
   `create index if not exists sites_host_idx on sites(host)`,
+  // FTP/SFTP publishing credentials, for hosts that are neither WordPress
+  // nor GitHub-deployed. Password encrypted like every other credential.
+  `alter table connections add column if not exists ftp_host text`,
+  `alter table connections add column if not exists ftp_port int`,
+  `alter table connections add column if not exists ftp_user text`,
+  `alter table connections add column if not exists ftp_password text`,
+  `alter table connections add column if not exists ftp_protocol text`,
+  `alter table connections add column if not exists ftp_root text`,
   `create table if not exists support_messages (
      id uuid primary key default gen_random_uuid(),
      name text, email text not null, subject text, message text not null,
@@ -200,7 +208,7 @@ export type SiteRow = {
   /** False while the owner has paused autonomous production. */
   active: boolean;
   url: string;
-  platform: "wordpress" | "github";
+  platform: "wordpress" | "github" | "ftp";
   cadence: "daily" | "every3days" | "weekly";
   publish_mode: "autopilot" | "review";
   business_name: string;
@@ -225,6 +233,14 @@ export type ConnectionRow = {
   github_token: string | null;
   github_branch: string | null;
   gsc_refresh_token: string | null;
+  ftp_host: string | null;
+  ftp_port: number | null;
+  ftp_user: string | null;
+  ftp_password: string | null;
+  /** ftps | ftp | sftp */
+  ftp_protocol: string | null;
+  /** Remote directory serving the site root, e.g. "public_html". */
+  ftp_root: string | null;
 };
 
 export type PageSummary = {
@@ -374,6 +390,7 @@ export async function getConnection(siteId: string): Promise<ConnectionRow | nul
     wp_app_password: decryptSecret(row.wp_app_password),
     github_token: decryptSecret(row.github_token),
     gsc_refresh_token: decryptSecret(row.gsc_refresh_token),
+    ftp_password: decryptSecret(row.ftp_password),
   };
 }
 
@@ -611,7 +628,7 @@ export type ProvisionInput = {
   name?: string;
   site: {
     url: string;
-    platform: "wordpress" | "github";
+    platform: "wordpress" | "github" | "ftp";
     cadence: "daily" | "every3days" | "weekly";
     publishMode: "autopilot" | "review";
     businessName: string;
@@ -634,6 +651,12 @@ export type ProvisionInput = {
     githubToken?: string;
     githubBranch?: string;
     gscRefreshToken?: string;
+    ftpHost?: string;
+    ftpPort?: number;
+    ftpUser?: string;
+    ftpPassword?: string;
+    ftpProtocol?: string;
+    ftpRoot?: string;
   };
 };
 
@@ -718,8 +741,9 @@ export async function provisionSite(
 
   const c = input.connection;
   await sql(
-    `insert into connections (site_id, wp_user, wp_app_password, github_repo, github_token, github_branch, gsc_refresh_token, updated_at)
-     values ($1,$2,$3,$4,$5,$6,$7, now())
+    `insert into connections (site_id, wp_user, wp_app_password, github_repo, github_token, github_branch, gsc_refresh_token,
+       ftp_host, ftp_port, ftp_user, ftp_password, ftp_protocol, ftp_root, updated_at)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
      on conflict (site_id) do update set
        wp_user = coalesce(nullif(excluded.wp_user, ''), connections.wp_user),
        wp_app_password = coalesce(nullif(excluded.wp_app_password, ''), connections.wp_app_password),
@@ -727,6 +751,14 @@ export async function provisionSite(
        github_token = coalesce(nullif(excluded.github_token, ''), connections.github_token),
        github_branch = coalesce(nullif(excluded.github_branch, ''), connections.github_branch),
        gsc_refresh_token = coalesce(nullif(excluded.gsc_refresh_token, ''), connections.gsc_refresh_token),
+       ftp_host = coalesce(nullif(excluded.ftp_host, ''), connections.ftp_host),
+       ftp_port = coalesce(excluded.ftp_port, connections.ftp_port),
+       ftp_user = coalesce(nullif(excluded.ftp_user, ''), connections.ftp_user),
+       ftp_password = coalesce(nullif(excluded.ftp_password, ''), connections.ftp_password),
+       ftp_protocol = coalesce(nullif(excluded.ftp_protocol, ''), connections.ftp_protocol),
+       -- No nullif: "" is a meaningful root ("login lands in the web
+       -- root"), so an explicit empty string must be storable.
+       ftp_root = coalesce(excluded.ftp_root, connections.ftp_root),
        updated_at = now()`,
     [
       siteId,
@@ -739,6 +771,12 @@ export async function provisionSite(
       encryptSecret(c.githubToken),
       c.githubBranch ?? null,
       encryptSecret(c.gscRefreshToken),
+      c.ftpHost ?? null,
+      c.ftpPort ?? null,
+      c.ftpUser ?? null,
+      encryptSecret(c.ftpPassword),
+      c.ftpProtocol ?? null,
+      c.ftpRoot ?? null,
     ]
   );
 
@@ -1524,7 +1562,7 @@ export async function deleteAccount(email: string): Promise<AccountDeletion> {
  * nothing, and returns whether a row actually changed so the caller can
  * distinguish "disconnected" from "there was nothing connected".
  */
-export type ConnectedService = "wordpress" | "github" | "gsc";
+export type ConnectedService = "wordpress" | "github" | "gsc" | "ftp";
 
 export async function disconnectService(
   email: string,
@@ -1536,6 +1574,7 @@ export async function disconnectService(
     wordpress: "wp_user = null, wp_app_password = null",
     github: "github_token = null, github_repo = null, github_branch = null",
     gsc: "gsc_refresh_token = null",
+    ftp: "ftp_host = null, ftp_port = null, ftp_user = null, ftp_password = null, ftp_protocol = null, ftp_root = null",
   };
   const res = await sql(
     `update connections c

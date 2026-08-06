@@ -132,6 +132,12 @@ export function Wizard() {
             data.publishing.githubRepo.trim() !== "" &&
             (data.publishing.githubOauth || data.publishing.githubToken.trim() !== "")
           );
+        if (data.website.platform === "ftp")
+          return (
+            data.publishing.ftpHost.trim() !== "" &&
+            data.publishing.ftpUser.trim() !== "" &&
+            data.publishing.ftpPassword.trim() !== ""
+          );
         return false;
       case "searchconsole":
         return data.searchConsole.connected || data.searchConsole.skipped;
@@ -412,7 +418,13 @@ function WebsiteStep({ data, update }: StepProps) {
                 <p>
                   <span className="text-muted">Platform </span>
                   <span className="font-medium">
-                    {ingest.platform === "wordpress" ? "WordPress detected" : "Static site"}
+                    {ingest.platform === "wordpress"
+                      ? "WordPress detected"
+                      : ingest.platform === "wix"
+                        ? "Wix detected"
+                        : ingest.platform === "lovable"
+                          ? "Lovable detected"
+                          : "Static site"}
                   </span>
                 </p>
               )}
@@ -434,6 +446,36 @@ function WebsiteStep({ data, update }: StepProps) {
           </div>
         )}
 
+        {/* Wix blocks all external editing — no API, no FTP — so the
+            honest move is to say so here, before any more time is spent,
+            rather than let onboarding finish into a publish that can
+            never work. */}
+        {!studying && ingest?.ok && ingest.platform === "wix" && (
+          <div className="rounded-xl border border-ink/30 bg-paper-warm p-5">
+            <p className="text-[13.5px] font-medium">This looks like a Wix site — Ascent can&apos;t publish to it.</p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+              Wix doesn&apos;t allow outside software to add pages: no API, no
+              file access. That&apos;s a Wix restriction, not a setting. To use
+              Ascent you&apos;d need the site on WordPress, a static host, or
+              anywhere reachable by FTP — we can help you move when you&apos;re
+              ready, but we&apos;d rather tell you now than after setup.
+            </p>
+          </div>
+        )}
+        {/* Lovable is the opposite case: every Lovable project already
+            syncs bi-directionally with a GitHub repository, so the GitHub
+            path covers it as-is — the card just has to say so. */}
+        {!studying && ingest?.ok && ingest.platform === "lovable" && (
+          <div className="rounded-xl border border-line bg-paper p-5">
+            <p className="text-[13.5px] font-medium">Built with Lovable? Choose GitHub below.</p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+              Lovable keeps every project synced with a GitHub repository
+              (Settings &rarr; GitHub in Lovable). Connect that repository and
+              pages the agent commits flow back into your Lovable project
+              automatically.
+            </p>
+          </div>
+        )}
         <div role="group" aria-labelledby="platform-label" className="grid gap-3">
           <span id="platform-label" className="text-[13px] font-medium text-ink">Platform</span>
           <ChoiceCard
@@ -446,7 +488,13 @@ function WebsiteStep({ data, update }: StepProps) {
             selected={w.platform === "github"}
             onClick={() => set({ platform: "github" })}
             title="Static site on GitHub"
-            text="Sign in with GitHub and pick the repository. We commit pages straight into it."
+            text="Sign in with GitHub and pick the repository. We commit pages straight into it. Lovable and Cursor-built sites live here too."
+          />
+          <ChoiceCard
+            selected={w.platform === "ftp"}
+            onClick={() => set({ platform: "ftp" })}
+            title="Any other host (FTP/SFTP)"
+            text="GoDaddy, HostGator, cPanel hosting, a plain VPS — anywhere with FTP access. The agent uploads pages the way a human specialist would."
           />
         </div>
       </div>
@@ -458,6 +506,7 @@ function PublishingStep({ data, update }: StepProps) {
   const p = data.publishing;
   const set = (patch: Partial<typeof p>) => update({ publishing: { ...p, ...patch } });
   const isWp = data.website.platform === "wordpress";
+  const isFtp = data.website.platform === "ftp";
   const [manual, setManual] = useState(false);
   const [repos, setRepos] = useState<{ fullName: string; defaultBranch: string }[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
@@ -490,6 +539,36 @@ function PublishingStep({ data, update }: StepProps) {
       );
     } catch {
       setWpTest({ state: "fail", msg: "Could not reach the server to run the test." });
+    }
+  };
+
+  const [ftpTest, setFtpTest] = useState<{ state: "idle" | "busy" | "ok" | "fail"; msg: string }>({
+    state: "idle",
+    msg: "",
+  });
+  const testFtp = async () => {
+    setFtpTest({ state: "busy", msg: "" });
+    try {
+      const res = await fetch("/api/connect/ftp/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          host: p.ftpHost,
+          port: p.ftpPort,
+          user: p.ftpUser,
+          password: p.ftpPassword,
+          protocol: p.ftpProtocol,
+          root: p.ftpRoot,
+        }),
+      });
+      const j = (await res.json()) as { ok: boolean; error?: string };
+      setFtpTest(
+        j.ok
+          ? { state: "ok", msg: "Connected — the web root is reachable and writable." }
+          : { state: "fail", msg: j.error || "The connection test failed." }
+      );
+    } catch {
+      setFtpTest({ state: "fail", msg: "Could not reach the server to run the test." });
     }
   };
 
@@ -559,7 +638,9 @@ function PublishingStep({ data, update }: StepProps) {
         sub={
           isWp
             ? "One click. You sign in on your own WordPress site and approve the connection. No passwords are typed here and you can revoke access from WordPress at any time."
-            : "Sign in with GitHub and pick the repository your site lives in. We request access to repository contents only."
+            : isFtp
+              ? "The same details you'd give FileZilla or any FTP program — they're in your hosting control panel, usually under FTP Accounts. Credentials are encrypted and used only to upload pages."
+              : "Sign in with GitHub and pick the repository your site lives in. We request access to repository contents only."
         }
       />
       <div className="mt-8 grid gap-5">
@@ -647,6 +728,78 @@ function PublishingStep({ data, update }: StepProps) {
               )}
             </>
           )
+        ) : isFtp ? (
+          <>
+            <Field
+              label="Server"
+              placeholder="ftp.yoursite.com"
+              hint="Sometimes called host or hostname. Your host's welcome email or cPanel's FTP Accounts page lists it."
+              value={p.ftpHost}
+              onChange={(e) => set({ ftpHost: e.target.value })}
+            />
+            <div className="grid gap-5 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-[13px] font-medium text-ink">Connection type</span>
+                <select
+                  value={p.ftpProtocol}
+                  onChange={(e) => set({ ftpProtocol: e.target.value as typeof p.ftpProtocol })}
+                  className="mt-2 w-full rounded-xl border border-line bg-paper px-4 py-3 text-[14.5px] text-ink outline-none transition-all focus:border-ink focus:ring-4 focus:ring-ink/[0.06]"
+                >
+                  <option value="ftps">FTPS — encrypted, most hosts (recommended)</option>
+                  <option value="sftp">SFTP — over SSH, port 22</option>
+                  <option value="ftp">Plain FTP — unencrypted, last resort</option>
+                </select>
+              </label>
+              <Field
+                label="Port"
+                optional
+                inputMode="numeric"
+                placeholder={p.ftpProtocol === "sftp" ? "22" : "21"}
+                hint="Leave blank for the standard port."
+                value={p.ftpPort}
+                onChange={(e) => set({ ftpPort: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field
+                label="Username"
+                placeholder="user@yoursite.com"
+                value={p.ftpUser}
+                onChange={(e) => set({ ftpUser: e.target.value })}
+              />
+              <Field
+                label="Password"
+                type="password"
+                value={p.ftpPassword}
+                onChange={(e) => set({ ftpPassword: e.target.value })}
+              />
+            </div>
+            <Field
+              label="Web root folder"
+              optional
+              placeholder="public_html"
+              hint="The folder that serves your site — public_html on most cPanel hosts. Leave as is unless you know yours differs; blank means the login already lands there."
+              value={p.ftpRoot}
+              onChange={(e) => set({ ftpRoot: e.target.value })}
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={testFtp}
+                disabled={
+                  ftpTest.state === "busy" ||
+                  !p.ftpHost.trim() ||
+                  !p.ftpUser.trim() ||
+                  !p.ftpPassword.trim()
+                }
+                className="rounded-full border border-line bg-paper px-4 py-2 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-60"
+              >
+                {ftpTest.state === "busy" ? "Testing…" : "Test the connection"}
+              </button>
+              {ftpTest.state === "ok" && <span className="text-[12.5px] text-ink">{ftpTest.msg}</span>}
+              {ftpTest.state === "fail" && <span className="text-[12.5px] text-muted">{ftpTest.msg}</span>}
+            </div>
+          </>
         ) : ghConnected && p.githubOauth ? (
           <>
             <ConnectedCard
@@ -943,7 +1096,12 @@ function LaunchStep({ data, update }: StepProps) {
     { label: "Website", value: data.website.url || "Not set" },
     {
       label: "Publishing",
-      value: data.website.platform === "wordpress" ? "WordPress REST API" : "GitHub repository",
+      value:
+        data.website.platform === "wordpress"
+          ? "WordPress REST API"
+          : data.website.platform === "ftp"
+            ? `${(data.publishing.ftpProtocol || "ftps").toUpperCase()} upload to ${data.publishing.ftpHost || "your host"}`
+            : "GitHub repository",
     },
     {
       label: "Rankings",

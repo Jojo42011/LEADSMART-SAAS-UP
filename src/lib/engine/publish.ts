@@ -36,6 +36,16 @@ export type PublishResult =
     }
   | {
       ok: true;
+      /** FTP/FTPS/SFTP upload — the universal fallback (see engine/ftp.ts). */
+      platform: "ftp";
+      path: string;
+      liveUrl: string | null;
+      liveStatus: string | null;
+      /** How the artwork was resolved, for the run summary. */
+      imageNote: string | null;
+    }
+  | {
+      ok: true;
       platform: "wordpress";
       pageId: number;
       liveUrl: string;
@@ -330,7 +340,7 @@ function lastmod(publishedAt: string | Date | null): string {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
-function sitemapXml(pages: PublishedPageRef[]): string {
+export function sitemapXml(pages: PublishedPageRef[]): string {
   const rows = pages
     .map((p) => {
       const mod = lastmod(p.publishedAt);
@@ -340,7 +350,7 @@ function sitemapXml(pages: PublishedPageRef[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows}\n</urlset>\n`;
 }
 
-function folderIndexHtml(input: {
+export function folderIndexHtml(input: {
   businessName: string;
   siteUrl: string;
   folder: string;

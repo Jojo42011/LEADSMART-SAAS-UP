@@ -10,7 +10,7 @@
 export type SiteIngest = {
   ok: boolean;
   url: string;
-  platform: "wordpress" | "github" | "unknown";
+  platform: "wordpress" | "github" | "wix" | "lovable" | "unknown";
   title: string;
   description: string;
   h1: string;

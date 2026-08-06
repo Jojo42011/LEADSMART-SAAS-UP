@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
   const siteId = (body.siteId || "").trim();
   const service = body.service as ConnectedService | undefined;
 
-  if (!siteId || !service || !["wordpress", "github", "gsc"].includes(service)) {
+  if (!siteId || !service || !["wordpress", "github", "gsc", "ftp"].includes(service)) {
     return NextResponse.json(
-      { ok: false, error: "A siteId and a service of wordpress, github or gsc are required." },
+      { ok: false, error: "A siteId and a service of wordpress, github, gsc or ftp are required." },
       { status: 400 }
     );
   }

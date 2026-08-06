@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from "react";
 
-export type Platform = "wordpress" | "github";
+export type Platform = "wordpress" | "github" | "ftp";
 export type PublishMode = "autopilot" | "review";
 export type Cadence = "daily" | "every3days" | "weekly";
 
@@ -34,6 +34,14 @@ export type OnboardingData = {
     githubToken: string;
     /** True when GitHub was connected through OAuth; the token lives in an httpOnly cookie server side. */
     githubOauth: boolean;
+    /** FTP/SFTP publishing, for hosts that are neither WordPress nor GitHub. */
+    ftpHost: string;
+    ftpPort: string;
+    ftpUser: string;
+    ftpPassword: string;
+    ftpProtocol: "ftps" | "ftp" | "sftp";
+    /** Remote directory serving the site root — usually public_html. */
+    ftpRoot: string;
   };
   searchConsole: {
     connected: boolean;
@@ -65,7 +73,10 @@ export const emptyOnboarding: OnboardingData = {
     serviceArea: "",
   },
   website: { url: "", platform: null },
-  publishing: { wpUser: "", wpAppPassword: "", githubRepo: "", githubBranch: "", githubToken: "", githubOauth: false },
+  publishing: {
+    wpUser: "", wpAppPassword: "", githubRepo: "", githubBranch: "", githubToken: "", githubOauth: false,
+    ftpHost: "", ftpPort: "", ftpUser: "", ftpPassword: "", ftpProtocol: "ftps", ftpRoot: "public_html",
+  },
   searchConsole: { connected: false, skipped: false },
   market: { industry: "", services: "", locations: "", competitors: "", avgSaleValue: "", wishlist: "" },
   launch: { cadence: "daily", mode: "autopilot" },
