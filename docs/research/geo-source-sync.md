@@ -17,7 +17,8 @@ changed:
    new protocol adoption signals like llms.txt).
 3. Updates this file's "Last synced commit" and appends a dated entry to the log
    below describing what changed and what was implemented (or why nothing was).
-4. Commits and pushes to `Row-Claude/leadsmart-seo`.
+4. Commits and pushes to `main` (fetch and start from `origin/main` first;
+   `Row-Claude/leadsmart-seo` is retired as of 2026-08-06 — work stranded there).
 
 See the Routine named "GEO source weekly sync" (or search triggers for
 "awesome-generative-engine-optimization") for the schedule.
@@ -80,4 +81,4 @@ these in robots.txt is invisible to answer engines regardless of content quality
 ## Sync log
 - **2026-07-16** — initial sync at commit `7c37369`. Implemented the 9-tactic scoring,
   freshness signal, citation-platform suggestions, llms.txt, and AI-crawler robots.txt
-  (see commit history on `Row-Claude/leadsmart-seo`).
+  (see commit history — on `main` since 2026-08-06, on the retired `Row-Claude/leadsmart-seo` branch before that).

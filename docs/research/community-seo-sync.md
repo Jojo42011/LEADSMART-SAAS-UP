@@ -36,7 +36,10 @@ If Reddit access is ever restored, the Routine will pick it up automatically.
    genuinely new, implement nothing — a quiet day is a valid outcome.
 5. Append a dated entry to the log below (what was seen, what was applied, or
    why nothing was). Update "last synced" date.
-6. `npm run build` to verify, then commit + push to `Row-Claude/leadsmart-seo`.
+6. `npm run build` to verify, then commit + push to `main` (fetch and start
+   from `origin/main` first). Sync work used to go to
+   `Row-Claude/leadsmart-seo`, where three real engine improvements sat
+   stranded and unmerged for days; that branch is retired (2026-08-06).
 7. Only message the user if something meaningful shipped.
 
 **Guardrail — fabrication:** never implement fabrication tactics (fake
