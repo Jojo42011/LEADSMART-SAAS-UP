@@ -134,6 +134,15 @@ const SCHEMA_REPAIRS = [
      live_url text,
      live_status text,
      updated_at timestamptz not null default now())`,
+  // Which directory listings the owner has completed. Server-side rather
+  // than localStorage: this is real business state, and a checklist that
+  // resets on a new device teaches people not to trust the checklist.
+  `create table if not exists citation_listings (
+     site_id uuid references sites(id) on delete cascade,
+     directory text not null,
+     status text not null default 'todo',
+     updated_at timestamptz not null default now(),
+     primary key (site_id, directory))`,
   `create table if not exists support_messages (
      id uuid primary key default gen_random_uuid(),
      name text, email text not null, subject text, message text not null,
@@ -1695,4 +1704,52 @@ export async function markRebuildPublished(
       where site_id = $1`,
     [siteId, input.previousHomeHtml, input.liveUrl, input.liveStatus]
   );
+}
+
+/* ------------------------------ Citations -------------------------------- */
+
+/**
+ * Directory-listing progress, one row per (site, directory).
+ *
+ * Ownership is enforced inside each statement via the tenant join, the
+ * same way every other cross-account surface here works: a siteId from
+ * another account reads as empty and writes nothing, rather than trusting
+ * the caller to have checked.
+ */
+export async function listCitationStatuses(
+  siteId: string,
+  email: string
+): Promise<Record<string, string>> {
+  if (!storeConfigured()) return {};
+  const res = await sql(
+    `select c.directory, c.status from citation_listings c
+      join sites s on s.id = c.site_id
+      join tenants t on t.id = s.tenant_id
+     where c.site_id = $1 and lower(t.email) = $2`,
+    [siteId, email.trim().toLowerCase()]
+  );
+  const out: Record<string, string> = {};
+  for (const row of res.rows) out[row.directory as string] = row.status as string;
+  return out;
+}
+
+export async function setCitationStatus(
+  siteId: string,
+  email: string,
+  directory: string,
+  status: "todo" | "submitted" | "live"
+): Promise<boolean> {
+  if (!storeConfigured()) return false;
+  // insert...select: the row only comes into being if the ownership join
+  // holds, so there is no window where a foreign siteId writes anything.
+  const res = await sql(
+    `insert into citation_listings (site_id, directory, status, updated_at)
+     select s.id, $3, $4, now() from sites s
+       join tenants t on t.id = s.tenant_id
+      where s.id = $1 and lower(t.email) = $2
+     on conflict (site_id, directory)
+       do update set status = excluded.status, updated_at = now()`,
+    [siteId, email.trim().toLowerCase(), directory, status]
+  );
+  return (res.rowCount ?? 0) > 0;
 }

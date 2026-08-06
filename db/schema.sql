@@ -68,6 +68,16 @@ create table if not exists rebuilds (
   updated_at    timestamptz not null default now()
 );
 
+-- Directory-listing progress for the citations checklist: one row per
+-- (site, directory), status todo | submitted | live.
+create table if not exists citation_listings (
+  site_id       uuid references sites(id) on delete cascade,
+  directory     text not null,
+  status        text not null default 'todo',
+  updated_at    timestamptz not null default now(),
+  primary key (site_id, directory)
+);
+
 -- Publishing credentials, one row per site. Encrypt values with a KMS or
 -- pgcrypto before insert; the app treats them as opaque.
 create table if not exists connections (

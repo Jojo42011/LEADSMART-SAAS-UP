@@ -91,7 +91,7 @@ const hostile = buildHomepage({
 });
 check("markup in the business name cannot execute", !hostile.html.includes("<script>alert(1)</script>"));
 check("markup in a service cannot execute", !hostile.html.includes("<script>x</script>"));
-const blob = hostile.html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)?.[1] ?? "";
+const blob = hostile.html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1] ?? "";
 check("the schema blob cannot be broken out of", !blob.includes("</script>"));
 
 /* -------------------------- accent hygiene ------------------------------- */

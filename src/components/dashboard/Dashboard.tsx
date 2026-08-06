@@ -17,6 +17,7 @@ import { site } from "@/lib/site";
 import { SiteSwitcher } from "./SiteSwitcher";
 import { Connections } from "./Connections";
 import { SiteRebuild } from "./SiteRebuild";
+import { Citations } from "./Citations";
 import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
@@ -32,7 +33,7 @@ import { Analytics } from "./Analytics";
 
 // Billing is a Tab but not a navItem: it is entered through the Plan card
 // (and the mobile switcher), not the section list.
-type Tab = "Overview" | "Strategy" | "Content" | "Analytics" | "Keywords" | "Competitors" | "Settings" | "Billing" | "Support";
+type Tab = "Overview" | "Strategy" | "Content" | "Analytics" | "Keywords" | "Competitors" | "Citations" | "Settings" | "Billing" | "Support";
 
 const navItems: { label: Tab; icon: React.ReactNode }[] = [
   {
@@ -88,6 +89,15 @@ const navItems: { label: Tab; icon: React.ReactNode }[] = [
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
         <circle cx="11" cy="11" r="7" />
         <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    label: "Citations",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M12 21s-7-4.5-7-10a7 7 0 0 1 14 0c0 5.5-7 10-7 10Z" />
+        <circle cx="12" cy="11" r="2.5" />
       </svg>
     ),
   },
@@ -458,6 +468,7 @@ export function Dashboard() {
                 onResearched={refreshIntel}
               />
             )}
+            {tab === "Citations" && <Citations data={data} />}
             {tab === "Billing" && <Billing />}
             {tab === "Support" && <SupportPanel />}
             {tab === "Settings" && (
