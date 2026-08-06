@@ -33,7 +33,7 @@ const TIER_LABEL: Record<Directory["tier"], string> = {
   general: "General",
 };
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+export function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <button

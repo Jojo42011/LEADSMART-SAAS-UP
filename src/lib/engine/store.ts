@@ -143,6 +143,22 @@ const SCHEMA_REPAIRS = [
      status text not null default 'todo',
      updated_at timestamptz not null default now(),
      primary key (site_id, directory))`,
+  // Editorial-placement targets the outreach researcher found, with the
+  // drafted pitch. Unique on (site_id, url) so re-running research
+  // refreshes rather than duplicates.
+  `create table if not exists outreach_targets (
+     id uuid primary key default gen_random_uuid(),
+     site_id uuid not null references sites(id) on delete cascade,
+     name text not null,
+     url text not null,
+     kind text not null default 'press',
+     why text not null default '',
+     pitch_subject text not null default '',
+     pitch_body text not null default '',
+     status text not null default 'new',
+     created_at timestamptz not null default now(),
+     updated_at timestamptz not null default now(),
+     unique (site_id, url))`,
   `create table if not exists support_messages (
      id uuid primary key default gen_random_uuid(),
      name text, email text not null, subject text, message text not null,
@@ -1750,6 +1766,94 @@ export async function setCitationStatus(
      on conflict (site_id, directory)
        do update set status = excluded.status, updated_at = now()`,
     [siteId, email.trim().toLowerCase(), directory, status]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+/* ------------------------------- Outreach -------------------------------- */
+
+export type OutreachTargetRow = {
+  id: string;
+  site_id: string;
+  name: string;
+  url: string;
+  kind: string;
+  why: string;
+  pitch_subject: string;
+  pitch_body: string;
+  status: string;
+  created_at: Date;
+};
+
+/**
+ * Stores a research run's targets. Upsert by (site, url): a re-run
+ * refreshes the pitch and reasoning on rows the owner has not acted on,
+ * but never touches one that has moved past 'new' — their status
+ * history ("pitched three weeks ago") is a record of THEIR work, and a
+ * refresh must not silently reset it.
+ */
+export async function saveOutreachTargets(
+  siteId: string,
+  targets: {
+    name: string;
+    url: string;
+    kind: string;
+    why: string;
+    pitchSubject: string;
+    pitchBody: string;
+  }[]
+): Promise<number> {
+  if (!storeConfigured() || targets.length === 0) return 0;
+  let written = 0;
+  for (const t of targets) {
+    const res = await sql(
+      `insert into outreach_targets (site_id, name, url, kind, why, pitch_subject, pitch_body)
+       values ($1,$2,$3,$4,$5,$6,$7)
+       on conflict (site_id, url) do update set
+         name = excluded.name, kind = excluded.kind, why = excluded.why,
+         pitch_subject = excluded.pitch_subject, pitch_body = excluded.pitch_body,
+         updated_at = now()
+       where outreach_targets.status = 'new'`,
+      [siteId, t.name, t.url, t.kind, t.why, t.pitchSubject, t.pitchBody]
+    );
+    written += res.rowCount ?? 0;
+  }
+  return written;
+}
+
+export async function listOutreachTargets(
+  siteId: string,
+  email: string
+): Promise<OutreachTargetRow[]> {
+  if (!storeConfigured()) return [];
+  const res = await sql(
+    `select o.* from outreach_targets o
+      join sites s on s.id = o.site_id
+      join tenants t on t.id = s.tenant_id
+     where o.site_id = $1 and lower(t.email) = $2
+     order by case o.kind when 'roundup' then 0 when 'press' then 1 when 'association' then 2 else 3 end,
+              o.created_at desc`,
+    [siteId, email.trim().toLowerCase()]
+  );
+  return res.rows as OutreachTargetRow[];
+}
+
+const OUTREACH_STATUSES = ["new", "pitched", "replied", "placed", "dismissed"];
+
+/** Ownership enforced in the update itself, like every status write here. */
+export async function setOutreachStatus(
+  id: string,
+  email: string,
+  status: string
+): Promise<boolean> {
+  if (!storeConfigured() || !OUTREACH_STATUSES.includes(status)) return false;
+  const res = await sql(
+    `update outreach_targets o
+        set status = $3, updated_at = now()
+       from sites s
+       join tenants t on t.id = s.tenant_id
+      where o.site_id = s.id and o.id = $1 and lower(t.email) = $2`,
+    [id, email.trim().toLowerCase(), status]
   );
   return (res.rowCount ?? 0) > 0;
 }

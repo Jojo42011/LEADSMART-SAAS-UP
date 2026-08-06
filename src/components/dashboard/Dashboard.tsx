@@ -18,6 +18,7 @@ import { SiteSwitcher } from "./SiteSwitcher";
 import { Connections } from "./Connections";
 import { SiteRebuild } from "./SiteRebuild";
 import { Citations } from "./Citations";
+import { Outreach } from "./Outreach";
 import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
@@ -468,7 +469,12 @@ export function Dashboard() {
                 onResearched={refreshIntel}
               />
             )}
-            {tab === "Citations" && <Citations data={data} />}
+            {tab === "Citations" && (
+              <div className="grid gap-4">
+                <Citations data={data} />
+                <Outreach />
+              </div>
+            )}
             {tab === "Billing" && <Billing />}
             {tab === "Support" && <SupportPanel />}
             {tab === "Settings" && (

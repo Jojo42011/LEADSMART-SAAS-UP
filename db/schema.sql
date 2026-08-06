@@ -78,6 +78,23 @@ create table if not exists citation_listings (
   primary key (site_id, directory)
 );
 
+-- Editorial-placement targets from the outreach researcher, with the
+-- drafted pitch. status: new | pitched | replied | placed | dismissed.
+create table if not exists outreach_targets (
+  id            uuid primary key default gen_random_uuid(),
+  site_id       uuid not null references sites(id) on delete cascade,
+  name          text not null,
+  url           text not null,
+  kind          text not null default 'press',      -- roundup | press | association | search
+  why           text not null default '',
+  pitch_subject text not null default '',
+  pitch_body    text not null default '',
+  status        text not null default 'new',
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  unique (site_id, url)
+);
+
 -- Publishing credentials, one row per site. Encrypt values with a KMS or
 -- pgcrypto before insert; the app treats them as opaque.
 create table if not exists connections (
