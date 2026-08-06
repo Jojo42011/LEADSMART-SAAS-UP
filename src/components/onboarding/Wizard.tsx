@@ -14,6 +14,7 @@ import {
 } from "@/lib/onboarding";
 import { loadIntel, saveIntel, type SiteIngest } from "@/lib/intel";
 import { buildPlan } from "@/lib/plan";
+import { assessSiteQuality } from "@/lib/site-quality";
 import { normalizeGithubRepo } from "@/lib/github-repo";
 import { site } from "@/lib/site";
 import { ChoiceCard, Field, StepHeading } from "./fields";
@@ -354,6 +355,10 @@ function WebsiteStep({ data, update }: StepProps) {
   const set = (patch: Partial<typeof w>) => update({ website: { ...w, ...patch } });
   const [studying, setStudying] = useState(false);
   const [ingest, setIngest] = useState<SiteIngest | null>(null);
+  // What the read implies for what the agent can publish here. Derived,
+  // never stored: the assessment must always describe the ingest on
+  // screen, not an older one.
+  const quality = useMemo(() => assessSiteQuality(ingest), [ingest]);
   const lastStudied = useRef("");
 
   const study = async () => {
@@ -471,6 +476,42 @@ function WebsiteStep({ data, update }: StepProps) {
                   HTML, so they are readable by every engine from day one. This
                   is about the rest of your site — ask whoever maintains it
                   about server-side rendering or prerendering.
+                </p>
+              </div>
+            )}
+
+            {/* What the agent will be working around, from the same read.
+                Deliberately the measurements and their consequences, not a
+                verdict on the site's taste — and the client-rendered
+                finding is excluded because it has its own fuller notice
+                directly above rather than being listed twice. */}
+            {quality.findings.filter((f) => f.key !== "clientRendered").length > 0 && (
+              <div className="mt-4 border-t border-line pt-4">
+                <p className="text-[12.5px] font-medium text-ink">
+                  {quality.offerRebuild
+                    ? "This site limits what the agent can publish into it"
+                    : "Small things the agent will work around"}
+                </p>
+                <ul className="mt-2 grid gap-2">
+                  {quality.findings
+                    .filter((f) => f.key !== "clientRendered")
+                    .map((f) => (
+                      <li key={f.key} className="flex gap-2.5">
+                        <span
+                          aria-hidden="true"
+                          className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-ink/25"
+                        />
+                        <span className="text-[12.5px] leading-relaxed">
+                          <span className="text-ink">{f.label}</span>{" "}
+                          <span className="text-muted">{f.consequence}</span>
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+                <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
+                  None of this stops setup — the agent publishes either way.
+                  It reads your site&apos;s own design to style what it writes,
+                  so the less there is to read, the plainer its pages look.
                 </p>
               </div>
             )}

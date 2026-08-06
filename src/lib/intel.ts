@@ -7,28 +7,22 @@
  * real findings instead of simulations.
  */
 
-export type SiteIngest = {
-  ok: boolean;
-  url: string;
-  platform: "wordpress" | "github" | "wix" | "lovable" | "unknown";
-  title: string;
-  description: string;
-  h1: string;
-  phone: string;
-  navLinks: string[];
-  colors: string[];
-  fonts: string[];
-  pageCount: number | null;
-  /**
-   * Visible text in the raw HTML before any JavaScript runs, and whether
-   * the page appears to be an empty client-rendered shell. Set by
-   * detectClientRendered in src/lib/site-ingest.ts — see the reasoning
-   * there. Optional because snapshots saved before this existed are still
-   * in customers' browsers.
-   */
-  rawTextChars?: number;
-  clientRendered?: boolean;
-};
+/**
+ * The site-analysis snapshot, defined once in src/lib/site-ingest.ts.
+ *
+ * This module used to keep its own copy of the shape, and the two drifted
+ * exactly as duplicated types do: the real ingest grew nav, footerLinks
+ * and logo — which generated pages depend on to reproduce a customer's
+ * header — while this copy still described the older, smaller object, so
+ * anything reading the snapshot through this type could not see fields
+ * that were genuinely there. Re-exported rather than restated so there is
+ * one definition to keep current.
+ *
+ * A type-only import, so nothing from the server-side ingest module (dns,
+ * sockets) is pulled into the browser bundle.
+ */
+import type { SiteIngest } from "./site-ingest";
+export type { SiteIngest };
 
 export type ResearchKeyword = {
   keyword: string;
