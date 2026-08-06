@@ -16,6 +16,7 @@ import { PRICE_PER_SITE } from "@/lib/pricing";
 import { site } from "@/lib/site";
 import { SiteSwitcher } from "./SiteSwitcher";
 import { Connections } from "./Connections";
+import { SiteRebuild } from "./SiteRebuild";
 import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
@@ -266,6 +267,12 @@ export function Dashboard() {
       setTab("Analytics");
       window.history.replaceState({}, "", "/dashboard");
     }
+    // Returning from the rebuild's Stripe checkout: land on the panel the
+    // purchase belongs to, with the params tidied away.
+    if (params.get("rebuild")) {
+      setTab("Settings");
+      window.history.replaceState({}, "", "/dashboard");
+    }
   }, []);
 
   // Competitors the research cycle discovered feed the plan, so the tab is
@@ -456,6 +463,7 @@ export function Dashboard() {
             {tab === "Settings" && (
               <div className="grid gap-5">
                 <Settings data={data} update={update} onApplied={() => setIntel(loadIntel())} />
+                <SiteRebuild />
                 {/* Below the settings form rather than beside it: these are
                     the destructive controls, and they should be somewhere
                     you arrive at deliberately. */}

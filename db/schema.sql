@@ -52,6 +52,22 @@ create index if not exists sites_due_idx on sites(active, last_run_at);
 -- and inside the scheduler's due-sites query.
 create index if not exists sites_host_idx on sites(host);
 
+-- One-time homepage rebuilds: preview -> paid -> published. One row per
+-- site; previous_home_html keeps the replaced homepage's bytes so the
+-- never-delete promise survives the file being overwritten on disk.
+create table if not exists rebuilds (
+  site_id       uuid primary key references sites(id) on delete cascade,
+  status        text not null default 'preview',     -- preview | paid | published
+  html          text not null,
+  title         text not null default '',
+  previous_home_html text,
+  paid_at       timestamptz,
+  published_at  timestamptz,
+  live_url      text,
+  live_status   text,
+  updated_at    timestamptz not null default now()
+);
+
 -- Publishing credentials, one row per site. Encrypt values with a KMS or
 -- pgcrypto before insert; the app treats them as opaque.
 create table if not exists connections (

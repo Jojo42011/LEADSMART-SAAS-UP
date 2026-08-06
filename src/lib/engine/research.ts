@@ -29,7 +29,7 @@ export type ResearchResult = {
   summary: string;
 };
 
-function splitList(s: string): string[] {
+export function splitList(s: string): string[] {
   return s.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
 }
 

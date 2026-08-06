@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyStripeSignature } from "@/lib/stripe";
 import {
+  markRebuildPaid,
   setTenantPlanByEmail,
   setTenantPlanByCustomer,
   getTenantEmailByCustomer,
@@ -66,6 +67,15 @@ export async function POST(req: Request) {
   try {
     switch (event.type) {
       case "checkout.session.completed": {
+        // A one-time rebuild purchase arrives as the same event type as a
+        // plan purchase. It must be handled first and on its own: falling
+        // through to the subscription path would activate a full plan off
+        // a $49 one-time payment.
+        if (obj.metadata?.kind === "rebuild") {
+          const siteId = obj.metadata?.siteId;
+          if (siteId) await markRebuildPaid(siteId);
+          break;
+        }
         const email = obj.customer_details?.email || obj.customer_email || obj.metadata?.email;
         if (email) {
           await setTenantPlanByEmail(email, "active", typeof obj.customer === "string" ? obj.customer : undefined);

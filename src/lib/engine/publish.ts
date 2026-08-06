@@ -208,7 +208,7 @@ async function commitWithRetry(
 }
 
 /** Creates or updates one file in the repo; returns false on failure. */
-async function commitFile(input: {
+export async function commitFile(input: {
   token: string;
   repo: string;
   branch?: string | null;

@@ -377,3 +377,32 @@ export async function publishFtpSupportFiles(input: {
     await writer?.close().catch(() => {});
   }
 }
+
+/**
+ * Replaces the homepage over FTP/SFTP, returning what was there before.
+ *
+ * The one deliberately destructive write in this module, and it is only
+ * reachable from the rebuild's publish step — behind a preview the owner
+ * saw and a payment they chose to make. The previous bytes are read
+ * FIRST and handed back to the caller to store, so "never delete" holds
+ * in the only form an overwrite allows: the old page is always
+ * recoverable, even though the file on disk is replaced.
+ */
+export async function publishFtpHomepage(input: {
+  credentials: FtpCredentials;
+  html: string;
+}): Promise<{ ok: true; previousHtml: string | null } | { ok: false; error: string }> {
+  let writer: RemoteWriter | null = null;
+  try {
+    const dir = ftpRemoteDir(input.credentials.root) || ".";
+    writer = await openWriter(input.credentials);
+    const previousHtml = await writer.read(dir, "index.html");
+    await writer.write(dir, "index.html", Buffer.from(input.html, "utf8"));
+    return { ok: true, previousHtml };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "upload failed";
+    return { ok: false, error: msg.slice(0, 300) };
+  } finally {
+    await writer?.close().catch(() => {});
+  }
+}

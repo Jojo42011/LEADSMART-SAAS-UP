@@ -14,6 +14,16 @@
 
 export const PRICE_PER_SITE = 49;
 
+/**
+ * One-time price for a homepage rebuild, in dollars.
+ *
+ * Not a subscription: the rebuild is a deliverable, paid once, and the
+ * customer keeps the result whether or not they stay subscribed. Lives
+ * here with the other price so no surface ever hard-codes its own copy
+ * of the number.
+ */
+export const REBUILD_PRICE = 49;
+
 export type Quote = {
   sites: number;
   /** Dollars per month, total. */

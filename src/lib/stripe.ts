@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import { quoteFor, PRICE_PER_SITE } from "./pricing";
+import { quoteFor, PRICE_PER_SITE, REBUILD_PRICE } from "./pricing";
 
 /**
  * Server side Stripe wrapper over the REST API — no SDK, matching the
@@ -382,6 +382,59 @@ export async function cancelSubscriptionNow(
       return { error: json.error?.message || `stripe error ${res.status}` };
     }
     return { ok: true };
+  } catch {
+    return { error: "stripe unreachable" };
+  }
+}
+
+/**
+ * One-time checkout for a homepage rebuild.
+ *
+ * mode "payment", not "subscription" — the rebuild is a deliverable paid
+ * once. The metadata kind marks the session so the webhook can tell this
+ * apart from a plan purchase: both arrive as checkout.session.completed,
+ * and without the marker a $49 rebuild would activate a full
+ * subscription.
+ */
+export async function createRebuildCheckoutSession(input: {
+  origin: string;
+  email: string;
+  siteId: string;
+}): Promise<{ url: string } | { error: string }> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return { error: "not_configured" };
+
+  const params = new URLSearchParams();
+  params.set("mode", "payment");
+  params.set("success_url", `${input.origin}/dashboard?rebuild=paid`);
+  params.set("cancel_url", `${input.origin}/dashboard?rebuild=canceled`);
+  params.set("customer_email", input.email);
+  params.set("metadata[kind]", "rebuild");
+  params.set("metadata[siteId]", input.siteId);
+  params.set("metadata[email]", input.email);
+  params.set("line_items[0][price_data][currency]", "usd");
+  params.set("line_items[0][price_data][unit_amount]", String(REBUILD_PRICE * 100));
+  params.set(
+    "line_items[0][price_data][product_data][name]",
+    "Ascent — one-time homepage rebuild"
+  );
+  params.set("line_items[0][quantity]", "1");
+
+  try {
+    const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+      signal: AbortSignal.timeout(15000),
+    });
+    const json = (await res.json()) as { url?: string; error?: { message?: string } };
+    if (!res.ok || !json.url) {
+      return { error: json.error?.message || `stripe error ${res.status}` };
+    }
+    return { url: json.url };
   } catch {
     return { error: "stripe unreachable" };
   }

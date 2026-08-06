@@ -120,6 +120,20 @@ const SCHEMA_REPAIRS = [
   `alter table connections add column if not exists ftp_password text`,
   `alter table connections add column if not exists ftp_protocol text`,
   `alter table connections add column if not exists ftp_root text`,
+  // One-time homepage rebuilds: preview -> paid -> published. One row per
+  // site (the primary key), because two concurrent rebuild drafts for one
+  // site is a confusion with no legitimate use.
+  `create table if not exists rebuilds (
+     site_id uuid primary key references sites(id) on delete cascade,
+     status text not null default 'preview',
+     html text not null,
+     title text not null default '',
+     previous_home_html text,
+     paid_at timestamptz,
+     published_at timestamptz,
+     live_url text,
+     live_status text,
+     updated_at timestamptz not null default now())`,
   `create table if not exists support_messages (
      id uuid primary key default gen_random_uuid(),
      name text, email text not null, subject text, message text not null,
@@ -1600,4 +1614,85 @@ export async function getGscRefreshToken(email: string, siteId: string): Promise
     [email.trim().toLowerCase(), siteId]
   );
   return (res.rows[0]?.gsc_refresh_token as string | null) ?? null;
+}
+
+/* ------------------------------- Rebuilds -------------------------------- */
+
+/**
+ * The one-time homepage rebuild, one row per site.
+ *
+ * The status walk is preview -> paid -> published, and the transitions
+ * are guarded where money or someone's live site is involved:
+ * regenerating a preview never touches a paid or published row (the
+ * customer bought THAT document, not whatever a later regeneration
+ * produced), and markRebuildPublished stores the previous homepage bytes
+ * beside the new ones — never-delete means the old page is always
+ * recoverable from the row even after it is replaced on disk.
+ */
+export type RebuildRow = {
+  site_id: string;
+  status: "preview" | "paid" | "published";
+  html: string;
+  title: string;
+  previous_home_html: string | null;
+  paid_at: Date | null;
+  published_at: Date | null;
+  live_url: string | null;
+  live_status: string | null;
+};
+
+export async function saveRebuildPreview(siteId: string, html: string, title: string): Promise<boolean> {
+  if (!storeConfigured()) return false;
+  // The where-clause on the conflict arm is the guard: once paid for or
+  // published, the stored document is immutable from this path.
+  const res = await sql(
+    `insert into rebuilds (site_id, status, html, title, updated_at)
+     values ($1, 'preview', $2, $3, now())
+     on conflict (site_id) do update
+       set html = excluded.html, title = excluded.title, updated_at = now()
+       where rebuilds.status = 'preview'`,
+    [siteId, html, title]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+/** The rebuild for a site the given email owns, or null. */
+export async function getRebuildForEmail(siteId: string, email: string): Promise<RebuildRow | null> {
+  if (!storeConfigured()) return null;
+  const res = await sql(
+    `select r.* from rebuilds r
+      join sites s on s.id = r.site_id
+      join tenants t on t.id = s.tenant_id
+     where r.site_id = $1 and lower(t.email) = $2`,
+    [siteId, email.trim().toLowerCase()]
+  );
+  return (res.rows[0] as RebuildRow) ?? null;
+}
+
+/**
+ * Records payment. Idempotent (webhooks retry), and never demotes: a
+ * published rebuild that receives a late duplicate webhook stays
+ * published.
+ */
+export async function markRebuildPaid(siteId: string): Promise<boolean> {
+  if (!storeConfigured()) return false;
+  const res = await sql(
+    `update rebuilds set status = 'paid', paid_at = coalesce(paid_at, now()), updated_at = now()
+      where site_id = $1 and status = 'preview'`,
+    [siteId]
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+export async function markRebuildPublished(
+  siteId: string,
+  input: { previousHomeHtml: string | null; liveUrl: string | null; liveStatus: string | null }
+): Promise<void> {
+  if (!storeConfigured()) return;
+  await sql(
+    `update rebuilds set status = 'published', published_at = now(),
+        previous_home_html = $2, live_url = $3, live_status = $4, updated_at = now()
+      where site_id = $1`,
+    [siteId, input.previousHomeHtml, input.liveUrl, input.liveStatus]
+  );
 }

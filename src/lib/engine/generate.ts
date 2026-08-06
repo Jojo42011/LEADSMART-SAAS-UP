@@ -97,7 +97,7 @@ function esc(s: string): string {
  * three characters as \u sequences leaves the JSON byte-identical once
  * parsed, so the schema search engines read is unchanged.
  */
-function jsonLd(value: unknown): string {
+export function jsonLd(value: unknown): string {
   return JSON.stringify(value)
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e")
