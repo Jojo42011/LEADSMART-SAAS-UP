@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wordmark } from "@/components/ui/Wordmark";
-import { saveBilling } from "@/lib/billing";
 import { quoteFor, describeQuote } from "@/lib/pricing";
 
 const ease = [0.21, 0.47, 0.32, 0.98] as const;
@@ -46,8 +45,11 @@ export function Checkout() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("paid") === "1") {
       // Payment confirmed by Stripe redirect; the webhook activates the
-      // tenant server side. Unlock onboarding locally and move on.
-      saveBilling({ active: true, sites: 1, activatedAt: new Date().toISOString() });
+      // tenant server side, which is the only place activation is recorded.
+      // There used to be a localStorage flag mirrored here to unlock
+      // onboarding — a second, client-side answer to "have they paid" that
+      // could disagree with the server's. Onboarding is open now, and
+      // entitlement is read from the server, so the flag is gone.
       // eslint-disable-next-line react-hooks/set-state-in-effect -- post-mount browser read
       setDone(true);
       const t = setTimeout(() => router.push("/onboarding"), 1400);
@@ -109,7 +111,6 @@ export function Checkout() {
       body: JSON.stringify({ sites }),
     }).catch(() => {});
     setTimeout(() => {
-      saveBilling({ active: true, sites, activatedAt: new Date().toISOString() });
       setDone(true);
       setTimeout(() => router.push("/onboarding"), 1200);
     }, 1400);

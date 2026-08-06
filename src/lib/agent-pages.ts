@@ -59,9 +59,11 @@ export type AgentSite = {
 
 export type Entitlement = {
   allowed: boolean;
-  state: "trialing" | "active" | "grace" | "suspended" | "none";
+  state: "trialing" | "active" | "grace" | "suspended" | "none" | "free" | "free_limit";
   reason: string;
   graceEndsAt: string | null;
+  /** Free-preview progress. Present only in the "free" and "free_limit" states. */
+  free?: { used: number; limit: number };
 };
 
 export type AgentState = {

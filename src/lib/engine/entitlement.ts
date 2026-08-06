@@ -20,6 +20,22 @@
 
 export const PLAN_GRACE_DAYS = Number(process.env.PLAN_GRACE_DAYS) || 7;
 
+/**
+ * How many pages the agent publishes before asking for a card.
+ *
+ * The free preview exists so someone can watch the thing actually work on
+ * their own website before paying for it. It is deliberately counted in
+ * published pages rather than in days: a trial measured in time can be
+ * spent entirely on a slow week, whereas three real pages on your own
+ * domain is the same evidence for everybody.
+ *
+ * It is also the abuse limit. The allowance is charged against the
+ * WEBSITE, not the email address (see freePagesUsedFor), so signing up
+ * again with a different email and the same site yields no further free
+ * pages — the domain is the thing that cannot be re-minted for free.
+ */
+export const FREE_PAGE_LIMIT = Number(process.env.FREE_PAGE_LIMIT) || 3;
+
 /** Statuses we store. Mirrors Stripe's vocabulary plus our own two. */
 export type PlanStatus =
   | "inactive"
@@ -35,11 +51,17 @@ export type PlanStatus =
 export type Entitlement = {
   allowed: boolean;
   /** Machine-readable, for the dashboard and for tests. */
-  state: "trialing" | "active" | "grace" | "suspended" | "none";
+  state: "trialing" | "active" | "grace" | "suspended" | "none" | "free" | "free_limit";
   /** One sentence an owner can act on. */
   reason: string;
   /** When a grace period runs out, if one is running. */
   graceEndsAt: Date | null;
+  /**
+   * Free-preview progress, present only in the two free states. The
+   * dashboard shows this as "2 of 3 free pages used"; nothing else should
+   * infer the count from the reason string.
+   */
+  free?: { used: number; limit: number };
 };
 
 /**
@@ -74,10 +96,19 @@ export function planStatusFromStripe(stripeStatus: string): PlanStatus {
   }
 }
 
+/**
+ * @param freePagesUsed Published pages already charged against this site's
+ * free allowance. Pass a number to evaluate the free preview; omit it and
+ * a tenant with no subscription is simply denied. The omission default is
+ * deliberately the closed one — a caller that has not been taught about
+ * the free tier turns work away rather than handing it out unmetered.
+ * entitlementForEmail always supplies it, so in practice it is always set.
+ */
 export function entitlementFor(
   planStatus: string | null | undefined,
   statusSince: Date | string | null | undefined,
-  now: Date = new Date()
+  now: Date = new Date(),
+  freePagesUsed?: number | null
 ): Entitlement {
   const status = (planStatus || "inactive") as PlanStatus;
 
@@ -121,6 +152,33 @@ export function entitlementFor(
   }
 
   if (status === "inactive") {
+    // The free preview. Someone who has never paid still gets the agent
+    // researching, writing and publishing to their real site — capped at
+    // FREE_PAGE_LIMIT pages — because "see it working first" is the whole
+    // proposition, and a dashboard full of locked panels demonstrates
+    // nothing. Past the cap the agent stops and the upgrade prompt is the
+    // only way forward.
+    if (typeof freePagesUsed === "number") {
+      const used = Math.max(0, Math.floor(freePagesUsed));
+      const free = { used, limit: FREE_PAGE_LIMIT };
+      const left = FREE_PAGE_LIMIT - used;
+      if (left > 0) {
+        return {
+          allowed: true,
+          state: "free",
+          reason: `Free preview — ${left} of ${FREE_PAGE_LIMIT} page${FREE_PAGE_LIMIT === 1 ? "" : "s"} left before you pick a plan.`,
+          graceEndsAt: null,
+          free,
+        };
+      }
+      return {
+        allowed: false,
+        state: "free_limit",
+        reason: `You've used all ${FREE_PAGE_LIMIT} free pages. Start a plan to keep the agent writing — the pages already published stay on your site.`,
+        graceEndsAt: null,
+        free,
+      };
+    }
     return {
       allowed: false,
       state: "none",
@@ -154,6 +212,34 @@ export function entitlementFor(
  * Kept alongside entitlementFor so a change to one is visibly a change
  * to the other.
  */
+/**
+ * The free preview's rule, in SQL, for the scheduler.
+ *
+ * Kept beside entitledSqlFragment for the same reason that one exists: the
+ * cron decides in SQL and every button decides in TypeScript, and when the
+ * two drift the product either keeps working for people it should have
+ * stopped serving or stops for people it should be serving — silently,
+ * either way. The live test runs both against the same rows.
+ *
+ * Counted by host rather than by tenant so a second signup on the same
+ * website inherits the pages the first one already spent, which is what
+ * makes the limit hold against a fresh email address. A site whose host
+ * could not be resolved gets no free pages: an unidentifiable site must
+ * not match every other unidentifiable site.
+ */
+export function freeTierSqlFragment(siteAlias = "s", tenantAlias = "t"): string {
+  const limit = Math.max(0, Math.round(FREE_PAGE_LIMIT));
+  return `(
+    ${tenantAlias}.plan_status = 'inactive'
+    and coalesce(${siteAlias}.host, '') <> ''
+    and (
+      select count(*) from pages fp
+      join sites fs on fs.id = fp.site_id
+      where fp.status = 'published' and fs.host = ${siteAlias}.host
+    ) < ${limit}
+  )`;
+}
+
 export function entitledSqlFragment(alias = "t"): string {
   return `(
     ${alias}.plan_status in ('active', 'trialing')

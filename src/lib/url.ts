@@ -26,3 +26,26 @@ export function siteOrigin(raw: string): string {
     return withScheme.replace(/\/+$/, "");
   }
 }
+
+/**
+ * The bare hostname: lowercased, port dropped, leading "www." removed.
+ *
+ * The identity of a website rather than the spelling of a URL.
+ * "https://WWW.Example.com/pricing", "example.com" and "http://example.com"
+ * are one site to a person, and have to be one site to the free-page
+ * allowance too — otherwise the limit is bypassed by retyping the URL a
+ * different way, which is the cheapest possible way to defeat it.
+ *
+ * Returns "" for anything that does not parse to a real host, and callers
+ * treat that as "cannot identify this site" rather than as a match — an
+ * empty host must never collide with another empty host.
+ */
+export function siteHost(raw: string): string {
+  const origin = siteOrigin(raw);
+  if (!origin) return "";
+  try {
+    return new URL(origin).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}

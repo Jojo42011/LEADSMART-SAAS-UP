@@ -12,7 +12,6 @@ import {
   clearOnboarding,
   emptyOnboarding,
 } from "@/lib/onboarding";
-import { loadBilling } from "@/lib/billing";
 import { loadIntel, saveIntel, type SiteIngest } from "@/lib/intel";
 import { buildPlan } from "@/lib/plan";
 import { normalizeGithubRepo } from "@/lib/github-repo";
@@ -47,12 +46,13 @@ export function Wizard() {
     if (handledCallback.current) return;
     handledCallback.current = true;
 
-    // Onboarding is unlocked by checkout. Swaps to a server side
-    // subscription check when Stripe is attached.
-    if (!loadBilling().active) {
-      router.replace("/checkout");
-      return;
-    }
+    // Onboarding used to be locked behind checkout: signing up bounced
+    // straight to a payment page, so the first thing anyone saw was a
+    // price for something they had not watched work yet. The free preview
+    // replaced that gate — set the site up, let the agent publish real
+    // pages to it, and ask for a card when the allowance runs out. The
+    // limit is enforced server-side in entitlement.ts, which is the only
+    // place it can be enforced honestly; nothing here needs to guard it.
 
     const params = new URLSearchParams(window.location.search);
 

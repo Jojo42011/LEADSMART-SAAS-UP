@@ -20,7 +20,7 @@ import { GEO_TACTICS, CORE_LOCAL_CITATIONS } from "@/lib/geo";
 import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
 import { refreshAndSaveResearch } from "@/lib/research-client";
-import { useAgentPages, allPages, type AgentPage } from "@/lib/agent-pages";
+import { useAgentPages, allPages, type AgentPage, type Entitlement } from "@/lib/agent-pages";
 import { Billing } from "./Billing";
 import { ContactForm } from "../support/ContactForm";
 import { ThemeToggle } from "../ui/ThemeToggle";
@@ -160,6 +160,85 @@ function EmptyState({
   );
 }
 
+/**
+ * The free preview's state, stated plainly at the top of every tab.
+ *
+ * Two different messages, and conflating them would be the whole mistake:
+ * while pages remain this is a progress note on work that is actually
+ * happening, and it stays quiet. Once the allowance is spent the agent has
+ * genuinely stopped, and saying so loudly is honest — a dashboard that
+ * keeps looking busy after the engine is off is the thing that makes
+ * someone feel cheated later.
+ *
+ * Nothing is rendered for a paying customer, and nothing is rendered
+ * before the entitlement has loaded: a banner that flashes "0 of 3 free
+ * pages" at a subscriber on every refresh is worse than no banner.
+ */
+function FreePreviewBanner({
+  entitlement,
+  onUpgrade,
+}: {
+  entitlement: Entitlement | null;
+  onUpgrade: () => void;
+}) {
+  if (!entitlement?.free) return null;
+  if (entitlement.state !== "free" && entitlement.state !== "free_limit") return null;
+  const { used, limit } = entitlement.free;
+  const spent = entitlement.state === "free_limit";
+
+  return (
+    <div
+      className={`mb-6 rounded-2xl border p-5 sm:p-6 ${
+        spent ? "border-line-dark bg-fill-strong text-on-ink" : "border-line bg-paper"
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className={`label-mono ${spent ? "text-accent" : "text-muted"}`}>
+            {spent ? "Free preview finished" : "Free preview"}
+          </p>
+          <p className="mt-2 text-[15px] font-medium">
+            {spent
+              ? `You've used all ${limit} free pages.`
+              : `${used} of ${limit} free pages used.`}
+          </p>
+          <p
+            className={`mt-1.5 max-w-lg text-[13px] leading-relaxed ${
+              spent ? "text-on-ink/75" : "text-muted"
+            }`}
+          >
+            {spent
+              ? "The agent has stopped writing. Everything it already published stays on your site — start a plan and it picks up where it left off."
+              : "The agent is researching, writing and publishing to your real site. No card needed until the free pages run out."}
+          </p>
+        </div>
+        <button
+          onClick={onUpgrade}
+          className={`shrink-0 rounded-full px-5 py-2.5 text-[13.5px] font-medium transition-colors ${
+            spent
+              ? "bg-paper text-ink hover:bg-accent hover:text-on-ink"
+              : "bg-ink text-on-ink hover:bg-accent"
+          }`}
+        >
+          {spent ? `Start a plan — $${PRICE_PER_SITE}/mo` : "See plans"}
+        </button>
+      </div>
+      {/* Progress is shown as well as stated: three segments, one per page,
+          so "how much is left" is readable without parsing the sentence. */}
+      <div className="mt-4 flex gap-1.5" aria-hidden="true">
+        {Array.from({ length: limit }, (_, i) => (
+          <span
+            key={i}
+            className={`h-1 flex-1 rounded-full ${
+              i < used ? "bg-accent" : spent ? "bg-on-ink/20" : "bg-ink/[0.08]"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const [data, update] = useOnboarding();
   const [tab, setTab] = useState<Tab>("Overview");
@@ -210,7 +289,7 @@ export function Dashboard() {
   // onboarding buffer only ever holds one site, so on a multi-site account
   // it is the wrong answer for every site but the last one set up — the
   // server row is the authority once the engine knows about the site.
-  const { allSites, activeSite, selectSite } = useAgentPages();
+  const { allSites, activeSite, selectSite, entitlement } = useAgentPages();
   const siteName = activeSite?.businessName || data.business.name || "Your site";
   const siteUrl =
     (activeSite?.url || data.website.url || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
@@ -328,6 +407,7 @@ export function Dashboard() {
         </header>
 
         <main className="mx-auto w-full max-w-5xl min-w-0 flex-1 px-4 py-10 sm:px-6">
+          <FreePreviewBanner entitlement={entitlement} onUpgrade={() => setTab("Billing")} />
           <motion.div
             key={tab}
             initial={{ opacity: 0, y: 16 }}
@@ -2026,18 +2106,46 @@ function AgentSwitch({ onManageBilling }: { onManageBilling: () => void }) {
   // "paused" and "suspended" look identical from the outside, and only one
   // of them is fixed by pressing anything here.
   if (entitlement && !entitlement.allowed) {
+    // Running out the free preview is not a billing failure, and telling
+    // someone to "fix billing" when they have never given us a card reads
+    // as an error they caused. It is the good outcome: the agent worked,
+    // they watched it, and now there is something to buy.
+    const spent = entitlement.state === "free_limit";
     return (
       <span className="flex items-center gap-2">
         <span className="hidden items-center gap-1.5 text-[12.5px] text-ink sm:inline-flex" title={entitlement.reason}>
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-ink" />
-          Agent stopped
+          {spent
+            ? `${entitlement.free?.used ?? 0} of ${entitlement.free?.limit ?? 0} free pages used`
+            : "Agent stopped"}
         </span>
         <button
           onClick={onManageBilling}
           title={entitlement.reason}
           className="rounded-full bg-ink px-3.5 py-1.5 text-[12.5px] font-medium text-on-ink transition-colors hover:bg-accent"
         >
-          Fix billing
+          {spent ? "Upgrade" : "Fix billing"}
+        </button>
+      </span>
+    );
+  }
+
+  // Still inside the free preview: show what is left, beside the running
+  // indicator rather than in place of it — the agent genuinely is working.
+  if (entitlement?.state === "free" && entitlement.free) {
+    const { used, limit } = entitlement.free;
+    return (
+      <span className="flex items-center gap-2">
+        <span className="hidden items-center gap-1.5 text-[12.5px] text-ink sm:inline-flex" title={entitlement.reason}>
+          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent animate-livepulse" />
+          {used} of {limit} free pages used
+        </span>
+        <button
+          onClick={onManageBilling}
+          title={entitlement.reason}
+          className="rounded-full border border-line px-3.5 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:border-ink/40 hover:bg-paper-warm"
+        >
+          Upgrade
         </button>
       </span>
     );

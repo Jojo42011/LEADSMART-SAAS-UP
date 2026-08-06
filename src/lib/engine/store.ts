@@ -1,6 +1,13 @@
 import { Pool } from "pg";
 import { decryptSecret, encryptSecret } from "../secrets";
-import { type PlanStatus, type Entitlement, entitlementFor, entitledSqlFragment } from "./entitlement";
+import {
+  type PlanStatus,
+  type Entitlement,
+  entitlementFor,
+  entitledSqlFragment,
+  freeTierSqlFragment,
+} from "./entitlement";
+import { siteHost } from "../url";
 
 /**
  * Multi tenant data access. Activates when DATABASE_URL is set (Neon,
@@ -91,6 +98,20 @@ const SCHEMA_REPAIRS = [
   // Stripe on every read, so onboarding does not fail when Stripe is slow;
   // the webhook and reconciliation keep it in step.
   `alter table tenants add column if not exists site_allowance int not null default 1`,
+  // The site's bare hostname, which is what the free-page allowance is
+  // charged against (see FREE_PAGE_LIMIT). Stored rather than derived on
+  // read because the scheduler has to compare it in SQL, and normalizing
+  // every row's url inside that query would defeat the index.
+  `alter table sites add column if not exists host text not null default ''`,
+  // Backfill: strip scheme, any path, any port and a leading www. so old
+  // rows match the same identity siteHost() computes for new ones.
+  `update sites set host = regexp_replace(
+       regexp_replace(
+         regexp_replace(regexp_replace(lower(url), '^https?://', ''), '/.*$', ''),
+         ':[0-9]+$', ''),
+       '^www\\.', '')
+     where host = '' and url <> ''`,
+  `create index if not exists sites_host_idx on sites(host)`,
   `create table if not exists support_messages (
      id uuid primary key default gen_random_uuid(),
      name text, email text not null, subject text, message text not null,
@@ -236,13 +257,16 @@ export type PageSummary = {
 // exercised without editing timestamps between test runs.
 const CADENCE_HOURS: Record<string, number> = { continuous: 0.1, daily: 24, every3days: 72, weekly: 168 };
 
-/** Sites whose cadence interval has elapsed, on an active tenant plan. */
+/**
+ * Sites whose cadence interval has elapsed, on an entitled tenant plan or
+ * still inside the free preview's published-page allowance.
+ */
 export async function getDueSites(limit = 3): Promise<SiteRow[]> {
   if (!storeConfigured()) return [];
   const res = await sql(
     `select s.* from sites s
      join tenants t on t.id = s.tenant_id
-     where s.active and ${entitledSqlFragment("t")}
+     where s.active and (${entitledSqlFragment("t")} or ${freeTierSqlFragment("s", "t")})
        and (s.last_run_at is null
             or s.last_run_at < now() - make_interval(mins =>
               -- Integer minutes on purpose: make_interval only accepts
@@ -657,25 +681,35 @@ export async function provisionSite(
       `update sites set platform=$2, cadence=$3, publish_mode=$4, business_name=$5, phone=$6,
          address=$7, city=$8, region=$9, service_area=$10, industry=$11, services=$12,
          target_locations=$13, seed_competitors=$14, avg_sale_value=$15,
-         brand = case when $16::jsonb = '{}'::jsonb then sites.brand else $16::jsonb end
+         brand = case when $16::jsonb = '{}'::jsonb then sites.brand else $16::jsonb end,
+         -- Self-repair for rows written before host existed, in the same
+         -- spirit as normalizing a URL on read: a row the backfill missed
+         -- fixes itself the next time its owner saves Settings, rather
+         -- than silently sitting outside the free-page accounting.
+         host = case when coalesce(sites.host, '') = '' then $17 else sites.host end
        where id = $1`,
       [
         siteId, s.platform, s.cadence, s.publishMode, s.businessName, s.phone,
         s.address, s.city, s.region, s.serviceArea, s.industry, s.services,
         s.targetLocations, s.seedCompetitors, s.avgSaleValue, JSON.stringify(s.brand),
+        siteHost(s.url),
       ]
     );
   } else {
     const siteRes = await sql(
       `insert into sites (tenant_id, url, platform, cadence, publish_mode, business_name, phone,
          address, city, region, service_area, industry, services, target_locations,
-         seed_competitors, avg_sale_value, brand)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         seed_competitors, avg_sale_value, brand, host)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        returning id`,
       [
         tenantId, s.url, s.platform, s.cadence, s.publishMode, s.businessName, s.phone,
         s.address, s.city, s.region, s.serviceArea, s.industry, s.services,
         s.targetLocations, s.seedCompetitors, s.avgSaleValue, JSON.stringify(s.brand),
+        // Written here, not left to the backfill: the free-page allowance
+        // is charged against this value, and a new site with an empty host
+        // would get its allowance evaluated as "unidentifiable".
+        siteHost(s.url),
       ]
     );
     siteId = siteRes.rows[0].id as string;
@@ -1305,8 +1339,44 @@ export async function entitlementForEmail(email: string): Promise<Entitlement | 
     [email.toLowerCase()]
   );
   const row = res.rows[0];
-  if (!row) return entitlementFor("inactive", null);
-  return entitlementFor(row.plan_status as string, row.plan_status_since as Date);
+  const status = (row?.plan_status as string) ?? "inactive";
+  // Only counted when it can change the answer. For a paying tenant this
+  // is a join across pages and sites that decides nothing, on the read
+  // every on-demand button makes.
+  const freeUsed = status === "inactive" ? await freePagesUsedFor(email) : null;
+  if (!row) return entitlementFor("inactive", null, new Date(), freeUsed);
+  return entitlementFor(status, row.plan_status_since as Date, new Date(), freeUsed);
+}
+
+/**
+ * Published pages already charged against this tenant's free allowance.
+ *
+ * Counted across every site sharing a host with one of theirs, not just
+ * their own rows, so the allowance belongs to the WEBSITE. Signing up
+ * again with a fresh email and the same site inherits the pages the first
+ * account published, which is the whole point — an email address costs
+ * nothing to mint and a domain does not.
+ *
+ * A tenant whose sites have no resolvable host counts as having used
+ * nothing, and is gated by the fact that the scheduler will not run an
+ * unidentifiable site for free at all.
+ */
+export async function freePagesUsedFor(email: string): Promise<number> {
+  if (!storeConfigured()) return 0;
+  const res = await sql(
+    `select count(*)::int as n
+       from pages p
+       join sites s on s.id = p.site_id
+      where p.status = 'published'
+        and s.host <> ''
+        and s.host in (
+          select s2.host from sites s2
+          join tenants t on t.id = s2.tenant_id
+          where t.email = $1 and s2.host <> ''
+        )`,
+    [email.toLowerCase()]
+  );
+  return Number(res.rows[0]?.n ?? 0);
 }
 
 /** Tenants with a Stripe customer, for reconciling drift against Stripe. */

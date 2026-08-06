@@ -25,7 +25,11 @@ export async function requireEntitlement(email: string): Promise<NextResponse | 
     {
       ok: false,
       error: entitlement.reason,
-      entitlement: { state: entitlement.state, allowed: false },
+      // free carries the page counts when this is the free preview's limit
+      // rather than a billing failure. The two need different prompts —
+      // "start a plan" against "fix your card" — and the client should not
+      // have to infer which one it is by reading the prose.
+      entitlement: { state: entitlement.state, allowed: false, free: entitlement.free },
     },
     { status: 402 }
   );

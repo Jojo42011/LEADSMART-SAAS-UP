@@ -20,6 +20,11 @@ create table if not exists sites (
   id            uuid primary key default gen_random_uuid(),
   tenant_id     uuid not null references tenants(id) on delete cascade,
   url           text not null,
+  -- Bare hostname (lowercased, no scheme/port, no leading "www."). The
+  -- free-page allowance is charged against this rather than against the
+  -- tenant, so a second signup on the same website inherits the pages the
+  -- first one published. See siteHost() and FREE_PAGE_LIMIT.
+  host          text not null default '',
   platform      text not null,                       -- wordpress | github
   cadence       text not null default 'daily',       -- daily | every3days | weekly
   publish_mode  text not null default 'autopilot',   -- autopilot | review
@@ -43,6 +48,9 @@ create table if not exists sites (
 );
 create index if not exists sites_tenant_idx on sites(tenant_id);
 create index if not exists sites_due_idx on sites(active, last_run_at);
+-- The free-page allowance is looked up by host on every entitlement read
+-- and inside the scheduler's due-sites query.
+create index if not exists sites_host_idx on sites(host);
 
 -- Publishing credentials, one row per site. Encrypt values with a KMS or
 -- pgcrypto before insert; the app treats them as opaque.
