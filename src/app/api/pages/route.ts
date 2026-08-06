@@ -89,7 +89,12 @@ export async function GET(req: NextRequest) {
           active: site.active,
           lastRunAt: site.last_run_at,
           pages,
-          runs: await listRuns(site.id, 5),
+          // Deep enough for the Strategy tab to draw a real history rather
+          // than the last handful of cycles. Five was sized for a "recent
+          // activity" strip; a timeline grouped by week needs weeks of it.
+          // Each row is a few short fields, so this is kilobytes, not a
+          // reason to split the endpoint.
+          runs: await listRuns(site.id, 40),
         };
       })
     );

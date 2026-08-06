@@ -21,7 +21,9 @@ import { loadIntel, type Intel } from "@/lib/intel";
 import { applySettings, type ApplyResult, type ApplyStage } from "@/lib/apply-settings";
 import { refreshAndSaveResearch } from "@/lib/research-client";
 import { useAgentPages, allPages, type AgentPage, type Entitlement } from "@/lib/agent-pages";
+import { useSearchSnapshot } from "@/lib/search-snapshot";
 import { Billing } from "./Billing";
+import { Strategy } from "./Strategy";
 import { ContactForm } from "../support/ContactForm";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { useNow } from "@/lib/use-now";
@@ -29,7 +31,7 @@ import { Analytics } from "./Analytics";
 
 // Billing is a Tab but not a navItem: it is entered through the Plan card
 // (and the mobile switcher), not the section list.
-type Tab = "Overview" | "Content" | "Analytics" | "Keywords" | "Competitors" | "Settings" | "Billing" | "Support";
+type Tab = "Overview" | "Strategy" | "Content" | "Analytics" | "Keywords" | "Competitors" | "Settings" | "Billing" | "Support";
 
 const navItems: { label: Tab; icon: React.ReactNode }[] = [
   {
@@ -40,6 +42,16 @@ const navItems: { label: Tab; icon: React.ReactNode }[] = [
         <rect x="13" y="4" width="7" height="7" rx="1.5" />
         <rect x="4" y="13" width="7" height="7" rx="1.5" />
         <rect x="13" y="13" width="7" height="7" rx="1.5" />
+      </svg>
+    ),
+  },
+  {
+    label: "Strategy",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M12 3v6m0 6v6" strokeLinecap="round" />
+        <circle cx="12" cy="12" r="3" />
+        <path d="M5 7h3M16 17h3" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -415,6 +427,7 @@ export function Dashboard() {
             transition={{ duration: 0.4, ease: [0.21, 0.47, 0.32, 0.98] }}
           >
             {tab === "Overview" && <Overview plan={plan} goTo={setTab} />}
+            {tab === "Strategy" && <Strategy plan={plan} data={data} goTo={setTab} />}
             {tab === "Content" && <Content plan={plan} />}
             {tab === "Analytics" && <Analytics />}
             {/* The "Live keyword targets" chip panel used to stack above
@@ -457,75 +470,6 @@ export function Dashboard() {
 }
 
 /* ------------------------------- Overview ------------------------------- */
-
-/**
- * The two Search Console numbers the Overview shows, and nothing else.
- *
- * A deliberately small read: the Analytics tab fetches the same endpoint
- * for its charts, but the Overview only needs a headline, and pulling the
- * whole payload apart in two places is how the two screens end up
- * disagreeing about a number. Failures and an unconnected account are the
- * same outcome here — no figure, and the card says why rather than
- * showing a zero that reads as "nobody found you".
- */
-function useSearchSnapshot(): {
-  loading: boolean;
-  connected: boolean;
-  clicks: number | null;
-  position: number | null;
-  clicksDelta: string | null;
-  positionDelta: string | null;
-} {
-  const [state, setState] = useState({
-    loading: true,
-    connected: false,
-    clicks: null as number | null,
-    position: null as number | null,
-    clicksDelta: null as string | null,
-    positionDelta: null as string | null,
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/analytics?range=28")
-      .then((r) => r.json())
-      .then((j: {
-        connected?: boolean;
-        totals?: { clicks: number; position: number };
-        prevTotals?: { clicks: number; position: number };
-      }) => {
-        if (cancelled) return;
-        const t = j.totals;
-        const prev = j.prevTotals;
-        // Position improves as it falls, so its arrow is inverted. Getting
-        // that backwards would report a genuine improvement as a decline.
-        const posDelta =
-          t && prev && prev.position
-            ? `${prev.position - t.position >= 0 ? "▲" : "▼"} ${Math.abs(prev.position - t.position).toFixed(1)} vs previous 28 days`
-            : null;
-        const clickDelta =
-          t && prev
-            ? `${t.clicks - prev.clicks >= 0 ? "▲" : "▼"} ${Math.abs(t.clicks - prev.clicks).toLocaleString()} vs previous 28 days`
-            : null;
-        setState({
-          loading: false,
-          connected: Boolean(j.connected && t),
-          clicks: t?.clicks ?? null,
-          position: t?.position ?? null,
-          clicksDelta: clickDelta,
-          positionDelta: posDelta,
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setState((p) => ({ ...p, loading: false, connected: false }));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return state;
-}
 
 function Overview({
   plan,
