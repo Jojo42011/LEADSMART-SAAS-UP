@@ -14,8 +14,8 @@ import { upsertTenant } from "@/lib/engine/store";
  * Google sign-in, step 2. Exchanges the authorization code for tokens,
  * reads the verified profile from Google's userinfo endpoint, mints an
  * httpOnly session, and routes the user into the product. New accounts
- * (flow=signup) go through checkout, which unlocks onboarding; returning
- * users land on the dashboard.
+ * (flow=signup) go straight to onboarding — the free preview means no
+ * card is needed to start; returning users land on the dashboard.
  */
 
 type GoogleProfile = {
@@ -122,7 +122,7 @@ export async function GET(req: NextRequest) {
       // sign-in proceeds; provisioning upserts the tenant again at launch
     }
 
-    const res = NextResponse.redirect(`${origin}/${flow === "signup" ? "checkout" : "dashboard"}`);
+    const res = NextResponse.redirect(`${origin}/${flow === "signup" ? "onboarding" : "dashboard"}`);
     res.cookies.set(SESSION_COOKIE, signSession(user), sessionCookieOptions);
     res.cookies.set(PROFILE_COOKIE, encodeProfile(user), profileCookieOptions);
     res.cookies.delete("g_oauth_state");

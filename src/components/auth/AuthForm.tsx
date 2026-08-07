@@ -117,7 +117,7 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
         setBusy(false);
         return;
       }
-      router.push(json.next || (isSignup ? "/checkout" : "/dashboard"));
+      router.push(json.next || (isSignup ? "/onboarding" : "/dashboard"));
     } catch {
       setError("Could not reach the server. Please try again.");
       setBusy(false);

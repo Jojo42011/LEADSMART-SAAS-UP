@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
 
     const dest =
       flow === "signup"
-        ? `${origin}/checkout`
+        ? `${origin}/onboarding`
         : flow === "signin"
           ? `${origin}/dashboard`
           : `${origin}/onboarding?github=connected`;

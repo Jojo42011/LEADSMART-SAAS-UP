@@ -85,7 +85,12 @@ export async function POST(req: NextRequest) {
     provider: "password",
     iat: Date.now(),
   };
-  const res = NextResponse.json({ ok: true, next: "/checkout" });
+  // Straight into setup, not into a price. The free preview gives three
+  // published pages before a card is needed, and the limit is enforced
+  // server-side in entitlement.ts — sending someone to checkout first
+  // put a paywall in front of a product they had not seen work yet,
+  // which is exactly what the free tier exists to remove.
+  const res = NextResponse.json({ ok: true, next: "/onboarding" });
   res.cookies.set(SESSION_COOKIE, signSession(user), sessionCookieOptions);
   res.cookies.set(PROFILE_COOKIE, encodeProfile(user), profileCookieOptions);
   return res;
