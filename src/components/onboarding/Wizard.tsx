@@ -429,7 +429,11 @@ function WebsiteStep({ data, update }: StepProps) {
                         ? "Wix detected"
                         : ingest.platform === "lovable"
                           ? "Lovable detected"
-                          : "Static site"}
+                          : ingest.platform === "vercel"
+                            ? "Hosted on Vercel"
+                            : ingest.platform === "netlify"
+                              ? "Hosted on Netlify"
+                              : "Static site"}
                   </span>
                 </p>
               )}
@@ -548,6 +552,23 @@ function WebsiteStep({ data, update }: StepProps) {
             </p>
           </div>
         )}
+        {/* Vercel and Netlify serve a build from a repository: no wp-admin,
+            no FTP. The repo is the only way in, which is the GitHub path —
+            and saying so here is what stops someone picking WordPress and
+            landing on their host's 403 page. */}
+        {!studying && ingest?.ok && (ingest.platform === "vercel" || ingest.platform === "netlify") && (
+          <div className="rounded-xl border border-line bg-paper p-5">
+            <p className="text-[13.5px] font-medium">
+              This site is hosted on {ingest.platform === "vercel" ? "Vercel" : "Netlify"} — choose GitHub below.
+            </p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+              {ingest.platform === "vercel" ? "Vercel" : "Netlify"} builds your
+              site from a repository, so it has no WordPress admin and no FTP
+              access. Connect the repository it deploys from and the pages the
+              agent commits go live on your next deploy automatically.
+            </p>
+          </div>
+        )}
         <div role="group" aria-labelledby="platform-label" className="grid gap-3">
           <span id="platform-label" className="text-[13px] font-medium text-ink">Platform</span>
           <ChoiceCard
@@ -584,6 +605,16 @@ function PublishingStep({ data, update }: StepProps) {
   const [branches, setBranches] = useState<string[]>([]);
   const [ghLogin, setGhLogin] = useState("");
   const [connecting, setConnecting] = useState(false);
+
+  // The site analysis from the previous step, read back from the intel
+  // snapshot it was saved to — WebsiteStep holds it in local state, and
+  // this step needs it to warn before sending anyone to a wp-admin that
+  // does not exist.
+  const [ingest, setIngest] = useState<SiteIngest | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from localStorage, browser-only
+    setIngest(loadIntel().ingest ?? null);
+  }, []);
 
   const wpConnected = Boolean(p.wpUser && p.wpAppPassword);
   const ghConnected = p.githubOauth || Boolean(p.githubRepo && p.githubToken);
@@ -716,6 +747,35 @@ function PublishingStep({ data, update }: StepProps) {
         }
       />
       <div className="mt-8 grid gap-5">
+        {/* The 403 guard. connectWordpress builds
+            <site>/wp-admin/authorize-application.php and sends the browser
+            there; if the site is not WordPress that URL does not exist and
+            the host answers 403, which reads as "Ascent is broken" rather
+            than "this is not a WordPress site". The ingest already probed
+            /wp-json/ and the HTML for WordPress markers, so when it found
+            neither, say so BEFORE the redirect. Only shown when the ingest
+            actually succeeded — a site we could not read is not evidence. */}
+        {isWp && ingest?.ok && ingest.platform !== "wordpress" && (
+          <div className="rounded-xl border border-ink/30 bg-paper-warm p-5">
+            <p className="text-[13.5px] font-medium">
+              We couldn&apos;t find WordPress at {data.website.url.replace(/^https?:\/\//, "")}
+            </p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+              We checked the page and its <code>/wp-json/</code> endpoint and
+              found no WordPress.{" "}
+              {ingest.platform === "vercel" || ingest.platform === "netlify"
+                ? `It's hosted on ${ingest.platform === "vercel" ? "Vercel" : "Netlify"}, which builds from a repository — go back and choose GitHub instead.`
+                : ingest.platform === "lovable"
+                  ? "It's a Lovable project, which syncs to a GitHub repository — go back and choose GitHub instead."
+                  : "Go back and choose GitHub if it deploys from a repository, or FTP/SFTP for traditional hosting."}
+            </p>
+            <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+              Connecting anyway will open a WordPress admin page that
+              doesn&apos;t exist on this site, and your host will answer with a
+              403 error.
+            </p>
+          </div>
+        )}
         {isWp ? (
           wpConnected ? (
             <>

@@ -14,7 +14,7 @@ import { assertPublicUrl, safeFetch } from "./safe-fetch";
 export type SiteIngest = {
   ok: boolean;
   url: string;
-  platform: "wordpress" | "github" | "wix" | "lovable" | "unknown";
+  platform: "wordpress" | "github" | "wix" | "lovable" | "vercel" | "netlify" | "unknown";
   title: string;
   description: string;
   h1: string;
@@ -285,7 +285,27 @@ export async function ingestSite(rawUrl: string): Promise<SiteIngest> {
     } else if (/\.lovable\.app$|\.lovableproject\.com$/.test(hostName)) {
       result.platform = "lovable";
     } else if (/wp-content|wp-includes|name=["']generator["'][^>]*wordpress/i.test(html)) {
+      // WordPress markers win over the host checks below: a WordPress site
+      // can sit behind any host, and what it RUNS matters more than where.
       result.platform = "wordpress";
+    } else if (
+      /\.vercel\.app$/.test(hostName) ||
+      res.headers.get("x-vercel-id") !== null ||
+      /^Vercel$/i.test(res.headers.get("server") || "")
+    ) {
+      // Vercel and Netlify serve static output built from a repository.
+      // They have no wp-admin and no FTP, so the only route in is the
+      // repo — which is exactly the GitHub path. Detected by response
+      // header as well as hostname, because the sites that matter here
+      // are on custom domains and the header is what still identifies
+      // them. Checked AFTER the WordPress markers so a WordPress install
+      // proxied through either host is still treated as WordPress.
+      result.platform = "vercel";
+    } else if (
+      /\.netlify\.app$/.test(hostName) ||
+      res.headers.get("x-nf-request-id") !== null
+    ) {
+      result.platform = "netlify";
     } else {
       try {
         const probe = await safeFetch(`${origin}/wp-json/`, {
