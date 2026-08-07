@@ -62,7 +62,10 @@ export async function GET(req: NextRequest) {
   const state = req.nextUrl.searchParams.get("state");
   const savedState = req.cookies.get("gh_oauth_state")?.value;
   const flowCookie = req.cookies.get("gh_oauth_flow")?.value;
-  const flow = flowCookie === "signin" || flowCookie === "signup" ? flowCookie : "connect";
+  const flow =
+    flowCookie === "signin" || flowCookie === "signup" || flowCookie === "dashboard"
+      ? flowCookie
+      : "connect";
   const origin = req.nextUrl.origin;
 
   const fail = (reason: string) => {
@@ -111,7 +114,12 @@ export async function GET(req: NextRequest) {
         ? `${origin}/onboarding`
         : flow === "signin"
           ? `${origin}/dashboard`
-          : `${origin}/onboarding?github=connected`;
+          : flow === "dashboard"
+            ? // Changing platform from Settings: same connect, different
+              // landing. The dashboard reads this param exactly as the
+              // wizard does and records the connection.
+              `${origin}/dashboard?github=connected`
+            : `${origin}/onboarding?github=connected`;
 
     const res = NextResponse.redirect(dest);
     res.cookies.set("gh_token", tokenJson.access_token, {

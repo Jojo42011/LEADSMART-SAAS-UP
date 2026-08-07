@@ -27,6 +27,7 @@ import { useAgentPages, allPages, type AgentPage, type Entitlement } from "@/lib
 import { useSearchSnapshot } from "@/lib/search-snapshot";
 import { Billing } from "./Billing";
 import { Strategy } from "./Strategy";
+import { PublishingSetup } from "./PublishingSetup";
 import { ContactForm } from "../support/ContactForm";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { useNow } from "@/lib/use-now";
@@ -281,6 +282,12 @@ export function Dashboard() {
     // Returning from the rebuild's Stripe checkout: land on the panel the
     // purchase belongs to, with the params tidied away.
     if (params.get("rebuild")) {
+      setTab("Settings");
+      window.history.replaceState({}, "", "/dashboard");
+    }
+    // Returning from the GitHub OAuth flow started in Settings: back to
+    // the publishing panel, which can now list the account's repos.
+    if (params.get("github")) {
       setTab("Settings");
       window.history.replaceState({}, "", "/dashboard");
     }
@@ -1982,6 +1989,8 @@ function Settings({
           />
         </div>
       </Card>
+
+      <PublishingSetup data={data} update={update} />
 
       <Card className="p-6 sm:p-8">
         <h2 className="text-[14.5px] font-medium">Publishing</h2>

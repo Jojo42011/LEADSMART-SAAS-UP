@@ -19,7 +19,13 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(req: NextRequest) {
   const origin = req.nextUrl.origin;
   const flowParam = req.nextUrl.searchParams.get("flow");
-  const flow = flowParam === "signin" || flowParam === "signup" ? flowParam : "connect";
+  // "dashboard" is the same connect intent as the wizard's, differing
+  // only in where the callback returns to — the Settings platform
+  // switcher needs to land back on the dashboard, not in onboarding.
+  const flow =
+    flowParam === "signin" || flowParam === "signup" || flowParam === "dashboard"
+      ? flowParam
+      : "connect";
 
   const clientId = process.env.GITHUB_CLIENT_ID;
   if (!clientId) {
