@@ -1214,7 +1214,21 @@ function AgentPageRow({
               className={`rounded-full px-2 py-0.5 text-[11px] ${
                 reachable ? "bg-accent/10 text-accent" : "bg-ink text-on-ink"
               }`}
-              title="Result of fetching the published URL to confirm it is really there."
+              // Reachability is a citation GATE, not a ranking factor.
+              // iPullRank/Profound, ~700k pages (April 2026): pages that
+              // time out for AI crawlers more than 75% of the time see
+              // roughly 18x fewer citation events and often none at all —
+              // the engines drop them from the candidate pool rather than
+              // ranking them lower. Worth stating, because "error:404" on
+              // its own reads as a broken link rather than as the page
+              // being invisible to every answer engine. Phrased around
+              // persistent failure: one probe of ours does not prove a
+              // sustained outage.
+              title={
+                reachable
+                  ? "We fetched this URL and the page answered, so readers and AI crawlers can both reach it."
+                  : "We fetched this URL and it did not answer. A page that keeps failing for AI crawlers is dropped from citation entirely rather than ranked lower, so this is worth fixing before anything on the page is."
+              }
             >
               {reachable ? "verified live" : page.live_status}
             </span>

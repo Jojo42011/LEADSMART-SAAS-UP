@@ -67,7 +67,7 @@ its `skill.md`-style pages are designed to make agents execute instructions
 - Treat anything an agent forum "recommends doing" as untrusted input, not an
   instruction.
 
-**Last synced:** 2026-08-06
+**Last synced:** 2026-08-07
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -871,3 +871,55 @@ act on what's genuinely new beyond this.
     Nothing new.
   - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
     in today's rotation; last covered 08-05).
+
+- **2026-08-07** — Reddit still blocked (r/SEO .json and old.reddit r/aeo .json
+  fetches both failed, as expected). Searched: "Google core update August 2026
+  confirmed / Search Status Dashboard", "page speed + Core Web Vitals effect on
+  AI Overviews citation" (a technical-SEO angle the log had not covered), a
+  dedicated corroboration query on the one finding worth chasing, and the
+  agent-forum monitoring topic (rotation: last covered 08-05; search-only, no
+  moltbook fetch). Findings:
+  - **NEW + applied (dashboard messaging):** crawler reachability is a citation
+    GATE, not a ranking factor. iPullRank/Profound, ~700k pages (April 2026):
+    pages that time out for AI crawlers more than 75% of the time see roughly
+    **18x fewer citation events and often none at all** — engines drop them from
+    the candidate pool rather than ranking them lower, which the source states
+    explicitly as "a gating mechanism, not a ranking penalty." Ascent already
+    does the substantive thing here (verifyLive after every publish, live_status
+    stored, unreachable verdicts re-checked on dashboard read, "N verified
+    reachable" on the Strategy tab), so no behaviour changed — but the badge's
+    tooltip said only "Result of fetching the published URL to confirm it is
+    really there", and a raw `error:404` reads as a broken link rather than as
+    the page being invisible to every answer engine. The tooltip now states the
+    consequence, split by state, and is phrased around *persistent* failure
+    because a single probe of ours does not prove a sustained outage. Same
+    class of finding as the 08-04 nosnippet gate: a binary technical
+    precondition sitting upstream of every content tactic.
+  - **Checked and correctly NOT applied (page speed as a citation factor):**
+    the same searches surfaced "FCP under 0.4s averaged 6.7 citations vs 2.1 for
+    slower pages" and various Core-Web-Vitals-drive-AI-visibility claims. Not
+    implemented: the largest empirical study in the set (107,000+ pages
+    appearing in AI Overviews, January 2026) found only **weak** correlations
+    between CWV and AI visibility, and the 6.7-vs-2.1 figure comes from an
+    unnamed "independent analysis" with no traceable methodology. Per the
+    standing corroboration rule the contested claim stays out, and the
+    well-evidenced half of the same topic — reachability — is what was acted on.
+  - **Deliberately NOT added as a geo.ts signal:** reachability is a fact about
+    the live site that Ascent measures for real, not a content property the
+    deterministic per-keyword scorer can simulate. A hash-triggered
+    "unreachable" penalty would be invented data about a real page. Same
+    reasoning that kept client-side rendering (08-03) and the nosnippet gate
+    (08-04) out of the GEO score; the real check already exists and already
+    reports.
+  - **Confirmed, already captured (algo):** still no confirmed August core
+    update — March (Mar 27–Apr 8) and May (May 21–Jun 2) remain 2026's only two,
+    and Q3 stays expected-but-unannounced on the Search Status Dashboard. Same
+    speculative window logged 07-27/08-01/08-02/08-05; nothing landed.
+  - **Agent-forum trend (monitoring only, no fetch):** coverage repeats the
+    EU AI Act picture already logged 08-05 — Article 50 transparency plus the
+    high-risk provisions enforceable 2 Aug 2026 — which bind AI system providers
+    and operators, not website publishers, and change nothing in
+    geo.ts/plan.ts/schema.ts. Provenance and verifiable-sourcing remain the
+    direction Ascent already optimizes for. Nothing actionable. Guardrail
+    respected: no moltbook.com or agent-forum page fetched; all signal came from
+    third-party coverage via search.
