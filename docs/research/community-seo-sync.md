@@ -40,6 +40,10 @@ If Reddit access is ever restored, the Routine will pick it up automatically.
    from `origin/main` first). Sync work used to go to
    `Row-Claude/leadsmart-seo`, where three real engine improvements sat
    stranded and unmerged for days; that branch is retired (2026-08-06).
+   THEN also `git push origin main:claude/lauren-seo-agent-yeqx0f` — Vercel
+   deploys production from that branch, and a push that lands only on main
+   leaves the live site stale (found 2026-08-06 via a user bug report:
+   production served a build from before the free tier and Strategy tab).
 7. Only message the user if something meaningful shipped.
 
 **Guardrail — fabrication:** never implement fabrication tactics (fake

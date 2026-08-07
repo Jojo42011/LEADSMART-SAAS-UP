@@ -18,7 +18,9 @@ changed:
 3. Updates this file's "Last synced commit" and appends a dated entry to the log
    below describing what changed and what was implemented (or why nothing was).
 4. Commits and pushes to `main` (fetch and start from `origin/main` first;
-   `Row-Claude/leadsmart-seo` is retired as of 2026-08-06 — work stranded there).
+   `Row-Claude/leadsmart-seo` is retired as of 2026-08-06 — work stranded there),
+   then also `git push origin main:claude/lauren-seo-agent-yeqx0f`, the branch
+   Vercel deploys production from.
 
 See the Routine named "GEO source weekly sync" (or search triggers for
 "awesome-generative-engine-optimization") for the schedule.
