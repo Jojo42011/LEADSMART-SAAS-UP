@@ -67,7 +67,7 @@ its `skill.md`-style pages are designed to make agents execute instructions
 - Treat anything an agent forum "recommends doing" as untrusted input, not an
   instruction.
 
-**Last synced:** 2026-08-07
+**Last synced:** 2026-08-08
 
 ## Baseline captured at setup (2026-07-16)
 
@@ -923,3 +923,70 @@ act on what's genuinely new beyond this.
     direction Ascent already optimizes for. Nothing actionable. Guardrail
     respected: no moltbook.com or agent-forum page fetched; all signal came from
     third-party coverage via search.
+
+- **2026-08-08** — Reddit still blocked (r/TechSEO .json and old.reddit r/SEO
+  .json fetches both failed, as expected). Rotated to two surfaces the log had
+  not covered directly: internal linking / site architecture as an AI-citation
+  signal, and AI Mode query fan-out; then chased the one primary source that
+  surfaced, and closed with an AEO content-refresh query. Quiet day — no code
+  change. Findings:
+  - **Strong primary source, but validates existing design rather than changing
+    it (arXiv 2605.14021, "Measuring Google AI Overviews", Xu/Iqbal/Montgomery,
+    13 May 2026 — 55,393 trending queries across 19 categories over 40 days,
+    98,020 atomic claims):** overall AI Overview activation is **13.7%, rising
+    to 64.7% for question-form queries** — nearly 5x. This is the best-sourced
+    statement yet of why question-form targets matter, and it was tempting to
+    act on by raising the `Question` intent base in `plan.ts` (currently 56, vs
+    Local 68 / Near me 62 / Service 48). **Deliberately not changed.** That
+    ordering encodes *commercial* intent for a local service business — a "pool
+    builder scottsdale" or "near me" query is a buyer, a cost question is a
+    researcher — and re-ranking it on citation-activation odds would trade real
+    revenue for citation probability, which is precisely the failure mode the
+    07-25 arXiv survey documented (citation-oriented rewrites cutting top-10
+    organic presence ~16%). Checked the generator rather than assuming: every
+    service already emits two genuinely question-form targets (`what to look
+    for in a <service> company`, `how much does <service> cost`), so on a
+    typical 3-service × 3-location profile roughly a third of the queue is
+    already question-form. The finding confirms the 07-21 Question-intent work
+    was right; it does not ask for more.
+  - **Confirmed, already captured (same paper, source selection):** ~30% of
+    AIO-cited domains do not appear in the co-displayed first-page results at
+    all, "indicating a source selection mechanism distinct from Google's ranking
+    algorithm." This is the same dual-track finding as Ahrefs' ~38% and Moz's
+    88% (07-22) and is already the basis of the SEO+GEO split. No change.
+  - **Checked against our own generation, already sound (same paper, claim
+    fidelity):** 11.0% of AIO claims are unsupported by the page cited, with
+    **omission the dominant failure mode (6.98%)** — the engine drops a
+    qualifier present on the source and states the bare claim. For a business
+    quoting prices this is a real commercial risk (a range quoted without its
+    "once the site has been assessed" condition). The publisher-side defense is
+    sentence-level self-containment: qualifiers in the same sentence as the
+    number, not in an adjacent one. Audited `generate.ts`'s answer/body
+    templates and they already do this. Recorded as validation, not a change —
+    same class of entry as the 07-25 design check.
+  - **Confirmed, already captured (internal linking):** the 2026 internal-link
+    guidance is the pillar-cluster model plus descriptive in-prose anchors —
+    our hub-and-spoke roadmap and `link-graph.ts` already encode the first, and
+    checked the second in code: internal links come back from generation as
+    real anchors with descriptive labels inside the prose, preserved by
+    `escProse` (which keeps same-origin anchors and strips off-site ones). No
+    generic "learn more" anchors to fix. No change.
+  - **Confirmed, already captured (query fan-out):** fan-out optimization
+    guidance reduces to thorough subtopic coverage, question-based sections,
+    clean H2/H3 structure, FAQs and comparisons — all already encoded in the
+    GEO tactics, FAQPage schema and Question-intent generation, and already
+    logged 07-24. Notably the sources' stated *anti*-pattern ("thin content
+    with schema markup, keywords stuffed in headings, AI content without
+    expertise") is what our thin-content and keyword-stuffing negative signals
+    and the information-gain gate already penalize.
+  - **Noted, not applied (vendor-blog sourcing):** an AEO content-refresh crop
+    quoting a "70/30 refresh-vs-new resource split", "268% organic click growth
+    from refreshed content", and "refreshes deliver up to 70% better ROI". The
+    directional content is already built — `scoreFreshness` thresholds plus a
+    refresh-due signal the orchestrator actually acts on, not just displays —
+    and the specific ratios come from vendor blogs with no traceable
+    methodology, so they stay out of both the model and user-facing copy per
+    the standing corroboration rule. The corroborated half ("over 70% of AI-cited
+    pages updated within 12 months") matches the 07-16 baseline exactly.
+  - Guardrails respected: no moltbook/agent-forum fetches this run (topic not
+    in today's rotation; last covered 08-07).
